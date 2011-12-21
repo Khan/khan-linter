@@ -129,17 +129,17 @@ class JavaScriptLintRules(ecmalintrules.EcmaScriptLintRules):
               'Type should be immediately after %s tag' % token.string,
               token)
 
-    elif token.type == Type.DOUBLE_QUOTE_STRING_START:
+    elif token.type == Type.SINGLE_QUOTE_STRING_START:
       next_token = token.next
       while next_token.type == Type.STRING_TEXT:
-        if javascripttokenizer.JavaScriptTokenizer.SINGLE_QUOTE.search(
+        if javascripttokenizer.JavaScriptTokenizer.DOUBLE_QUOTE.search(
             next_token.string):
           break
         next_token = next_token.next
       else:
         self._HandleError(
-            errors.UNNECESSARY_DOUBLE_QUOTED_STRING,
-            'Single-quoted string preferred over double-quoted string.',
+            errors.UNNECESSARY_SINGLE_QUOTED_STRING,
+            'Double-quoted string preferred over single-quoted string.',
             token,
             Position.All(token.string))
 
