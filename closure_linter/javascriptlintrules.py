@@ -284,21 +284,57 @@ class JavaScriptLintRules(ecmalintrules.EcmaScriptLintRules):
             'Missing space after "%s"' % token.string,
             token,
             Position.AtEnd(token.string))
-    elif token.type == Type.WHITESPACE:
-      first_in_line = token.IsFirstInLine()
-      last_in_line = token.IsLastInLine()
-      # Check whitespace length if it's not the first token of the line and
-      # if it's not immediately before a comment.
-      if not last_in_line and not first_in_line and not token.next.IsComment():
-        # Ensure there is no space after opening parentheses.
-        if (token.previous.type in (Type.START_PAREN, Type.START_BRACKET,
-                                    Type.FUNCTION_NAME)
-            or token.next.type == Type.START_PARAMETERS):
-          self._HandleError(
-              errors.EXTRA_SPACE,
-              'Extra space after "%s"' % token.previous.string,
-              token,
-              Position.All(token.string))
+    elif token.type in [Type.START_PAREN, Type.START_BRACKET, Type.START_BLOCK]:
+      if token.type == Type.START_PAREN:
+        matching_type = Type.END_PAREN
+      elif token.type == Type.START_BRACKET:
+        matching_type = Type.END_BRACKET
+      else:
+        matching_type = Type.END_BLOCK
+
+      # Everything following an opening token should be another opening token
+      # of some type until the end of the line, otherwise it needs a whitespace
+      cur = token
+#      while not cur.IsLastInLine():
+#        if cur.type not in [Type.START_PAREN,
+#                            Type.START_BRACKET,
+#                            Type.START_BLOCK]:
+#          if cur.type == Type.WHITESPACE or cur.type == matching_type:
+#            # We're good!
+#            break
+#          else:
+#            self._HandleError(
+#                errors.MISSING_SPACE,
+#                'Missing space after "%s"' % token.string,
+#                token,
+#                Position.All(token.string))
+#        cur = cur.next
+
+    elif token.type in [Type.END_PAREN, Type.END_BRACKET, Type.END_BLOCK]:
+      if token.type == Type.END_PAREN:
+        matching_type = Type.START_PAREN
+      elif token.type == Type.END_BRACKET:
+        matching_type = Type.START_BRACKET
+      else:
+        matching_type = Type.START_BLOCK
+
+      # Everything before a closing token should be another closing token of
+      # some type until the beginning of the line, otherwise it needs a space
+#      cur = token
+#      while not cur.IsFirstInLine():
+#        if cur.type not in [Type.END_PAREN,
+#                            Type.END_BRACKET,
+#                            Type.END_BLOCK]:
+#          if cur.type == Type.WHITESPACE or cur.type == matching_type:
+#            # We're good!
+#            break
+#          else:
+#            self._HandleError(
+#                errors.MISSING_SPACE,
+#                'Missing space before "%s"' % token.string,
+#                token,
+#                Position.All(token.string))
+#        cur = cur.previous
 
   def Finalize(self, state, tokenizer_mode):
     """Perform all checks that need to occur after all lines are processed."""

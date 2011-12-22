@@ -189,12 +189,13 @@ class CheckerBase(object):
       A boolean indicating whether the full file could be checked or if checking
       failed prematurely.
     """
-    limited_doc_checks = False
-    if self._limited_doc_files:
-      for limited_doc_filename in self._limited_doc_files:
-        if filename.endswith(limited_doc_filename):
-          limited_doc_checks = True
-          break
+#    limited_doc_checks = False
+#    if self._limited_doc_files:
+#      for limited_doc_filename in self._limited_doc_files:
+#        if filename.endswith(limited_doc_filename):
+#          limited_doc_checks = True
+#          break
+    limited_doc_checks = True
 
     lint_rules = self._lint_rules
     lint_rules.Initialize(self, limited_doc_checks, is_html)
