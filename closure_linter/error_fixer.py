@@ -205,17 +205,17 @@ class ErrorFixer(errorhandler.ErrorHandler):
           tokenutil.InsertBlankLineAfter(token.previous)
         self._AddFix(token)
 
-    elif code == errors.UNNECESSARY_DOUBLE_QUOTED_STRING:
-      end_quote = tokenutil.Search(token, Type.DOUBLE_QUOTE_STRING_END)
+    elif code == errors.UNNECESSARY_SINGLE_QUOTED_STRING:
+      end_quote = tokenutil.Search(token, Type.SINGLE_QUOTE_STRING_END)
       if end_quote:
-        single_quote_start = Token(
-            "'", Type.SINGLE_QUOTE_STRING_START, token.line, token.line_number)
-        single_quote_end = Token(
-            "'", Type.SINGLE_QUOTE_STRING_START, end_quote.line,
+        double_quote_start = Token(
+            '"', Type.DOUBLE_QUOTE_STRING_START, token.line, token.line_number)
+        double_quote_end = Token(
+            '"', Type.DOUBLE_QUOTE_STRING_START, end_quote.line,
             token.line_number)
 
-        tokenutil.InsertTokenAfter(single_quote_start, token)
-        tokenutil.InsertTokenAfter(single_quote_end, end_quote)
+        tokenutil.InsertTokenAfter(double_quote_start, token)
+        tokenutil.InsertTokenAfter(double_quote_end, end_quote)
         tokenutil.DeleteToken(token)
         tokenutil.DeleteToken(end_quote)
         self._AddFix([token, end_quote])
