@@ -152,7 +152,7 @@ class ErrorPrinter(errorhandler.ErrorHandler):
       self._error_file_count += 1
 
       if self._format != UNIX_FORMAT:
-        print '----- FILE  :  %s -----' % (self._filename)
+        print '----- FILE  :  \033[33m%s\033[0m -----' % (self._filename)
 
       self._file_errors.sort(Error.Compare)
 
