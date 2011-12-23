@@ -265,6 +265,14 @@ class EcmaScriptLintRules(checkerbase.LintRulesBase):
         self._HandleError(errors.MISSING_SPACE, 'Missing space after ","',
             token)
 
+      # Find extra spaces at the beginning of parameter lists.  Make sure
+      # we aren't at the beginning of a continuing multi-line list.
+      if not first_in_line:
+        space_count = len(token.string) - len(token.string.lstrip())
+        if space_count:
+          self._HandleError(errors.EXTRA_SPACE, 'Extra space after "("',
+              token, Position(0, space_count))
+
     elif (type == Type.START_BLOCK and
           token.metadata.context.type == Context.BLOCK):
       self._CheckForMissingSpaceBeforeToken(token)
@@ -354,12 +362,24 @@ class EcmaScriptLintRules(checkerbase.LintRulesBase):
 
     elif type == Type.START_BRACKET:
       self._HandleStartBracket(token, last_non_space_token)
-    elif token.type == Type.END_BRACKET:
-      last_code = token.metadata.last_code
-      if last_code.IsOperator(','):
-        self._HandleError(errors.COMMA_AT_END_OF_LITERAL,
-            'Illegal comma at end of array literal', last_code,
-            Position.All(last_code.string))
+    elif type in (Type.END_PAREN, Type.END_BRACKET):
+      # Ensure there is no space before closing parentheses, except when
+      # it's in a for statement with an omitted section, or when it's at the
+      # beginning of a line.
+      if (token.previous and token.previous.type == Type.WHITESPACE and
+          not token.previous.IsFirstInLine() and
+          not (last_non_space_token and last_non_space_token.line_number ==
+                   token.line_number and
+               last_non_space_token.type == Type.SEMICOLON)):
+        self._HandleError(errors.EXTRA_SPACE, 'Extra space before "%s"' %
+            token.string, token.previous, Position.All(token.previous.string))
+
+      if token.type == Type.END_BRACKET:
+        last_code = token.metadata.last_code
+        if last_code.IsOperator(','):
+          self._HandleError(errors.COMMA_AT_END_OF_LITERAL,
+              'Illegal comma at end of array literal', last_code,
+              Position.All(last_code.string))
 
     elif type == Type.WHITESPACE:
       if self.ILLEGAL_TAB.search(token.string):
@@ -621,6 +641,13 @@ class EcmaScriptLintRules(checkerbase.LintRulesBase):
               token)
 
     elif type == Type.END_PARAMETERS:
+      # Find extra space at the end of parameter lists.  We check the token
+      # prior to the current one when it is a closing paren.
+      if (token.previous and token.previous.type == Type.PARAMETERS
+          and self.ENDS_WITH_SPACE.search(token.previous.string)):
+        self._HandleError(errors.EXTRA_SPACE, 'Extra space before ")"',
+            token.previous)
+
       jsdoc = state.GetDocComment()
       if state.GetFunction().is_interface:
         if token.previous and token.previous.type == Type.PARAMETERS:
