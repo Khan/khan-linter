@@ -645,8 +645,9 @@ class EcmaScriptLintRules(checkerbase.LintRulesBase):
       # prior to the current one when it is a closing paren.
       if (token.previous and token.previous.type == Type.PARAMETERS
           and self.ENDS_WITH_SPACE.search(token.previous.string)):
+        space_start = self.ENDS_WITH_SPACE.search(token.previous.string).start()
         self._HandleError(errors.EXTRA_SPACE, 'Extra space before ")"',
-            token.previous)
+            token.previous, Position(space_start, len(token.previous.string) - space_start))
 
       jsdoc = state.GetDocComment()
       if state.GetFunction().is_interface:
