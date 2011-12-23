@@ -79,14 +79,16 @@ def FormatTime(t):
     return '%.2fs' % t
 
 
-def main(argv = None):
+def main(argv=None):
   """Main function.
 
   Args:
     argv: Sequence of command line arguments.
   """
   if argv is None:
-    argv = flags.FLAGS(sys.argv)
+    argv = sys.argv
+
+  argv = flags.FLAGS(argv)
 
   if FLAGS.time:
     start_time = time.time()
@@ -105,7 +107,8 @@ def main(argv = None):
 
   runner = checker.GJsLintRunner()
   result = runner.Run(files, error_handler)
-  result.PrintSummary()
+  if FLAGS.summary:
+    result.PrintSummary()
 
   exit_code = 0
   if result.HasOldErrors():
@@ -121,28 +124,10 @@ def main(argv = None):
       # Make a beep noise.
       sys.stdout.write(chr(7))
 
-    # Write out instructions for using fixjsstyle script to fix some of the
-    # reported errors.
-    fix_args = []
-    for flag in sys.argv[1:]:
-      for f in GJSLINT_ONLY_FLAGS:
-        if flag.startswith(f):
-          break
-      else:
-        fix_args.append(flag)
-
-    print """
-Some of the errors reported by GJsLint may be auto-fixable using the script
-fixjsstyle. Please double check any changes it makes and report any bugs. The
-script can be run by executing:
-
-fixjsstyle %s """ % ' '.join(fix_args)
-
   if FLAGS.time:
     print 'Done in %s.' % FormatTime(time.time() - start_time)
 
-  sys.exit(exit_code)
-
+  return exit_code
 
 if __name__ == '__main__':
-  main()
+  sys.exit(main(sys.argv))
