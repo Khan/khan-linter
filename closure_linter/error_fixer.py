@@ -173,6 +173,11 @@ class ErrorFixer(errorhandler.ErrorHandler):
           token.string = error.position.Set(token.string, ' ')
         self._AddFix(token)
 
+      elif token.type == Type.PARAMETERS:
+        # Space may be missing in the middle of this token
+        token.string = re.sub(r',(\S)', r', \1', token.string)
+        self._AddFix(token)
+
     elif code == errors.EXTRA_SPACE:
       if error.position:
         token.string = error.position.Set(token.string, '')
