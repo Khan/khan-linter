@@ -146,6 +146,14 @@ class ErrorFixer(errorhandler.ErrorHandler):
       tokenutil.DeleteToken(token)
       self._AddFix(token)
 
+    elif code == errors.ILLEGAL_TAB:
+      # Replace tabs with 4-spaces
+      space_token = Token('    ' * len(token.string), Type.WHITESPACE,
+                          token.line, token.line_number)
+      tokenutil.InsertTokenAfter(space_token, token)
+      tokenutil.DeleteToken(token)
+      self._AddFix(token)
+
     elif code == errors.INVALID_JSDOC_TAG:
       if token.string == '@returns':
         token.string = '@return'
