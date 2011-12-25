@@ -29,7 +29,11 @@ def main():
     """
     failed = []
 
-    blacklisted = set([l.strip() for l in open('lint-blacklist.txt', 'r')])
+    try:
+        blacklisted = set([l.strip() for l in open('lint-blacklist.txt', 'r')])
+    except IOError as e:
+        # Can't find blacklist file? Oh well.
+        blacklisted = set()
 
     # Go through all modified or added files.
     for line in commands.getoutput('hg status -a -m --change tip').split('\n'):
