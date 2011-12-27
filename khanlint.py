@@ -1,14 +1,6 @@
 #!/usr/bin/env python
 
 # Pre-commit checks to check for readability.
-# Add to .hgrc to use:
-#
-# [hooks]
-# pretxncommit.lint = /path/to/this/file.py
-#
-# If a forced commit is required, set the environment variable
-# FORCE_COMMIT to 1 prior to calling 'hg commit' (there doesn't
-# seem to be a way to pass args to a pretxncommit script otherwise)
 
 import commands
 import os

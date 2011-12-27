@@ -19,4 +19,8 @@ Add to .hgrc to use:
 [hooks]
 pretxncommit.lint = /path/to/khanlint.py
 
-Or, if you would like to lint manually, invoke gjslint.py. You can try to also use fixjsstyle.py to automatically fix some style violations.
+If the project has a lint-blacklist.txt in the top level directory of the project, files listed there will be ignored in the linting process. This can be useful for legacy files.
+
+If a forced commit is required, set the environment variable  FORCE_COMMIT to 1 prior to calling 'hg commit' (there doesn't  seem to be a way to pass args to a pretxncommit script otherwise)
+
+If you would like to lint manually, invoke gjslint.py. You can try to also use fixjsstyle.py to automatically fix some style violations.
