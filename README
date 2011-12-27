@@ -5,7 +5,18 @@ http://code.google.com/closure/utilities/
 
 It has been modified to suit Khan Academy's slightly different style guides and wrapper scripts have been created to be used as pre-commit hooks for Mercurial.
 
+
+Usage
+==========
+
+First, install gflags:
+
+$ easy_install "http://python-gflags.googlecode.com/files/python_gflags-1.7-py2.6.egg"
+
+Then you can automatically invoke lints on modified or added files in Mercurial.
 Add to .hgrc to use:
 
 [hooks]
 pretxncommit.lint = /path/to/khanlint.py
+
+Or, if you would like to lint manually, invoke gjslint.py. You can try to also use fixjsstyle.py to automatically fix some style violations.
