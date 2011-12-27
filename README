@@ -1,9 +1,11 @@
-This repository contains the Closure Linter - a style checker for JavaScript.
+This repository contains linting tools for Khan Academy's codebase.
 
-To install the application, run
-   python ./setup.py install
+Most of the JavaScript linting code is based on Google's freely available and open-source Closure Linter:
+http://code.google.com/closure/utilities/
 
-After installing, you get two helper applications installed into /usr/local/bin:
+It has been modified to suit Khan Academy's slightly different style guides and wrapper scripts have been created to be used as pre-commit hooks for Mercurial.
 
-   gjslint.py - runs the linter and checks for errors
-   fixjsstyle.py - tries to fix errors automatically
+Add to .hgrc to use:
+
+[hooks]
+pretxncommit.lint = /path/to/khanlint.py
