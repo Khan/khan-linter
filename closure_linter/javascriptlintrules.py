@@ -253,18 +253,6 @@ class JavaScriptLintRules(ecmalintrules.EcmaScriptLintRules):
       if state.InFunction() and state.IsFunctionClose():
         is_immediately_called = (token.next and
                                  token.next.type == Type.START_PAREN)
-        if (function.has_this and function.doc and
-            not function.doc.HasFlag('this') and
-            not function.is_constructor and
-            not function.is_interface and
-            '.prototype.' not in function.name):
-          self._HandleError(
-              errors.MISSING_JSDOC_TAG_THIS,
-              'Missing @this JsDoc in function referencing "this". ('
-              'this usually means you are trying to reference "this" in '
-              'a static function, or you have forgotten to mark a '
-              'constructor with @constructor)',
-              function.doc.end_token, Position.AtBeginning())
 
     elif token.type == Type.OPERATOR:
       last_in_line = token.IsLastInLine()
