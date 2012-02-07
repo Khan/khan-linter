@@ -28,7 +28,7 @@ def main():
         blacklisted = set()
 
     num_heads = len(commands.getoutput('hg heads --template X'))
-    if num_heads:
+    if num_heads > 1:
         # Don't run on merges
         print "Skipping lint on merge..."
         return 0
