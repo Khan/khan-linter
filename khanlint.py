@@ -27,6 +27,12 @@ def main():
         # Can't find blacklist file? Oh well.
         blacklisted = set()
 
+    num_heads = len(commands.getoutput('hg heads --template X'))
+    if num_heads:
+        # Don't run on merges
+        print "Skipping lint on merge..."
+        return 0
+
     # Go through all modified or added files.
     for line in commands.getoutput('hg status -a -m --change tip').split('\n'):
         # each line of the format "M path/to/filename.js"
@@ -46,9 +52,10 @@ def main():
         print >> sys.stderr, (("\n\033[01;31m%s files failed linting\033[0m" +
                               "\nCommit message saved to .hg/commit.save") %
                               len(failed))
-        sys.exit(1)
+        return 1
+    return 0
 
 if __name__ == '__main__':
     force = os.getenv('FORCE_COMMIT')
     if force is None or force.lower() not in ['1', 'true']:
-        main()
+        sys.exit(main())
