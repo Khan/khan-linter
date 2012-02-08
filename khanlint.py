@@ -27,7 +27,7 @@ def main():
         # Can't find blacklist file? Oh well.
         blacklisted = set()
 
-    num_heads = len(commands.getoutput('hg heads --template X'))
+    num_heads = int(commands.getoutput('hg heads | grep -c "^parent:"') or 0)
     if num_heads > 1:
         # Don't run on merges
         print "Skipping lint on merge..."
