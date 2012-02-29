@@ -147,6 +147,24 @@ class ErrorPrinter(errorhandler.ErrorHandler):
         error_code = 'New Error ' + error_code
       print '%s:%s:(%s) %s' % (filename, line, error_code, error.message)
 
+  def relpath(self, path, start='.'):
+    if not path:
+      raise ValueError("no path specified")
+
+    if hasattr(os.path, 'relpath'):
+      return os.path.relpath(path, start)
+
+    start_list = [x for x in os.path.abspath(start).split(os.path.sep) if x]
+    path_list = [x for x in os.path.abspath(path).split(os.path.sep) if x]
+
+    # Work out how much of the filepath is shared by start and path.
+    i = len(os.path.commonprefix([start_list, path_list]))
+
+    rel_list = [os.path.pardir] * (len(start_list)-i) + path_list[i:]
+    if not rel_list:
+      return curdir
+    return os.path.join(*rel_list)
+
   def FinishFile(self):
     """Finishes handling the current file."""
     if self._file_errors:
@@ -154,7 +172,7 @@ class ErrorPrinter(errorhandler.ErrorHandler):
 
       if self._format != UNIX_FORMAT:
         print ('----- FILE  :  \033[33m%s\033[0m -----' %
-            os.path.relpath(self._filename))
+            self.relpath(self._filename))
 
       self._file_errors.sort(Error.Compare)
 
