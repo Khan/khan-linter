@@ -23,18 +23,21 @@ def main():
 
     try:
         blacklisted = set([l.strip() for l in open('lint-blacklist.txt', 'r')])
-    except IOError as e:
+    except IOError:
         # Can't find blacklist file? Oh well.
         blacklisted = set()
 
-    num_heads = int(commands.getoutput('hg heads | grep -c "^parent:"') or 0)
+    try:
+        num_heads = int(commands.getoutput('hg heads | grep -c "^parent:" 2> /dev/null') or 1)
+    except Exception:
+        num_heads = 1 # hg heads must have bonked. Just proceed and do the lint.
     if num_heads > 1:
         # Don't run on merges
         print "Skipping lint on merge..."
         return 0
 
     # Go through all modified or added files.
-    for line in commands.getoutput('hg status -a -m --change tip').split('\n'):
+    for line in commands.getoutput('hg status -a -m --change tip 2> /dev/null').split('\n'):
         # each line of the format "M path/to/filename.js"
         status, filename = line.split(' ')
         if not filename.endswith('.js'):
