@@ -2,12 +2,14 @@
 
 # Pre-commit checks to check for readability.
 
+from closure_linter import gjslint
+from subprocess import Popen, PIPE
+
 import commands
 import os
 import re
 import sys
 
-from closure_linter import gjslint
 
 def check_file(filename):
     fake_args = [gjslint.__file__, '--nobeep', filename]
@@ -28,7 +30,9 @@ def main():
         blacklisted = set()
 
     try:
-        num_heads = int(commands.getoutput('hg heads | grep -c "^parent:" 2> /dev/null') or 1)
+        p1 = Popen(["hg", "heads"], stdout=PIPE)
+        p2 = Popen(['grep', '-c', '"^parent:"'], stdin=p1.stdout, stdout=PIPE)
+        num_heads = int(p2.communicate()[0] or 1)
     except Exception:
         num_heads = 1 # hg heads must have bonked. Just proceed and do the lint.
     if num_heads > 1:
@@ -37,17 +41,24 @@ def main():
         return 0
 
     # Go through all modified or added files.
-    for line in commands.getoutput('hg status -a -m --change tip 2> /dev/null').split('\n'):
-        # each line of the format "M path/to/filename.js"
-        status, filename = line.split(' ')
-        if not filename.endswith('.js'):
-            continue
+    try:
+        filelist = Popen(["hg", "status", "-a", "-m", "--change", "tip"], stdout=PIPE).communicate()[0].rstrip('\n')
+    except OSError, e:
+        print >> sys.stderr, "Error calling hg status:", e
+        return 1
 
-        if status == 'M' and filename in blacklisted:
-            # Blacklisted legacy file - don't lint.
-            continue
-        if not check_file(filename):
-            failed.append(filename)
+    if filelist != "":
+        for line in filelist.split('\n'):
+            # each line of the format "M path/to/filename.js"
+            status, filename = line.split(' ')
+            if not filename.endswith('.js'):
+                continue
+
+            if status == 'M' and filename in blacklisted:
+                # Blacklisted legacy file - don't lint.
+                continue
+            if not check_file(filename):
+                failed.append(filename)
 
     if failed:
         # save the commit message so we don't need to retype it
