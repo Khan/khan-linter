@@ -9,9 +9,9 @@ It has been modified to suit Khan Academy's slightly different style guides and 
 Usage
 ==========
 
-First, install gflags:
+First, install dependent packages via the requirements.txt file
 
-$ easy_install "http://python-gflags.googlecode.com/files/python_gflags-1.7-py2.6.egg"
+$ pip install -r requirements.txt
 
 Then you can automatically invoke lints on modified or added files in Mercurial.
 Add to .hgrc to use:
