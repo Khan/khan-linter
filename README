@@ -17,7 +17,7 @@ Then you can automatically invoke lints on modified or added files in Mercurial.
 Add to .hgrc to use:
 
 [hooks]
-pretxncommit.lint = /path/to/khanlint.py
+pretxncommit.lint = /path/to/khan-linter/hghook.py
 
 If the project has a lint-blacklist.txt in the top level directory of the project, files listed there will be ignored in the linting process. This can be useful for legacy files.
 
