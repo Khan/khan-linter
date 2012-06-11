@@ -46,8 +46,8 @@ except ImportError, why:
              % why)
 
 
-_BLACKLIST_FILE = os.path.join(os.path.dirname(__file__),
-                               'runlint_blacklist.txt')
+_DEFAULT_BLACKLIST_FILENAME = os.path.join(os.path.dirname(__file__),
+                                           'runlint_blacklist.txt')
 
 
 # TODO(csilvers): move python stuff to its own file, so this file
@@ -395,8 +395,11 @@ def main(files, directories, options):
         }
 
     if options.blacklist == 'yes':
-        blacklist = _parse_blacklist(_BLACKLIST_FILE)
-        files = [f for f in files if os.path.normpath(f) not in blacklist]
+        file_blacklist = _parse_blacklist(options.blacklist_filename)
+        dir_blacklist = file_blacklist
+    elif options.blacklist == 'auto':
+        file_blacklist = []
+        dir_blacklist = _parse_blacklist(options.blacklist_filename)
     else:
         blacklist = None
 
@@ -449,7 +452,13 @@ if __name__ == '__main__':
                       # TODO(csilvers): ignore --flags when doing this check.
                       default='no' if sys.argv[1:] else 'yes',
                       help=('If yes, ignore files that are on the blacklist. '
-                            'If no, do not consult the blacklist.')),
+                            'If no, do not consult the blacklist. '
+                            'If auto, use the blacklist for directories listed'
+                            ' on the commandline, but not for files. '
+                            'Default: %default'))
+    parser.add_option('--blacklist-filename',
+                      default=_DEFAULT_BLACKLIST_FILENAME,
+                      help='The file to use as a blacklist. Default: %default')
     parser.add_option('--lang',
                       choices=[''] + list(set(_EXTENSION_DICT.itervalues())),
                       default='',
