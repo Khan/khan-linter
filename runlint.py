@@ -394,6 +394,8 @@ def main(files, directories, options):
         'unknown': None,
         }
 
+    # options.blacklist controls whether we use a blacklist on our
+    # 'files' parameter, on our 'directories' parameter, or both.
     if options.blacklist == 'yes':
         file_blacklist = _parse_blacklist(options.blacklist_filename)
         dir_blacklist = file_blacklist
@@ -401,7 +403,11 @@ def main(files, directories, options):
         file_blacklist = []
         dir_blacklist = _parse_blacklist(options.blacklist_filename)
     else:
-        blacklist = None
+        file_blacklist = []
+        dir_blacklist = []
+        
+    if file_blacklist:
+        files = [f for f in files if not _file_in_blacklist(f, file_blacklist)]
 
     # Log explicitly listed files that we're skipping because we don't
     # know how to lint them.  (But don't log implicitly found files
@@ -417,8 +423,7 @@ def main(files, directories, options):
     files = known_language_files
 
     for directory in (directories or []):
-        # We pass in the blacklist here to make it easy to blacklist dirs.
-        files.extend(_files_under_directory(directory, blacklist or []))
+        files.extend(_files_under_directory(directory, dir_blacklist))
 
     num_errors = 0
     for f in files:
@@ -446,11 +451,8 @@ def main(files, directories, options):
 
 if __name__ == '__main__':
     parser = optparse.OptionParser(USAGE)
-    parser.add_option('--blacklist', choices=['yes', 'no'],
-                      # By default, we ignore the blacklist for explicitly
-                      # specified files, but not when traversing under '.'.
-                      # TODO(csilvers): ignore --flags when doing this check.
-                      default='no' if sys.argv[1:] else 'yes',
+    parser.add_option('--blacklist', choices=['yes', 'no', 'auto'],
+                      default='auto',
                       help=('If yes, ignore files that are on the blacklist. '
                             'If no, do not consult the blacklist. '
                             'If auto, use the blacklist for directories listed'
