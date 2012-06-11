@@ -1,1 +1,6 @@
+# Required by python lint checking
+pep8==1.0.1
+pyflakes==0.5.0
+
+# Required by js lint checking
 python-gflags==2.0

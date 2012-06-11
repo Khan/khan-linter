@@ -3,26 +3,26 @@
 import optparse
 import sys
 
-from closure_linter import checker
-from closure_linter import error_fixer
-from closure_linter import gjslint
+import closure_linter
 
 
 USAGE = """%prog [options] [file1] [file2]...
 
 Run a JavaScript linter on one or more files.
 
-This will invoke the linter, and optionally attempt to auto-fix style-violations on the specified JavaScript files.
+This will invoke the linter, and optionally attempt to auto-fix
+style-violations on the specified JavaScript files.
 """
 
 
 def check_files(filenames):
-    fake_args = [gjslint.__file__, '--nobeep'] + filenames
-    return gjslint.main(argv=fake_args) == 0
+    fake_args = [closure_linter.gjslint.__file__, '--nobeep'] + filenames
+    return closure_linter.gjslint.main(argv=fake_args) == 0
 
 
 def fix_files(filenames):
-    style_checker = checker.JavaScriptStyleChecker(error_fixer.ErrorFixer())
+    style_checker = closure_linter.checker.JavaScriptStyleChecker(
+        closure_linter.error_fixer.ErrorFixer())
 
     for filename in filenames:
         style_checker.Check(filename)
@@ -31,10 +31,7 @@ def fix_files(filenames):
 
 def main():
     parser = optparse.OptionParser(USAGE)
-    parser.add_option('--autofix',
-                      dest='autofix',
-                      action='store_true',
-                      default=False,
+    parser.add_option('--autofix', action='store_true', default=False,
                       help='Whether or not to autofix')
     options, args = parser.parse_args()
     if options.autofix:
