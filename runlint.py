@@ -60,42 +60,6 @@ _DEFAULT_PEP8_ARGS = ['--repeat',
                       '--ignore=W291,W293,W391']
 
 
-def _parse_blacklist(blacklist_filename):
-    """Read from blacklist filename and returns a set of the contents.
-
-    Blank lines and those that start with # are ignored.
-
-    Arguments:
-       blacklist_filename: the name of the blacklist file
-
-    Returns:
-       A set of all the paths listed in blacklist_filename.
-       These paths may be filename strings, directory name strings,
-       or re objects (for blacklist entries with '*'/etc in them).
-    """
-    retval = set()
-    contents = open(blacklist_filename).readlines()
-    for line in contents:
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        if re.search(r'[[*?!]', line):   # has a char meaningful to glob()
-            if line.startswith('**/'):   # magic 'many directory' matcher
-                fnmatch_line = line[len('**/'):]
-                re_prefix = '.*'
-            else:
-                fnmatch_line = line
-                re_prefix = ''
-            fnmatch_re = fnmatch.translate(fnmatch_line)   # glob -> re
-            # For some unknown reason, fnmatch.translate tranlates '*'
-            # to '.*' rather than '[^/]*'.  We have to fix that.
-            fnmatch_re = fnmatch_re.replace('.*', '[^/]*')
-            retval.add(re.compile(re_prefix + fnmatch_re))
-        else:
-            retval.add(line)
-    return retval
-
-
 def _capture_stdout_of(fn, *args, **kwargs):
     """Call fn(*args, **kwargs) and return (fn_retval, fn_stdout_output_fp)."""
     try:
@@ -332,6 +296,42 @@ class ClosureLinter(object):
         return self._num_errors
 
 
+def _parse_blacklist(blacklist_filename):
+    """Read from blacklist filename and returns a set of the contents.
+
+    Blank lines and those that start with # are ignored.
+
+    Arguments:
+       blacklist_filename: the name of the blacklist file
+
+    Returns:
+       A set of all the paths listed in blacklist_filename.
+       These paths may be filename strings, directory name strings,
+       or re objects (for blacklist entries with '*'/etc in them).
+    """
+    retval = set()
+    contents = open(blacklist_filename).readlines()
+    for line in contents:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if re.search(r'[[*?!]', line):   # has a char meaningful to glob()
+            if line.startswith('**/'):   # magic 'many directory' matcher
+                fnmatch_line = line[len('**/'):]
+                re_prefix = '.*'
+            else:
+                fnmatch_line = line
+                re_prefix = ''
+            fnmatch_re = fnmatch.translate(fnmatch_line)   # glob -> re
+            # For some unknown reason, fnmatch.translate tranlates '*'
+            # to '.*' rather than '[^/]*'.  We have to fix that.
+            fnmatch_re = fnmatch_re.replace('.*', '[^/]*')
+            retval.add(re.compile(re_prefix + fnmatch_re))
+        else:
+            retval.add(line)
+    return retval
+
+
 def _file_in_blacklist(fname, blacklist):
     """Checks whether fname matches any entry in blacklist."""
     # The blacklist entries must be normalized, so normalize fname too.
@@ -383,7 +383,7 @@ def _lang(filename, lang_option):
 
 def main(files, directories,
          blacklist='auto', blacklist_filename=_DEFAULT_BLACKLIST_FILENAME,
-         lang=''):
+         lang='', verbose=False):
     """Call the appropriate linters on all given files and directory trees.
 
     Arguments:
@@ -392,6 +392,7 @@ def main(files, directories,
       blacklist: 'yes', 'no', or 'auto', as described by --help
       blacklist_filename: where to read the blacklist, as described by --help
       lang: the language to interpret all files to be in, or '' to auto-detect
+      verbose: print messages about what we're doing, to stdout
 
     Returns:
       The number of errors seen while linting.  0 means lint-cleanliness!
@@ -412,13 +413,18 @@ def main(files, directories,
     if blacklist == 'yes':
         file_blacklist = _parse_blacklist(blacklist_filename)
         dir_blacklist = file_blacklist
+        if verbose:
+            print 'Using blacklist %s for all files' % blacklist_filename
     elif blacklist == 'auto':
         file_blacklist = []
         dir_blacklist = _parse_blacklist(blacklist_filename)
+        if verbose:
+            print ('Using blacklist %s for files under %s'
+                   % (blacklist_filename, ' and '.join(directories)))
     else:
         file_blacklist = []
         dir_blacklist = []
-        
+
     if file_blacklist:
         files = [f for f in files if not _file_in_blacklist(f, file_blacklist)]
 
@@ -427,28 +433,34 @@ def main(files, directories,
     # found in directory-trees.)
     known_language_files = []
     for f in files:
-        lang = _lang(f, lang)
-        if processor_dict.get(lang, None) is not None:
+        file_lang = _lang(f, lang)
+        if processor_dict.get(file_lang, None) is None:
+            if verbose:
+                print ("Skipping lint of %s: don't know how to lint %s files"
+                       % (f, file_lang))
+        else:
             known_language_files.append(f)
     files = known_language_files
 
-    for directory in (directories or []):
+    for directory in directories:
         files.extend(_files_under_directory(directory, dir_blacklist))
 
     num_errors = 0
     for f in files:
-        lang = _lang(f, lang)
-        lint_processors = processor_dict.get(lang, None)
+        file_lang = _lang(f, lang)
+        lint_processors = processor_dict.get(file_lang, None)
         if lint_processors is None:
             continue
 
         try:
             contents = open(f, 'U').read()
         except (IOError, OSError), why:
-            print "SKIPPING %s: %s" % (f, why.args[1])
+            print "SKIPPING lint of %s: %s" % (f, why.args[1])
             num_errors += 1
             continue
 
+        if verbose:
+            print '--- linting %s (%s)' % (f, file_lang)
         for lint_processor in lint_processors:
             lint_processor.process(f, contents)
 
@@ -479,6 +491,8 @@ if __name__ == '__main__':
     parser.add_option('--always-exit-0', action='store_true', default=False,
                       help=('Exit 0 even if there are lint errors. '
                             'Only useful when used with phabricator.'))
+    parser.add_option('--verbose', action='store_true', default=False,
+                      help='Print information about what is happening.')
 
     options, args = parser.parse_args()
     if args:
@@ -489,7 +503,7 @@ if __name__ == '__main__':
         directories = ['.']
     num_errors = main(files, directories,
                       options.blacklist, options.blacklist_filename,
-                      options.lang)
+                      options.lang, options.verbose)
 
     if options.always_exit_0:
         sys.exit(0)
