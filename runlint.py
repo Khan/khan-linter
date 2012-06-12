@@ -381,8 +381,21 @@ def _lang(filename, lang_option):
     return _EXTENSION_DICT.get(extension, 'unknown')
 
 
-def main(files, directories, options):
-    """Calls the appropriate linters on all given files and directory trees."""
+def main(files, directories,
+         blacklist='auto', blacklist_filename=_DEFAULT_BLACKLIST_FILENAME,
+         lang=''):
+    """Call the appropriate linters on all given files and directory trees.
+
+    Arguments:
+      files: a list/set/etc of files to lint
+      directories: a list/etc of directories to lint all files under
+      blacklist: 'yes', 'no', or 'auto', as described by --help
+      blacklist_filename: where to read the blacklist, as described by --help
+      lang: the language to interpret all files to be in, or '' to auto-detect
+
+    Returns:
+      The number of errors seen while linting.  0 means lint-cleanliness!
+    """
     # A dict that maps from language (output of _lang) to a list of processors.
     # None means that we skip files of this language.
     processor_dict = {
@@ -394,14 +407,14 @@ def main(files, directories, options):
         'unknown': None,
         }
 
-    # options.blacklist controls whether we use a blacklist on our
+    # blacklist controls whether we use a blacklist on our
     # 'files' parameter, on our 'directories' parameter, or both.
-    if options.blacklist == 'yes':
-        file_blacklist = _parse_blacklist(options.blacklist_filename)
+    if blacklist == 'yes':
+        file_blacklist = _parse_blacklist(blacklist_filename)
         dir_blacklist = file_blacklist
-    elif options.blacklist == 'auto':
+    elif blacklist == 'auto':
         file_blacklist = []
-        dir_blacklist = _parse_blacklist(options.blacklist_filename)
+        dir_blacklist = _parse_blacklist(blacklist_filename)
     else:
         file_blacklist = []
         dir_blacklist = []
@@ -414,7 +427,7 @@ def main(files, directories, options):
     # found in directory-trees.)
     known_language_files = []
     for f in files:
-        lang = _lang(f, options.lang)
+        lang = _lang(f, lang)
         if processor_dict.get(lang, None) is None:
             print ("SKIPPING %s: can't lint language '%s' (c.f. --lang)"
                    % (f, lang))
@@ -427,7 +440,7 @@ def main(files, directories, options):
 
     num_errors = 0
     for f in files:
-        lang = _lang(f, options.lang)
+        lang = _lang(f, lang)
         lint_processors = processor_dict.get(lang, None)
         if lint_processors is None:
             continue
@@ -472,9 +485,14 @@ if __name__ == '__main__':
 
     options, args = parser.parse_args()
     if args:
-        num_errors = main(files=args, directories=[], options=options)
+        files = args
+        directories = []
     else:
-        num_errors = main(files=[], directories=['.'], options=options)
+        files = []
+        directories = ['.']
+    num_errors = main(files, directories,
+                      options.blacklist, options.blacklist_filename,
+                      options.lang)
 
     if options.always_exit_0:
         sys.exit(0)

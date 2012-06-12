@@ -1,26 +1,43 @@
 This repository contains linting tools for Khan Academy's codebase.
 
-Most of the JavaScript linting code is based on Google's freely available and open-source Closure Linter:
-http://code.google.com/closure/utilities/
+Most of the JavaScript linting code is based on Google's freely
+available and open-source Closure Linter:
+   http://code.google.com/closure/utilities/
 
-It has been modified to suit Khan Academy's slightly different style guides and wrapper scripts have been created to be used as pre-commit hooks for Mercurial.
+It has been modified to suit Khan Academy's slightly different style
+guides.
+
+The python linting is based on pep8, with some slight modifications
+(captured in runlint.py).
+
+This repository also contains a wrapper script that can be used as a
+pre-commit hook for Mercurial.
 
 
 Usage
-==========
+=====
 
 First, install dependent packages via the requirements.txt file
+   $ pip install -r requirements.txt
 
-$ pip install -r requirements.txt
-
-Then you can automatically invoke lints on modified or added files in Mercurial.
-Add to .hgrc to use:
+Then you can automatically invoke lints on modified or added files in
+Mercurial.  Add to .hgrc to use:
 
 [hooks]
 pretxncommit.lint = /path/to/khan-linter/hghook.py
 
-If the project has a lint-blacklist.txt in the top level directory of the project, files listed there will be ignored in the linting process. This can be useful for legacy files.
+You can update the blacklist file in this repository to control what
+files should not be linted at all.  Alternately, you can create a
+blacklist of your own, and use the --blacklist_file flag to runlint.py
+(you'll have to modify hghook.py to pass in the name of the blacklist
+file as well).
 
-If a forced commit is required, set the environment variable  FORCE_COMMIT to 1 prior to calling 'hg commit' (there doesn't  seem to be a way to pass args to a pretxncommit script otherwise)
+To suppress the lint check, set the environment variable FORCE_COMMIT
+to 1 prior to calling 'hg commit' (there doesn't seem to be a way to
+pass args to a pretxncommit script otherwise).
 
-If you would like to lint manually, invoke gjslint.py. You can try to also use fixjsstyle.py to automatically fix some style violations.
+If you would like to lint manually, invoke runlint.py.  By default,
+this will lint all files under the current directory.  Alternately,
+you can specify files on the commadnline to lint.  See
+   runlint.py --help
+for more options.
