@@ -169,6 +169,7 @@ javascript/stories-package/events.js
 javascript/stories-package/seedrandom.js
 javascript/studentlists-package/class-goals.js
 javascript/studentlists-package/class-progress-report.js
+javascript/studentlists-package/class-progress-summary.js
 javascript/studentlists-package/classprofile.js
 javascript/test/handlebars-test.js
 javascript/test/qunit.js
