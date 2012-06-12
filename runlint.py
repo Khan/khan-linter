@@ -428,10 +428,7 @@ def main(files, directories,
     known_language_files = []
     for f in files:
         lang = _lang(f, lang)
-        if processor_dict.get(lang, None) is None:
-            print ("SKIPPING %s: can't lint language '%s' (c.f. --lang)"
-                   % (f, lang))
-        else:
+        if processor_dict.get(lang, None) is not None:
             known_language_files.append(f)
     files = known_language_files
 
