@@ -38,6 +38,6 @@ pass args to a pretxncommit script otherwise).
 
 If you would like to lint manually, invoke runlint.py.  By default,
 this will lint all files under the current directory.  Alternately,
-you can specify files on the commadnline to lint.  See
+you can specify files on the commandline to lint.  See
    runlint.py --help
 for more options.

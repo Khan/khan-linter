@@ -18,10 +18,6 @@ import sys
 import runlint
 
 
-def check_file(filename):
-    """Do linting, return True iff the input file has no lint errors."""
-
-
 def main():
     """Run a Mercurial pre-commit lint-check."""
     # If we're a merge, don't try to do a lint-check.
