@@ -127,7 +127,10 @@ javascript/intro-package/exercises-intro.js
 javascript/intro-package/guiders.js
 javascript/knowledgemap-package/kmap-editor.js
 javascript/login-package/bday-picker.js
+javascript/maps-package/bootstrap-popover.js
+javascript/maps-package/bootstrap-tooltip.js
 javascript/maps-package/fastmarkeroverlay.js
+javascript/maps-package/knowledgemap.js
 javascript/mobile-package/jquery.js
 javascript/mobile-package/jquery.mobile-1.0a4.1.js
 javascript/mobile-package/mobile.js
@@ -148,6 +151,7 @@ javascript/shared-package/hover-card.js
 javascript/shared-package/jquery-ui-1.8.16.custom.js
 javascript/shared-package/jquery.hoverflow.js
 javascript/shared-package/jquery.js
+javascript/shared-package/jquery.mousewheel.js
 javascript/shared-package/jquery.placeholder.js
 javascript/shared-package/jquery.qtip.js
 javascript/shared-package/jquery.timeago.js
