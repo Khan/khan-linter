@@ -136,6 +136,7 @@ javascript/mobile-package/jquery.mobile-1.0a4.1.js
 javascript/mobile-package/mobile.js
 javascript/profile-package/highcharts.js
 javascript/profile-package/jquery.address-1.4.min.js
+javascript/profile-package/jquery.expander.js
 javascript/random/linkheat.js
 javascript/shared-package/api.js
 javascript/shared-package/backbone-extensions.js
