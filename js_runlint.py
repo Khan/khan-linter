@@ -3,7 +3,9 @@
 import optparse
 import sys
 
-import closure_linter
+import closure_linter.checker
+import closure_linter.error_fixer
+import closure_linter.gjslint
 
 
 USAGE = """%prog [options] [file1] [file2]...
