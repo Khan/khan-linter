@@ -15,11 +15,13 @@ Run linters over the given files, or the current directory tree.
 
 By default -- if no commandline arguments are given -- this runs the
 linters on all non-blacklisted python file under the current
-directory.  The blacklist is in runlint_blacklist.txt
+directory.  By default, the blacklist is in a file called
+lint_blacklist.txt, in some directory in or above the files being
+linted.
 
 If commandline arguments are given, this runs the linters on all the
 files listed on the commandline, regardless of their presence in the
-blacklist.
+blacklist (this behavior is controlled by the --blacklist flag).
 
 This script automatically determines the linter to run based on the
 filename extension.  (This can be overridden with the --lang flag.)
@@ -46,8 +48,7 @@ except ImportError, why:
              % why)
 
 
-_DEFAULT_BLACKLIST_FILENAME = os.path.join(os.path.dirname(__file__),
-                                           'runlint_blacklist.txt')
+_DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
 
 
 # TODO(csilvers): move python stuff to its own file, so this file
@@ -296,19 +297,28 @@ class ClosureLinter(object):
         return self._num_errors
 
 
+_BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
+
+
 def _parse_blacklist(blacklist_filename):
     """Read from blacklist filename and returns a set of the contents.
 
     Blank lines and those that start with # are ignored.
 
     Arguments:
-       blacklist_filename: the name of the blacklist file
+       blacklist_filename: the full path of the blacklist file
 
     Returns:
        A set of all the paths listed in blacklist_filename.
        These paths may be filename strings, directory name strings,
        or re objects (for blacklist entries with '*'/etc in them).
     """
+    if not blacklist_filename:
+        return set()
+
+    if blacklist_filename in _BLACKLIST_CACHE:
+        return _BLACKLIST_CACHE[blacklist_filename]
+
     retval = set()
     contents = open(blacklist_filename).readlines()
     for line in contents:
@@ -328,14 +338,69 @@ def _parse_blacklist(blacklist_filename):
             fnmatch_re = fnmatch_re.replace('.*', '[^/]*')
             retval.add(re.compile(re_prefix + fnmatch_re))
         else:
-            retval.add(line)
+            retval.add(os.path.normpath(line))
+    _BLACKLIST_CACHE[blacklist_filename] = retval
     return retval
 
 
-def _file_in_blacklist(fname, blacklist):
+# Map of a directory to the blacklist filename in the closest parent
+# directory to the given directory (or possibly the given directory
+# itself).  This is used when blacklist_filename starts with
+# '<ancestor>/'.
+_BLACKLIST_DIR_CACHE = {}
+
+
+def _blacklist_filename(file_to_lint, blacklist_pattern):
+    """Return the appropriate blacklist file for the given filename."""
+    if not blacklist_pattern:
+        return None
+
+    if not blacklist_pattern.startswith('<ancestor>/'):
+        return blacklist_pattern   # the 'pattern' is an actual filename
+
+    # The hard case: resolve '<ancestor>/' to the proper directory.
+    blacklist_basename = blacklist_pattern[len('<ancestor>/'):]
+    blacklist_dir = None
+    d = os.path.dirname(file_to_lint)
+    while os.path.dirname(d) != d:     # not at the root level (/) yet
+        if d in _BLACKLIST_DIR_CACHE:
+            return _BLACKLIST_DIR_CACHE[d]
+        if os.path.exists(os.path.join(d, blacklist_basename)):
+            blacklist_dir = d
+            break
+        d = os.path.dirname(d)
+
+    if blacklist_dir is None:   # never found a blacklist
+        return None
+
+    # Now update _BLACKLIST_DIR_CACHE for all directories that need it.
+    # We now know the proper blacklist file to use for blacklist_dir and
+    # all the directories we saw beneath it.
+    blacklist_filename = os.path.join(blacklist_dir, blacklist_basename)
+    d = os.path.dirname(file_to_lint)
+    while d != os.path.dirname(blacklist_dir):
+        _BLACKLIST_DIR_CACHE[d] = blacklist_filename
+        d = os.path.dirname(d)
+
+    return blacklist_filename
+
+
+def _file_in_blacklist(fname, blacklist_pattern):
     """Checks whether fname matches any entry in blacklist."""
-    # The blacklist entries must be normalized, so normalize fname too.
-    fname = os.path.normpath(fname)
+    # The blacklist entries are taken to be relative to
+    # blacklist_filename-root, so we need to relative-ize basename here.
+    blacklist_filename = _blacklist_filename(fname, blacklist_pattern)
+    if not blacklist_filename:
+        return False
+    blacklist_dir = os.path.abspath(os.path.dirname(blacklist_filename))
+    fname = os.path.abspath(fname)
+    if not fname.startswith(blacklist_dir):
+        print ('WARNING: %s is not under the directory containing the '
+               'blacklist (%s), so we are ignoring the blacklist'
+               % (fname, blacklist_dir))
+    fname = fname[len(blacklist_dir) + 1:]   # +1 for the trailing '/'
+
+    blacklist = _parse_blacklist(blacklist_filename)
     if fname in blacklist:
         return True
 
@@ -349,7 +414,7 @@ def _file_in_blacklist(fname, blacklist):
     return False
 
 
-def _files_under_directory(rootdir, blacklist):
+def _files_under_directory(rootdir, blacklist_pattern):
     """Return a set of files under rootdir not in the blacklist."""
     retval = set()
     for root, dirs, files in os.walk(rootdir):
@@ -358,11 +423,12 @@ def _files_under_directory(rootdir, blacklist):
         # calling del on an element of dirs suppresses os.walk()'s
         # traversal into that dir.)
         for i in xrange(len(dirs) - 1, -1, -1):
-            if _file_in_blacklist(os.path.join(root, dirs[i]), blacklist):
+            if _file_in_blacklist(os.path.join(root, dirs[i]),
+                                  blacklist_pattern):
                 del dirs[i]
         # Prune the files that are in the blacklist.
         for f in files:
-            if _file_in_blacklist(os.path.join(root, f), blacklist):
+            if _file_in_blacklist(os.path.join(root, f), blacklist_pattern):
                 continue
             retval.add(os.path.join(root, f))
     return retval
@@ -382,7 +448,7 @@ def _lang(filename, lang_option):
 
 
 def main(files, directories,
-         blacklist='auto', blacklist_filename=_DEFAULT_BLACKLIST_FILENAME,
+         blacklist='auto', blacklist_pattern=_DEFAULT_BLACKLIST_PATTERN,
          lang='', verbose=False):
     """Call the appropriate linters on all given files and directory trees.
 
@@ -390,7 +456,7 @@ def main(files, directories,
       files: a list/set/etc of files to lint
       directories: a list/etc of directories to lint all files under
       blacklist: 'yes', 'no', or 'auto', as described by --help
-      blacklist_filename: where to read the blacklist, as described by --help
+      blacklist_pattern: where to read the blacklist, as described by --help
       lang: the language to interpret all files to be in, or '' to auto-detect
       verbose: print messages about what we're doing, to stdout
 
@@ -411,42 +477,48 @@ def main(files, directories,
     # blacklist controls whether we use a blacklist on our
     # 'files' parameter, on our 'directories' parameter, or both.
     if blacklist == 'yes':
-        file_blacklist = _parse_blacklist(blacklist_filename)
-        dir_blacklist = file_blacklist
+        file_blacklist = blacklist_pattern
+        dir_blacklist = blacklist_pattern
         if verbose:
-            print 'Using blacklist %s for all files' % blacklist_filename
+            print 'Using blacklist %s for all files' % blacklist_pattern
     elif blacklist == 'auto':
-        file_blacklist = []
-        dir_blacklist = _parse_blacklist(blacklist_filename)
+        file_blacklist = None
+        dir_blacklist = blacklist_pattern
         if verbose:
             print ('Using blacklist %s for files under %s'
-                   % (blacklist_filename, ' and '.join(directories)))
+                   % (blacklist_pattern, ' and '.join(directories)))
     else:
-        file_blacklist = []
-        dir_blacklist = []
+        file_blacklist = None
+        dir_blacklist = None
 
-    if file_blacklist:
-        files = [f for f in files if not _file_in_blacklist(f, file_blacklist)]
-
-    # Log explicitly listed files that we're skipping because we don't
-    # know how to lint them.  (But don't log implicitly found files
-    # found in directory-trees.)
-    known_language_files = []
+    # Ignore explicitly-listed files that are in the blacklist, or
+    # that we don't know how to parse.
+    files_to_lint = []
     for f in files:
+        f = os.path.abspath(f)
         file_lang = _lang(f, lang)
-        if processor_dict.get(file_lang, None) is None:
+        blacklist_filename = _blacklist_filename(f, file_blacklist)
+        if verbose:
+            print ('Considering %s: language %s, blacklist %s'
+                   % (f, file_lang, blacklist_filename)),
+        if _file_in_blacklist(f, file_blacklist):
             if verbose:
-                print ("Skipping lint of %s: don't know how to lint %s files"
-                       % (f, file_lang))
+                print '... skipping (in blacklist)'
+        elif processor_dict.get(file_lang, None) is None:
+            if verbose:
+                print '... skipping (language unknown)'
         else:
-            known_language_files.append(f)
-    files = known_language_files
+            if verbose:
+                print '... LINTING'
+            files_to_lint.append(f)
 
+    # TODO(csilvers): log if we skip a file in a directory because
+    # it's in the blacklist?
     for directory in directories:
-        files.extend(_files_under_directory(directory, dir_blacklist))
+        files_to_lint.extend(_files_under_directory(directory, dir_blacklist))
 
     num_errors = 0
-    for f in files:
+    for f in files_to_lint:
         file_lang = _lang(f, lang)
         lint_processors = processor_dict.get(file_lang, None)
         if lint_processors is None:
@@ -462,7 +534,10 @@ def main(files, directories,
         if verbose:
             print '--- linting %s (%s)' % (f, file_lang)
         for lint_processor in lint_processors:
-            lint_processor.process(f, contents)
+            # To make the lint errors look nicer, let's pass in the
+            # filename relative to the current-working directory,
+            # rather than using the abspath.
+            lint_processor.process(os.path.relpath(f), contents)
 
     # Count up all the errors we've seen:
     for lint_processors in processor_dict.itervalues():
@@ -481,8 +556,13 @@ if __name__ == '__main__':
                             ' on the commandline, but not for files. '
                             'Default: %default'))
     parser.add_option('--blacklist-filename',
-                      default=_DEFAULT_BLACKLIST_FILENAME,
-                      help='The file to use as a blacklist. Default: %default')
+                      default=_DEFAULT_BLACKLIST_PATTERN,
+                      help=('The file to use as a blacklist. If the filename '
+                            'starts with "<ancestor>/", then, for each file '
+                            'to be linted, we take its blacklist to be from '
+                            'the closest parent directory that contains '
+                            'the (rest of the) blacklist filename.'
+                            ' Default: %default'))
     parser.add_option('--lang',
                       choices=[''] + list(set(_EXTENSION_DICT.itervalues())),
                       default='',
