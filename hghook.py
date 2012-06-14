@@ -45,7 +45,8 @@ def main():
             status, filename = line.split(' ', 1)
             files_to_lint.append(filename)
 
-    num_errors = runlint.main(files_to_lint, directories=[], blacklist='yes')
+    num_errors = runlint.main(files_to_lint, blacklist='yes')
+
     if num_errors:
         # save the commit message so we don't need to retype it
         f = open(os.path.join('.hg', 'commit.save'), 'w')

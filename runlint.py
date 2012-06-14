@@ -447,14 +447,14 @@ def _lang(filename, lang_option):
     return _EXTENSION_DICT.get(extension, 'unknown')
 
 
-def main(files, directories,
+def main(files_and_directories,
          blacklist='auto', blacklist_pattern=_DEFAULT_BLACKLIST_PATTERN,
          lang='', verbose=False):
     """Call the appropriate linters on all given files and directory trees.
 
     Arguments:
-      files: a list/set/etc of files to lint
-      directories: a list/etc of directories to lint all files under
+      files_and_directories: a list/set/etc of files to lint, and/or
+         a list/setetc of directories to lint all files under
       blacklist: 'yes', 'no', or 'auto', as described by --help
       blacklist_pattern: where to read the blacklist, as described by --help
       lang: the language to interpret all files to be in, or '' to auto-detect
@@ -485,8 +485,8 @@ def main(files, directories,
         file_blacklist = None
         dir_blacklist = blacklist_pattern
         if verbose:
-            print ('Using blacklist %s for files under %s'
-                   % (blacklist_pattern, ' and '.join(directories)))
+            print ('Using blacklist %s for files under directories'
+                   % blacklist_pattern)
     else:
         file_blacklist = None
         dir_blacklist = None
@@ -494,7 +494,12 @@ def main(files, directories,
     # Ignore explicitly-listed files that are in the blacklist, or
     # that we don't know how to parse.
     files_to_lint = []
-    for f in files:
+    directories_to_lint = []
+    for f in files_and_directories:
+        if os.path.isdir(f):
+            directories_to_lint.append(f)
+            continue
+
         f = os.path.abspath(f)
         file_lang = _lang(f, lang)
         blacklist_filename = _blacklist_filename(f, file_blacklist)
@@ -514,7 +519,7 @@ def main(files, directories,
 
     # TODO(csilvers): log if we skip a file in a directory because
     # it's in the blacklist?
-    for directory in directories:
+    for directory in directories_to_lint:
         files_to_lint.extend(_files_under_directory(directory, dir_blacklist))
 
     num_errors = 0
@@ -575,13 +580,9 @@ if __name__ == '__main__':
                       help='Print information about what is happening.')
 
     options, args = parser.parse_args()
-    if args:
-        files = args
-        directories = []
-    else:
-        files = []
-        directories = ['.']
-    num_errors = main(files, directories,
+    if not args:
+        args = ['.']
+    num_errors = main(args,
                       options.blacklist, options.blacklist_filename,
                       options.lang, options.verbose)
 
