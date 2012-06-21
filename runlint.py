@@ -300,6 +300,41 @@ class ClosureLinter(object):
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
 
 
+def _parse_one_blacklist_line(line):
+    if line.endswith('/'):
+        # When blacklisting a directory, we add two entries: one for the
+        # directory name itself (to make pruning easier), and one for the
+        # entire directory tree (as a regexp).  This recursive call does
+        # the first of these.
+        retval = _parse_one_blacklist_line(line[:-1])
+    elif not re.search(r'[[*?!]', line):
+        # Easy case: no char meaningful to glob()
+        return set((os.path.normpath(line),))
+    else:
+        retval = set()
+
+    # If we get here, the pattern is a glob pattern.
+    if line.startswith('**/'):   # magic 'many directory' matcher
+        fnmatch_line = line[len('**/'):]
+        re_prefix = '.*'
+    else:
+        fnmatch_line = line
+        re_prefix = ''
+
+    fnmatch_re = fnmatch.translate(fnmatch_line)   # glob -> re
+    # For some unknown reason, fnmatch.translate tranlates '*'
+    # to '.*' rather than '[^/]*'.  We have to fix that.
+    fnmatch_re = fnmatch_re.replace('.*', '[^/]*')
+    # fnmatch.translate also puts in a \Z (same as $, basically).
+    # But if the blacklist pattern is a directory, we don't want
+    # that, since we want to do exactly a prefix match.
+    if fnmatch_line.endswith('/'):
+        fnmatch_re = fnmatch_re.replace(r'\Z', '')
+
+    retval.add(re.compile(re_prefix + fnmatch_re))
+    return retval
+
+
 def _parse_blacklist(blacklist_filename):
     """Read from blacklist filename and returns a set of the contents.
 
@@ -323,22 +358,8 @@ def _parse_blacklist(blacklist_filename):
     contents = open(blacklist_filename).readlines()
     for line in contents:
         line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        if re.search(r'[[*?!]', line):   # has a char meaningful to glob()
-            if line.startswith('**/'):   # magic 'many directory' matcher
-                fnmatch_line = line[len('**/'):]
-                re_prefix = '.*'
-            else:
-                fnmatch_line = line
-                re_prefix = ''
-            fnmatch_re = fnmatch.translate(fnmatch_line)   # glob -> re
-            # For some unknown reason, fnmatch.translate tranlates '*'
-            # to '.*' rather than '[^/]*'.  We have to fix that.
-            fnmatch_re = fnmatch_re.replace('.*', '[^/]*')
-            retval.add(re.compile(re_prefix + fnmatch_re))
-        else:
-            retval.add(os.path.normpath(line))
+        if line and not line.startswith('#'):
+            retval.update(_parse_one_blacklist_line(line))
     _BLACKLIST_CACHE[blacklist_filename] = retval
     return retval
 
