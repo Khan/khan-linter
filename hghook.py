@@ -22,11 +22,16 @@ def main():
     """Run a Mercurial pre-commit lint-check."""
     # If we're a merge, don't try to do a lint-check.
     try:
-        heads_output = subprocess.check_output(['hg', 'heads'])
+        # We just want to know how many parents there are.
+        # This will output one x for one parent, and two xs for two parents
+        # (i.e. a merge)
+        heads_output = subprocess.check_output([
+            'hg', 'parents', '--template', 'x'
+        ])
     except subprocess.CalledProcessError:
         # hg heads must have bonked. Just proceed and do the lint.
         heads_output = ''
-    if heads_output.count('\nparent:') > 1:
+    if len(heads_output) > 1:
         print "Skipping lint on merge..."
         return 0
 
