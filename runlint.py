@@ -517,19 +517,24 @@ def main(files_and_directories,
     files_to_lint = []
     directories_to_lint = []
     for f in files_and_directories:
-        if os.path.isdir(f):
-            directories_to_lint.append(f)
-            continue
-
         f = os.path.abspath(f)
         file_lang = _lang(f, lang)
-        blacklist_filename = _blacklist_filename(f, file_blacklist)
+        if os.path.isdir(f):
+            blacklist_for_f = dir_blacklist
+        else:
+            blacklist_for_f = file_blacklist
+        blacklist_filename = _blacklist_filename(f, blacklist_for_f)
         if verbose:
             print ('Considering %s: language %s, blacklist %s'
                    % (f, file_lang, blacklist_filename)),
-        if _file_in_blacklist(f, file_blacklist):
+
+        if _file_in_blacklist(f, blacklist_for_f):
             if verbose:
                 print '... skipping (in blacklist)'
+        elif os.path.isdir(f):
+            if verbose:
+                print '... LINTING all files under this directory'
+            directories_to_lint.append(f)
         elif processor_dict.get(file_lang, None) is None:
             if verbose:
                 print '... skipping (language unknown)'
