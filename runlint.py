@@ -117,6 +117,39 @@ class Pep8(object):
             ('http://' in bad_line or 'https://' in bad_line)):
             return 0
 
+        # We sometimes embed json in docstrings (as documentation of
+        # command output), and don't want to have to do weird
+        # line-wraps for that.
+        # We do a cheap check for a plausible json-like line: starts
+        # and ends with a ".  (The end-check is kosher because only
+        # strings can be really long in our use-case.)  If that check
+        # passes, we do a simple syntax-check that we're in a
+        # docstring: going up until we see a line with a """, the line
+        # above it starts with 'def' or 'class' (we do some simple
+        # checking for multi-line def's).  This can be fooled, but
+        # should work well enough.
+        if ('E501 line too long' in lintline and
+            bad_line.lstrip().startswith('"') and
+            bad_line.rstrip(',\n').endswith('"')):
+            for linenum in xrange(bad_linenum - 1, 0, -1):
+                if (contents_lines[linenum].lstrip().startswith('"""') or
+                    contents_lines[linenum].lstrip().startswith("'''")):
+                    break
+            # Now check that the line before the """ is a def or class.
+            # Since def's (and classes) can be multiple lines long, we
+            # may have to check backwards a few lines.  We basically look
+            # at previous lines until we reach a line that starts with
+            # def or class (good), a line with a """ (bad, it means the
+            # """ above was ending a docstring, not starting one) or a
+            # blank line (bad, it means the """ is in some random place).
+            for prev_linenum in xrange(linenum - 1, -1, -1):
+                prev = contents_lines[prev_linenum].strip()
+                if (not prev or
+                    prev.startswith('"""') or prev.startswith("'''")):
+                    break
+                if prev.startswith('def ') or prev.startswith('class '):
+                    return 0
+
         # OK, looks like it's a legitimate error.
         print lintline
         return 1
