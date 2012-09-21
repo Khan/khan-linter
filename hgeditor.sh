@@ -8,6 +8,8 @@ ED="$1"
 FILE="$2"
 TMP="$FILE.hg_templated_editor.$$.txt"
 
+MD5SUM=`/bin/which md5sum md5 | head -n1`
+
 if [ -n "$3" ]; then
   echo "Too many arguments to $0: '$1' '$2' '$3' ..."
   echo "Should have two args only: editor and filename."
@@ -52,14 +54,14 @@ fi \
 # Append the original template.  Get rid of its starting blank line.
 grep . "$FILE" >> "$TMP"
 
-CHECKSUM=`md5sum "$TMP"`
+CHECKSUM=`"$MD5SUM" "$TMP"`
 
 $ED "$TMP" || exit $?
 
 # Detect if no change was made to the commit message.
 if [ "$changes_required" = "1" ]; then
   # On exit 0 original $FILE remains unchanged, causing hg to complain.
-  echo "$CHECKSUM" | md5sum -c --status && exit 0
+  echo "$CHECKSUM" | "$MD5SUM" -c --status && exit 0
 fi
 
 /bin/mv -f "$TMP" "$FILE"
