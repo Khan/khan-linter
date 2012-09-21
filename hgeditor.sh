@@ -8,7 +8,7 @@ ED="$1"
 FILE="$2"
 TMP="$FILE.hg_templated_editor.$$.txt"
 
-MD5SUM=`/bin/which md5sum md5 | head -n1`
+MD5SUM=`/usr/bin/which md5sum md5 | head -n1`
 
 if [ -n "$3" ]; then
   echo "Too many arguments to $0: '$1' '$2' '$3' ..."
