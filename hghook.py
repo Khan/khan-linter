@@ -12,6 +12,7 @@ To install, add the following line to your .hgrc:
 """
 
 import os
+import re
 import subprocess
 import sys
 
@@ -52,10 +53,30 @@ def main():
 
     num_errors = runlint.main(files_to_lint, blacklist='yes')
 
+    # Lint the commit message itself!  Every non-merge commit must
+    # list either a test plan or a review that it's part of (the first
+    # commit in a review must have a test plan, but subsequent ones
+    # don't need to restate it).  TODO(csilvers): should we do anything
+    # special with substate-update commits?
+    commit_message = subprocess.check_output(['hg', 'tip',
+                                              '--template', '{desc}'])
+    if not re.search('^(test plan|review):', commit_message, re.I | re.M):
+        print >> sys.stderr, ('Missing "Test plan:" or "Review:" section '
+                              'in the commit message.')
+        num_errors += 1
+    elif re.search('^    <see below>$', commit_message, re.M):
+        print >> sys.stderr, ('Must enter a "Test plan:" (or "Review:") '
+                              'in the commit message.')
+        num_errors += 1
+    if re.search('^<one-line summary, followed by ', commit_message, re.M):
+        print >> sys.stderr, 'Must enter a summary in the commit message.'
+        num_errors += 1
+    # TODO(csilvers): verify the first-line summary is actually 1 line long?
+
     if num_errors:
         # save the commit message so we don't need to retype it
         f = open(os.path.join('.hg', 'commit.save'), 'w')
-        subprocess.call(['hg', 'tip', '--template', '{desc}'], stdout=f)
+        f.write(commit_message)
         f.close()
         print >> sys.stderr, ('\n--- %s lint errors ---\n'
                               'Commit message saved to .hg/commit.save'
