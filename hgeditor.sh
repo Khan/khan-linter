@@ -59,7 +59,7 @@ CHECKSUM=`"$MD5SUM" "$TMP"`
 $ED "$TMP" || exit $?
 
 # Detect if no change was made to the commit message.
-if [ "$changes_required" = "1" -a "$CHECKSUM" != "`"$MD5SUM" "$TMP"`" ]; then
+if [ "$changes_required" = "1" -a "$CHECKSUM" = "`"$MD5SUM" "$TMP"`" ]; then
   # On exit 0 original $FILE remains unchanged, causing hg to complain.
   exit 0
 fi
