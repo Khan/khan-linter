@@ -27,32 +27,38 @@ trap "exit 255" 1 2 3 6 15 # HUP INT QUIT ABRT TERM
 # $TMP should match the permissions of $FILE
 umask 077
 
-if [ `hg parents --template x | wc -c` -gt 1 ]; then
-    echo "merge"
-    echo ""
-    changes_required=0
+# Check if there's already a commit message (in the case of an amend)
+if grep . "$FILE" | grep -q -v "^HG:"; then
+    # Just leave the message as is
+    cp "$FILE" "$TMP"
 else
-    # Prepend the custom template.  Leave space for one-line and full
-    # summaries.
-    echo "<one-line summary, followed by blank line and full summary>"
-    echo ""
-    echo "Test Plan:"
-    echo "    <see below>"
-    echo ""
-    echo "HG: --"
-    echo "HG: For 'Test Plan:', list the commands you ran or process you"
-    echo "HG:   followed to test this change."
-    # TODO(csilvers): figure out automatically if this change is likely to
-    # be a new review or an update to an existing review.
-    echo "HG: If this commit is adding to an existing review, delete the"
-    echo "HG: 'Test Plan:' lines and replace them with 'Review: Kxxx'."
-    echo "HG:"
-    changes_required=1
-fi \
-> "$TMP" || exit $?
+    if [ `hg parents --template x | wc -c` -gt 1 ]; then
+        echo "merge"
+        echo ""
+        changes_required=0
+    else
+        # Prepend the custom template.  Leave space for one-line and full
+        # summaries.
+        echo "<one-line summary, followed by blank line and full summary>"
+        echo ""
+        echo "Test Plan:"
+        echo "<see below>"
+        echo ""
+        echo "HG: --"
+        echo "HG: For 'Test Plan:', list the commands you ran or process you"
+        echo "HG:   followed to test this change."
+        # TODO(csilvers): figure out automatically if this change is likely to
+        # be a new review or an update to an existing review.
+        echo "HG: If this commit is adding to an existing review, delete the"
+        echo "HG: 'Test Plan:' lines and replace them with 'Review: Kxxx'."
+        echo "HG:"
+        changes_required=1
+    fi \
+    > "$TMP" || exit $?
 
-# Append the original template.  Get rid of its starting blank line.
-grep . "$FILE" >> "$TMP"
+    # Append the original template.  Get rid of its starting blank line.
+    grep . "$FILE" >> "$TMP"
+fi
 
 CHECKSUM=`"$MD5SUM" "$TMP"`
 
