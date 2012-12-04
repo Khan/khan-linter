@@ -36,6 +36,7 @@ import re
 import sys
 
 import closure_linter.gjslint
+import static_content_refs
 try:
     import pep8
 except ImportError, why:
@@ -330,6 +331,31 @@ class ClosureLinter(object):
         return self._num_errors
 
 
+class HtmlLinter(object):
+    """Linter for html.  process() processes one file.
+
+    The main thing we look for with html is that the static images
+    are properly escaped using the |static_url filter.  This is
+    applied only to files in the 'templates' directory.
+    """
+    def __init__(self):
+        self._num_errors = 0
+
+    def process(self, f, contents_of_f):
+        if ('templates' + os.sep) in f:
+            # s_c_r.lint_one_file() happily ignores @Nolint lines for us.
+            errors = static_content_refs.lint_one_file(f, contents_of_f)
+            for (fname, linenum, colnum, unused_endcol, msg) in errors:
+                # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
+                print ('%s:%s:%s: E=static_url= %s'
+                       % (fname, linenum, colnum, msg))
+            self._num_errors += len(errors)
+
+    def num_errors(self):
+        """A count of all the errors we've seen (and emitted) so far."""
+        return self._num_errors
+
+
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
 
 
@@ -490,6 +516,7 @@ def _files_under_directory(rootdir, blacklist_pattern):
 
 _EXTENSION_DICT = {'.py': 'python',
                    '.js': 'javascript',
+                   '.html': 'html',
                    }
 
 
@@ -525,6 +552,8 @@ def main(files_and_directories,
                    ),
         'javascript': (ClosureLinter(),
                        ),
+        'html': (HtmlLinter(),
+                 ),
         'unknown': None,
         }
 
@@ -601,7 +630,12 @@ def main(files_and_directories,
             # To make the lint errors look nicer, let's pass in the
             # filename relative to the current-working directory,
             # rather than using the abspath.
-            lint_processor.process(os.path.relpath(f), contents)
+            try:
+                lint_processor.process(os.path.relpath(f), contents)
+            except Exception, why:
+                print "ERROR linting %s: %s" % (f, why)
+                num_errors += 1
+                continue
 
     # Count up all the errors we've seen:
     for lint_processors in processor_dict.itervalues():
