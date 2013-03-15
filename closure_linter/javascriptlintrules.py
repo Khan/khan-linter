@@ -288,6 +288,14 @@ class JavaScriptLintRules(ecmalintrules.EcmaScriptLintRules):
               token,
               Position.All(token.string))
 
+    elif token.type == Type.IDENTIFIER:
+      if token.string in ['window.console.log', 'console.log']:
+        self._HandleError(
+            errors.ILLEGAL_REFERENCE,
+            'Illegal reference to console.log. Leftover debug code?',
+            token,
+            Position.All(token.string))
+
   def Finalize(self, state, tokenizer_mode):
     """Perform all checks that need to occur after all lines are processed."""
     # Call the base class's Finalize function.
