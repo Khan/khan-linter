@@ -289,10 +289,10 @@ class JavaScriptLintRules(ecmalintrules.EcmaScriptLintRules):
               Position.All(token.string))
 
     elif token.type == Type.IDENTIFIER:
-      if token.string in ['window.console.log', 'console.log']:
+      if token.string in ['console.log', 'debugger']:
         self._HandleError(
             errors.ILLEGAL_REFERENCE,
-            'Illegal reference to console.log. Leftover debug code?',
+            'Illegal reference to %s - Leftover debug code?' % token.string,
             token,
             Position.All(token.string))
 
