@@ -21,7 +21,7 @@ import runlint
 
 
 def main():
-    """Run a Mercurial pre-commit lint-check."""
+    """Run a git pre-commit lint-check."""
     # Go through all modified or added files.
     try:
         subprocess.check_output(['git', 'rev-parse', '--verify', 'HEAD'],
@@ -34,6 +34,8 @@ def main():
     files = subprocess.check_output(['git', 'diff', '--cached', '--name-only',
                                      '--diff-filter=AMR', '-z', parent])
     files_to_lint = files.strip('\0').split('\0')    # that's what -z is for
+    if not files_to_lint or files_to_lint == ['']:
+        return 0
 
     num_errors = runlint.main(files_to_lint, blacklist='yes')
 
