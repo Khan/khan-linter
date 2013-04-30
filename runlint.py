@@ -280,7 +280,8 @@ class ClosureLinter(object):
         # We also strip the trailing newline.
         return self._MUNGE_RE.sub(r'E\1', line.rstrip(), count=1)
 
-    def _process_one_line(self, output_line, contents_lines):
+    def _process_one_line(self, output_line, contents_lines,
+                          console_log_is_ok):
         """If line is an 'error', print it and return 1.  Else return 0.
 
         closure-linter prints all errors to stdout.  But we want to
@@ -295,6 +296,12 @@ class ClosureLinter(object):
         Returns:
            1 (indicating one error) if we print the error line, 0 else.
         """
+        # We often have console.log in development code, so don't treat
+        # it as an error.
+        if ('reference to console.log - Leftover debug code?' in output_line
+            and console_log_is_ok):
+            return 0
+
         # Get the lint message to a canonical format so we can parse it.
         lintline = self._munge_output_line(output_line)
 
@@ -321,10 +328,16 @@ class ClosureLinter(object):
         if not has_any_errors:
             return
 
+        # We allow console.log messages in the deploy/ directory, and
+        # in javascript/test/.
+        console_log_is_ok = (
+            ('deploy' + os.sep) in f or (os.sep + 'test' + os.sep) in f)
+
         contents_lines = contents_of_f.splitlines()  # need these for filtering
         for output_line in closure_linter_stdout.readlines():
             self._num_errors += self._process_one_line(output_line,
-                                                       contents_lines)
+                                                       contents_lines,
+                                                       console_log_is_ok)
 
     def num_errors(self):
         """A count of all the errors we've seen (and emitted) so far."""
