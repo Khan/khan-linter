@@ -21,6 +21,12 @@ import hook_lib
 
 def main():
     """Run a git pre-commit lint-check."""
+    # If we're a merge, don't try to do a lint-check.
+    git_root = subprocess.check_output(['git', 'rev-parse', '--git-dir'])
+    if os.path.exists(os.path.join(git_root.strip(), 'MERGE_HEAD')):
+        print "Skipping lint on merge..."
+        return 0
+
     # Go through all modified or added files.
     try:
         subprocess.check_output(['git', 'rev-parse', '--verify', 'HEAD'],
