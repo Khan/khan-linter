@@ -49,6 +49,10 @@ def main():
     num_errors += hook_lib.lint_commit_message(commit_message)
 
     # Report what we found, and exit with the proper status code.
+    # We want to extract out lines starting with '#' from the commit message
+    # before saving it.
+    commit_message = '\n'.join(l for l in commit_message.splitlines()
+                               if not l.startswith('#'))
     hook_lib.report_errors_and_exit(num_errors, commit_message,
                                     os.path.join('.git', 'commit.save'))
 
