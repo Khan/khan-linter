@@ -454,7 +454,10 @@ def _blacklist_filename(file_to_lint, blacklist_pattern):
     # The hard case: resolve '<ancestor>/' to the proper directory.
     blacklist_basename = blacklist_pattern[len('<ancestor>/'):]
     blacklist_dir = None
-    d = os.path.dirname(file_to_lint)
+    if os.path.isdir(file_to_lint):
+        d = file_to_lint
+    else:
+        d = os.path.dirname(file_to_lint)
     while os.path.dirname(d) != d:     # not at the root level (/) yet
         if d in _BLACKLIST_DIR_CACHE:
             return _BLACKLIST_DIR_CACHE[d]
@@ -482,6 +485,7 @@ def _file_in_blacklist(fname, blacklist_pattern):
     """Checks whether fname matches any entry in blacklist."""
     # The blacklist entries are taken to be relative to
     # blacklist_filename-root, so we need to relative-ize basename here.
+    # TODO(csilvers): use os.path.relpath().
     blacklist_filename = _blacklist_filename(fname, blacklist_pattern)
     if not blacklist_filename:
         return False
@@ -527,6 +531,59 @@ def _files_under_directory(rootdir, blacklist_pattern):
     return retval
 
 
+def find_files_to_lint(files_and_directories,
+                       blacklist='auto',
+                       blacklist_pattern=_DEFAULT_BLACKLIST_PATTERN,
+                       verbose=False):
+    if blacklist == 'yes':
+        file_blacklist = blacklist_pattern
+        dir_blacklist = blacklist_pattern
+        if verbose:
+            print 'Using blacklist %s for all files' % blacklist_pattern
+    elif blacklist == 'auto':
+        file_blacklist = None
+        dir_blacklist = blacklist_pattern
+        if verbose:
+            print ('Using blacklist %s for files under directories'
+                   % blacklist_pattern)
+    else:
+        file_blacklist = None
+        dir_blacklist = None
+
+    # Ignore explicitly-listed files that are in the blacklist.
+    files_to_lint = []
+    directories_to_lint = []
+    for f in files_and_directories:
+        f = os.path.abspath(f)
+        if os.path.isdir(f):
+            blacklist_for_f = dir_blacklist
+        else:
+            blacklist_for_f = file_blacklist
+        blacklist_filename = _blacklist_filename(f, blacklist_for_f)
+        if verbose:
+            print 'Considering %s: blacklist %s' % (f, blacklist_filename),
+
+        if _file_in_blacklist(f, blacklist_for_f):
+            if verbose:
+                print '... skipping (in blacklist)'
+        elif os.path.isdir(f):
+            if verbose:
+                print ('... LINTING %s files under this directory'
+                       % ('non-blacklisted' if dir_blacklist else 'all'))
+            directories_to_lint.append(f)
+        else:
+            if verbose:
+                print '... LINTING'
+            files_to_lint.append(f)
+
+    # TODO(csilvers): log if we skip a file in a directory because
+    # it's in the blacklist?
+    for directory in directories_to_lint:
+        files_to_lint.extend(_files_under_directory(directory, dir_blacklist))
+
+    return files_to_lint
+
+
 _EXTENSION_DICT = {'.py': 'python',
                    '.js': 'javascript',
                    '.html': 'html',
@@ -570,64 +627,16 @@ def main(files_and_directories,
         'unknown': None,
         }
 
-    # blacklist controls whether we use a blacklist on our
-    # 'files' parameter, on our 'directories' parameter, or both.
-    if blacklist == 'yes':
-        file_blacklist = blacklist_pattern
-        dir_blacklist = blacklist_pattern
-        if verbose:
-            print 'Using blacklist %s for all files' % blacklist_pattern
-    elif blacklist == 'auto':
-        file_blacklist = None
-        dir_blacklist = blacklist_pattern
-        if verbose:
-            print ('Using blacklist %s for files under directories'
-                   % blacklist_pattern)
-    else:
-        file_blacklist = None
-        dir_blacklist = None
-
-    # Ignore explicitly-listed files that are in the blacklist, or
-    # that we don't know how to parse.
-    files_to_lint = []
-    directories_to_lint = []
-    for f in files_and_directories:
-        f = os.path.abspath(f)
-        file_lang = _lang(f, lang)
-        if os.path.isdir(f):
-            blacklist_for_f = dir_blacklist
-        else:
-            blacklist_for_f = file_blacklist
-        blacklist_filename = _blacklist_filename(f, blacklist_for_f)
-        if verbose:
-            print ('Considering %s: language %s, blacklist %s'
-                   % (f, file_lang, blacklist_filename)),
-
-        if _file_in_blacklist(f, blacklist_for_f):
-            if verbose:
-                print '... skipping (in blacklist)'
-        elif os.path.isdir(f):
-            if verbose:
-                print '... LINTING all files under this directory'
-            directories_to_lint.append(f)
-        elif processor_dict.get(file_lang, None) is None:
-            if verbose:
-                print '... skipping (language unknown)'
-        else:
-            if verbose:
-                print '... LINTING'
-            files_to_lint.append(f)
-
-    # TODO(csilvers): log if we skip a file in a directory because
-    # it's in the blacklist?
-    for directory in directories_to_lint:
-        files_to_lint.extend(_files_under_directory(directory, dir_blacklist))
+    files_to_lint = find_files_to_lint(files_and_directories,
+                                       blacklist, blacklist_pattern, verbose)
 
     num_errors = 0
     for f in files_to_lint:
         file_lang = _lang(f, lang)
         lint_processors = processor_dict.get(file_lang, None)
         if lint_processors is None:
+            if verbose:
+                print '--- skipping %s (language unknown)' % f
             continue
 
         try:
@@ -682,7 +691,7 @@ if __name__ == '__main__':
     parser.add_option('--always-exit-0', action='store_true', default=False,
                       help=('Exit 0 even if there are lint errors. '
                             'Only useful when used with phabricator.'))
-    parser.add_option('--verbose', action='store_true', default=False,
+    parser.add_option('--verbose', '-v', action='store_true', default=False,
                       help='Print information about what is happening.')
 
     options, args = parser.parse_args()
