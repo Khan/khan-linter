@@ -379,7 +379,9 @@ def _parse_one_blacklist_line(line):
         # entire directory tree (as a regexp).  This recursive call does
         # the first of these.
         retval = _parse_one_blacklist_line(line[:-1])
-    elif not re.search(r'[[*?!]', line):  # ] fix ST's syntax highlighting
+    # If the code below this line has horrible syntax highlighting, check
+    # this out:  http://stackoverflow.com/questions/13210816/sublime-texts-syntax-highlighting-of-regexes-in-python-leaks-into-surrounding-c
+    elif not re.search(r'[[*?!]', line):
         # Easy case: no char meaningful to glob()
         return set((os.path.normpath(line),))
     else:
