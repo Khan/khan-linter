@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 
-"""Run some linters on python files.
-
-The current linters run are pep8 and pyflakes.
-
-TODO(benkomalo): get rid of the version in https://github.com/Khan/analytics
-    (or use a sub-repo?)
-"""
+"""Run some linters on files of various types."""
 
 
 USAGE = """%prog [options] [files] ...
@@ -23,6 +17,13 @@ If commandline arguments are given, this runs the linters on all the
 files listed on the commandline, regardless of their presence in the
 blacklist (this behavior is controlled by the --blacklist flag).
 
+If --extra-linter-filename is set (as it is by default), and that
+file exists and is executable, then this script will run that program
+as well, passing in all the files listed on the commandline.
+Any such program must give output in the canonical form:
+   filename:linenum: E<error_code> error message
+and its exit code should be the number of lint errors seen.
+
 This script automatically determines the linter to run based on the
 filename extension.  (This can be overridden with the --lang flag.)
 Files with unknown or unsupported extensions will be skipped.
@@ -33,6 +34,7 @@ import fnmatch
 import optparse
 import os
 import re
+import subprocess
 import sys
 
 import closure_linter.gjslint
@@ -50,6 +52,10 @@ except ImportError, why:
 
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
+_DEFAULT_EXTRA_LINTER = '<ancestor>/tools/runlint.py'
+# TODO(csilvers): delete the next line to enable the extra linter, once
+#                 it's faster to start up.
+_DEFAULT_EXTRA_LINTER = ''
 
 
 # TODO(csilvers): move python stuff to its own file, so this file
@@ -438,49 +444,60 @@ def _parse_blacklist(blacklist_filename):
     return retval
 
 
-# Map of a directory to the blacklist filename in the closest parent
+# Map of a directory to the ancestor filename in the closest parent
 # directory to the given directory (or possibly the given directory
-# itself).  This is used when blacklist_filename starts with
+# itself).  Ancestor-filenames are ones that can start with
 # '<ancestor>/'.
-_BLACKLIST_DIR_CACHE = {}
+_ANCESTOR_DIR_CACHE = {}
 
 
-def _blacklist_filename(file_to_lint, blacklist_pattern):
-    """Return the appropriate blacklist file for the given filename."""
-    if not blacklist_pattern:
+def _resolve_ancestor(ancestor_pattern, file_to_lint):
+    """If a_p starts with '<ancestor>/', replace based on file_to_lint.
+
+    The rule is that we start at file_to_lint's directory, and replace
+    '<ancestor>/' with that directory.  If the resulting filepath exists,
+    return it.  Otherwise, go up one level in the directory tree and
+    try again, replacing '<ancestor>/' with the parent-dir.  Continue
+    until we succeed or get to /, at which point we return None.
+    """
+    if not ancestor_pattern:
         return None
 
-    if not blacklist_pattern.startswith('<ancestor>/'):
-        return blacklist_pattern   # the 'pattern' is an actual filename
+    if not ancestor_pattern.startswith('<ancestor>/'):
+        return ancestor_pattern   # the 'pattern' is an actual filename
 
     # The hard case: resolve '<ancestor>/' to the proper directory.
-    blacklist_basename = blacklist_pattern[len('<ancestor>/'):]
-    blacklist_dir = None
+    ancestor_basename = ancestor_pattern[len('<ancestor>/'):]
+    ancestor_dir = None
     if os.path.isdir(file_to_lint):
         d = file_to_lint
     else:
         d = os.path.dirname(file_to_lint)
+    d = os.path.abspath(d)
     while os.path.dirname(d) != d:     # not at the root level (/) yet
-        if d in _BLACKLIST_DIR_CACHE:
-            return _BLACKLIST_DIR_CACHE[d]
-        if os.path.exists(os.path.join(d, blacklist_basename)):
-            blacklist_dir = d
+        if (ancestor_pattern, d) in _ANCESTOR_DIR_CACHE:
+            return _ANCESTOR_DIR_CACHE[(ancestor_pattern, d)]
+        if os.path.exists(os.path.join(d, ancestor_basename)):
+            ancestor_dir = d
             break
         d = os.path.dirname(d)
 
-    if blacklist_dir is None:   # never found a blacklist
-        return None
-
-    # Now update _BLACKLIST_DIR_CACHE for all directories that need it.
-    # We now know the proper blacklist file to use for blacklist_dir and
+    # Now update _ANCESTOR_DIR_CACHE for all directories that need it.
+    # We now know the proper ancestor file to use for ancestor_dir and
     # all the directories we saw beneath it.
-    blacklist_filename = os.path.join(blacklist_dir, blacklist_basename)
-    d = os.path.dirname(file_to_lint)
-    while d != os.path.dirname(blacklist_dir):
-        _BLACKLIST_DIR_CACHE[d] = blacklist_filename
-        d = os.path.dirname(d)
-
-    return blacklist_filename
+    if ancestor_dir is None:   # never found a ancestor
+        d = os.path.dirname(file_to_lint)
+        while d != os.path.dirname(d):
+            _ANCESTOR_DIR_CACHE[(ancestor_pattern, d)] = None
+            d = os.path.dirname(d)
+        return None
+    else:
+        ancestor_filename = os.path.join(ancestor_dir, ancestor_basename)
+        d = os.path.dirname(file_to_lint)
+        while d != os.path.dirname(ancestor_dir):
+            _ANCESTOR_DIR_CACHE[(ancestor_pattern, d)] = ancestor_filename
+            d = os.path.dirname(d)
+        return ancestor_filename
 
 
 def _file_in_blacklist(fname, blacklist_pattern):
@@ -488,7 +505,7 @@ def _file_in_blacklist(fname, blacklist_pattern):
     # The blacklist entries are taken to be relative to
     # blacklist_filename-root, so we need to relative-ize basename here.
     # TODO(csilvers): use os.path.relpath().
-    blacklist_filename = _blacklist_filename(fname, blacklist_pattern)
+    blacklist_filename = _resolve_ancestor(blacklist_pattern, fname)
     if not blacklist_filename:
         return False
     blacklist_dir = os.path.abspath(os.path.dirname(blacklist_filename))
@@ -561,7 +578,7 @@ def find_files_to_lint(files_and_directories,
             blacklist_for_f = dir_blacklist
         else:
             blacklist_for_f = file_blacklist
-        blacklist_filename = _blacklist_filename(f, blacklist_for_f)
+        blacklist_filename = _resolve_ancestor(blacklist_for_f, f)
         if verbose:
             print 'Considering %s: blacklist %s' % (f, blacklist_filename),
 
@@ -583,6 +600,7 @@ def find_files_to_lint(files_and_directories,
     for directory in directories_to_lint:
         files_to_lint.extend(_files_under_directory(directory, dir_blacklist))
 
+    files_to_lint.sort()    # just to be pretty
     return files_to_lint
 
 
@@ -600,9 +618,49 @@ def _lang(filename, lang_option):
     return _EXTENSION_DICT.get(extension, 'unknown')
 
 
+def _run_extra_linter(extra_linter_filename, files, verbose):
+    """Run extra_linter_filename if it exists and is executable.
+
+    extra_linter_filename can start with <ancestor>, in which case
+    we use the same rule we use for the blacklist: for each file
+    in files, we go up the directory tree until we find the linter.
+    This means we could actually run several linter scripts for a
+    set of files (if, for instance, they're in different repos).
+
+    extra_linter_filename is passed a list of files; the same list
+    of files that is used for the blacklist.  We limit each run to
+    100 files at a time to avoid shell overflow.
+    """
+    num_errors = 0
+
+    # Probably all these files will use the same linter, but let's
+    # make sure.
+    linter_to_files = {}
+    for f in files:
+        linter = _resolve_ancestor(extra_linter_filename, f)
+        if linter:
+            linter_to_files.setdefault(linter, set()).add(f)
+
+    for (linter_filename, files) in linter_to_files.iteritems():
+        if not os.access(linter_filename, os.R_OK | os.X_OK):
+            continue
+        group_size = 100
+        files = sorted(files)
+        while files:
+            if verbose:
+                print ('--- running extra linter: %s %s'
+                       % (linter_filename, ' '.join(files[:group_size])))
+            rc = subprocess.call([linter_filename] + files[:group_size])
+            # extra_linter should return the number of errors seen
+            num_errors += rc
+            files = files[group_size:]
+
+    return num_errors
+
+
 def main(files_and_directories,
          blacklist='auto', blacklist_pattern=_DEFAULT_BLACKLIST_PATTERN,
-         lang='', verbose=False):
+         extra_linter_filename=_DEFAULT_EXTRA_LINTER, lang='', verbose=False):
     """Call the appropriate linters on all given files and directory trees.
 
     Arguments:
@@ -610,6 +668,7 @@ def main(files_and_directories,
          a list/setetc of directories to lint all files under
       blacklist: 'yes', 'no', or 'auto', as described by --help
       blacklist_pattern: where to read the blacklist, as described by --help
+      extra_linter_filename: what auxilliary linter to run, described by --help
       lang: the language to interpret all files to be in, or '' to auto-detect
       verbose: print messages about what we're doing, to stdout
 
@@ -665,6 +724,12 @@ def main(files_and_directories,
     for lint_processors in processor_dict.itervalues():
         for lint_processor in (lint_processors or []):
             num_errors += lint_processor.num_errors()
+
+    # If they asked for an extra linter to run over these files, do that.
+    if extra_linter_filename:
+        num_errors += _run_extra_linter(extra_linter_filename, files_to_lint,
+                                        verbose)
+
     return num_errors
 
 
@@ -685,6 +750,14 @@ if __name__ == '__main__':
                             'the closest parent directory that contains '
                             'the (rest of the) blacklist filename.'
                             ' Default: %default'))
+    parser.add_option('--extra-linter',
+                      default=_DEFAULT_EXTRA_LINTER,
+                      help=('A program to run more lint tests against.  It '
+                            'can start with "<ancestor>/", like '
+                            '--blacklist-filename.  Every file we lint '
+                            'against, we also pass to the extra linter, '
+                            'if it exists and is executable.'
+                            ' Default: %default'))
     parser.add_option('--lang',
                       choices=[''] + list(set(_EXTENSION_DICT.itervalues())),
                       default='',
@@ -701,7 +774,8 @@ if __name__ == '__main__':
         args = ['.']
     num_errors = main(args,
                       options.blacklist, options.blacklist_filename,
-                      options.lang, options.verbose)
+                      options.extra_linter, options.lang,
+                      options.verbose)
 
     if options.always_exit_0:
         sys.exit(0)
