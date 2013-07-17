@@ -37,6 +37,9 @@ import re
 import subprocess
 import sys
 
+import closure_linter.checker
+from closure_linter.common import errorprinter
+import closure_linter.errors
 import closure_linter.gjslint
 import static_content_refs
 try:
@@ -278,13 +281,14 @@ class ClosureLinter(object):
 
     _MUNGE_RE = re.compile(r'\((?:New Error )?-?(\d+)\)', re.I)
 
-    def _munge_output_line(self, line):
+    @classmethod
+    def _munge_output_line(cls, line):
         """Modify the line to have the canonical form for lint lines."""
         # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
         # Closure --unix_mode form: <file>:<line>:(<code>) <msg>
         # We just need to remove some parens and add an E.
         # We also strip the trailing newline.
-        return self._MUNGE_RE.sub(r'E\1', line.rstrip(), count=1)
+        return cls._MUNGE_RE.sub(r'E\1', line.rstrip(), count=1)
 
     def _process_one_line(self, output_line, contents_lines,
                           console_log_is_ok):
@@ -327,6 +331,7 @@ class ClosureLinter(object):
             closure_linter.gjslint.main,
             # TODO(csilvers): could pass in contents_of_f, though it's
             # work to thread it through main() and Run() and into Check().
+            # TODO(joel): do this using closure_lint
             argv=[closure_linter.gjslint.__file__,
                   '--nobeep', '--unix_mode', f])
 
@@ -350,24 +355,149 @@ class ClosureLinter(object):
         return self._num_errors
 
 
+def closure_lint(file_name, file_contents):
+    error_handler = errorprinter.ErrorPrinter(closure_linter.errors.NEW_ERRORS)
+    error_handler.SetFormat(errorprinter.UNIX_FORMAT)
+    js_checker = closure_linter.checker.JavaScriptStyleChecker(error_handler)
+
+    _, output = _capture_stdout_of(js_checker.Check, file_name, file_contents)
+    has_errors = error_handler.HasOldErrors() or error_handler.HasNewErrors()
+    return has_errors, output
+
+
 class JsxLinter(object):
     """Linter for jsx files.  process() processes one file.
 
     This is very barebones at the moment - it just checks line length.
     """
-    def __init__(self):
+
+    # Errors sometimes introduced by the jsx transformer. Jsx files use a
+    # comment at the top that the closure linter flags as being a jsdoc tag.
+    # The transformer also outputs a space before and after parens
+    # ("React.DOM.input( {...") and outputs no space around colons
+    # ("ref:'secs').
+    _lint_whitelist = [
+        'E0001',  # Extra space after "(" / before ")"
+        'E0002',  # Missing space after ":"
+        'E0200',  # Invalid JsDoc tag: jsx
+    ]
+
+    def __init__(self, verbose):
         self._num_errors = 0
+        self._verbose = verbose
 
     def process(self, f, contents_of_f):
-        lineno = 1
-        for line in contents_of_f.splitlines():
-            if len(line) >= 80:
-                print ('%s:%s: line too long' % (f, lineno))
-            lineno += 1
+        self._check_line_length(f, contents_of_f)
+        self._lint_generated_js(f, contents_of_f)
 
     def num_errors(self):
         """A count of all the errors we've seen (and emitted) so far."""
         return self._num_errors
+
+    def _check_line_length(self, f, contents_of_f):
+        lineno = 1
+        for line in contents_of_f.splitlines():
+            if len(line) >= 80:
+                self._num_errors += 1
+                print ('%s:%s: line too long' % (f, lineno))
+            lineno += 1
+
+    def _lint_generated_js(self, f, contents_of_f):
+        # Pipe the source of the file to `jsx` and get the result from stdout
+        # as `transformed_source`. Ignore when it prints out "build Module" to
+        # stderr.
+        with open(os.devnull, 'w') as devnull:
+            process = subprocess.Popen(['jsx'],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=devnull)
+        transformed_source, _ = process.communicate(contents_of_f)
+        result = process.wait()
+        if result != 0:
+            raise RuntimeError('jsx exited with error code %d' % result)
+
+        has_any_errors, closure_linter_stdout = closure_lint(f,
+            transformed_source)
+
+        # Now go through the output and remove the 'actually ok' lines.
+        if not has_any_errors:
+            return
+
+        # We allow console.log messages in the deploy/ directory, and
+        # in javascript/test/.
+        console_log_is_ok = (
+            ('deploy' + os.sep) in f or (os.sep + 'test' + os.sep) in f)
+
+        # need these for filtering
+        contents_lines = transformed_source.splitlines()
+        for output_line in closure_linter_stdout.readlines():
+            self._num_errors += self._process_one_line(output_line,
+                                                       contents_lines,
+                                                       console_log_is_ok)
+
+    def _process_one_line(self, output_line, contents_lines,
+                          console_log_is_ok):
+        """If line is an 'error', print it and return 1.  Else return 0.
+
+        closure-linter prints all errors to stdout.  But we want to
+        ignore some 'errors' that are ok for us, in particular ones
+        that have been commented out with @Nolint and errors the jsx compiler
+        is known to create.
+
+        Arguments:
+           output_line: one line of the closure-linter error-output
+           contents_lines: the contents of the file being linted,
+              as a list of lines.
+
+        Returns:
+           1 (indicating one error) if we print the error line, 0 else.
+        """
+        # We often have console.log in development code, so don't treat
+        # it as an error.
+        if ('reference to console.log - Leftover debug code?' in output_line
+            and console_log_is_ok):
+            return 0
+
+        # Get the lint message to a canonical format so we can parse it.
+        lintline = ClosureLinter._munge_output_line(output_line)
+
+        bad_linenum = int(lintline.split(':', 2)[1])   # first line is '1'
+        bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
+        try:
+            line_error_code = re.search('E\d{4}', lintline).group()
+        except:
+            line_error_code = None
+
+        # If the line has a nolint directive, ignore it.
+        if '@Nolint' in bad_line:
+            return 0
+
+        if any([line_error_code == x for x in self._lint_whitelist]):
+            return 0
+
+        # Otherwise, it's a legitimate error.
+        print lintline
+        if self._verbose:
+            # TODO(joel) consider using a real color library
+            print '\033[93mCompiled jsx:\033[0m'
+            print line_with_context(contents_lines, bad_linenum - 1, 2)
+        return 1
+
+
+def line_with_context(lines, line_no, context_size):
+    """Surround the specified line with a context, like grep -C.
+
+    This also highlights the specified line with an error color.
+    """
+    message = ''
+    for i in xrange(max(line_no - context_size, 0),
+                    min(line_no + context_size, len(lines))):
+        if i == line_no:
+            message += '\033[91m' + lines[i] + '\033[0m'
+        else:
+            message += lines[i]
+        message += '\n'
+    return message
 
 
 class HtmlLinter(object):
@@ -706,7 +836,7 @@ def main(files_and_directories,
                        ),
         'html': (HtmlLinter(),
                  ),
-        'jsx': (JsxLinter(),
+        'jsx': (JsxLinter(verbose),
                 ),
         'unknown': None,
         }
