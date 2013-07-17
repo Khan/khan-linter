@@ -350,6 +350,26 @@ class ClosureLinter(object):
         return self._num_errors
 
 
+class JsxLinter(object):
+    """Linter for jsx files.  process() processes one file.
+
+    This is very barebones at the moment - it just checks line length.
+    """
+    def __init__(self):
+        self._num_errors = 0
+
+    def process(self, f, contents_of_f):
+        lineno = 1
+        for line in contents_of_f.splitlines():
+            if len(line) >= 80:
+                print ('%s:%s: line too long' % (f, lineno))
+            lineno += 1
+
+    def num_errors(self):
+        """A count of all the errors we've seen (and emitted) so far."""
+        return self._num_errors
+
+
 class HtmlLinter(object):
     """Linter for html.  process() processes one file.
 
@@ -607,6 +627,7 @@ def find_files_to_lint(files_and_directories,
 _EXTENSION_DICT = {'.py': 'python',
                    '.js': 'javascript',
                    '.html': 'html',
+                   '.jsx': 'jsx',
                    }
 
 
@@ -685,6 +706,8 @@ def main(files_and_directories,
                        ),
         'html': (HtmlLinter(),
                  ),
+        'jsx': (JsxLinter(),
+                ),
         'unknown': None,
         }
 
