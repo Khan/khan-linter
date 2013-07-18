@@ -67,6 +67,8 @@ def report_errors_and_exit(num_errors, commit_message, save_filename):
             f.write(commit_message)
         print >> sys.stderr, ('\n--- %s lint errors ---\n'
                               'Commit message saved to %s'
-                              % (num_errors, save_filename))
+                              ' (use --template=%s on'
+                              ' commit to resume editing)'
+                              % (num_errors, save_filename, save_filename))
         sys.exit(1)
     sys.exit(0)
