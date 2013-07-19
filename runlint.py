@@ -374,12 +374,13 @@ class JsxLinter(object):
     # Errors sometimes introduced by the jsx transformer. Jsx files use a
     # comment at the top that the closure linter flags as being a jsdoc tag.
     # The transformer also outputs a space before and after parens
-    # ("React.DOM.input( {...") and outputs no space around colons
-    # ("ref:'secs').
+    # ("React.DOM.input( {..."), outputs no space around colons ("ref:'secs'),
+    # and uses single quotes instead of double.
     _lint_whitelist = [
         'E0001',  # Extra space after "(" / before ")"
         'E0002',  # Missing space after ":"
         'E0200',  # Invalid JsDoc tag: jsx
+        'E0131',  # Double-quoted string preferred over single-quoted string
     ]
 
     def __init__(self, verbose):
