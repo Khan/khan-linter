@@ -408,7 +408,8 @@ class JsxLinter(object):
         # as `transformed_source`. Ignore when it prints out "build Module" to
         # stderr.
         with open(os.devnull, 'w') as devnull:
-            process = subprocess.Popen(['./jsx'],
+            jsx_executable = os.path.join(os.path.dirname(__file__), 'jsx')
+            process = subprocess.Popen([jsx_executable],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=devnull)
