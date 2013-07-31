@@ -1,0 +1,7 @@
+{
+    "name": "khan-linter",
+    "version": "0.0.1",
+    "dependencies": {
+        "react-tools": "0.3.3"
+    }
+}
