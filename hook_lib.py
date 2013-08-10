@@ -71,4 +71,5 @@ def report_errors_and_exit(num_errors, commit_message, save_filename):
                               ' commit to resume editing)'
                               % (num_errors, save_filename, save_filename))
         sys.exit(1)
+    print >> sys.stderr, 'khan-linter: all lint checks passed'
     sys.exit(0)
