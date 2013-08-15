@@ -407,17 +407,18 @@ class JsxLinter(object):
         # Pipe the source of the file to `jsx` and get the result from stdout
         # as `transformed_source`. Ignore when it prints out "build Module" to
         # stderr.
-        with open(os.devnull, 'w') as devnull:
-            jsx_executable = os.path.join(os.path.dirname(__file__),
-                'compile_jsx_file')
-            process = subprocess.Popen([jsx_executable],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=devnull)
-        transformed_source, _ = process.communicate(contents_of_f)
+        jsx_executable = os.path.join(os.path.dirname(__file__),
+            'compile_jsx_file')
+        process = subprocess.Popen([jsx_executable],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        transformed_source, err = process.communicate(contents_of_f)
         result = process.wait()
+
         if result != 0:
-            raise RuntimeError('jsx exited with error code %d' % result)
+            raise RuntimeError('jsx exited with error code %d:\n%s' %
+                (result, indent(err)))
 
         has_any_errors, closure_linter_stdout = closure_lint(f,
             transformed_source)
@@ -485,6 +486,10 @@ class JsxLinter(object):
             print '\033[93mCompiled jsx:\033[0m'
             print line_with_context(contents_lines, bad_linenum - 1, 2)
         return 1
+
+
+def indent(string, n=4):
+    return ('\n' + ' ' * n).join(string.splitlines())
 
 
 def line_with_context(lines, line_no, context_size):
