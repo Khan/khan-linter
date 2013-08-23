@@ -56,9 +56,6 @@ except ImportError, why:
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
 _DEFAULT_EXTRA_LINTER = '<ancestor>/tools/runlint.py'
-# TODO(csilvers): delete the next line to enable the extra linter, once
-#                 it's faster to start up.
-_DEFAULT_EXTRA_LINTER = ''
 
 
 # TODO(csilvers): move python stuff to its own file, so this file
