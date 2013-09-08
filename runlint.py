@@ -30,6 +30,7 @@ Files with unknown or unsupported extensions will be skipped.
 """
 
 import cStringIO
+import itertools
 import fnmatch
 import optparse
 import os
@@ -37,10 +38,6 @@ import re
 import subprocess
 import sys
 
-import closure_linter.checker
-from closure_linter.common import errorprinter
-import closure_linter.errors
-import closure_linter.gjslint
 import static_content_refs
 try:
     import pep8
@@ -85,6 +82,10 @@ class Pep8(object):
     def __init__(self, pep8_args):
         pep8.process_options(pep8_args + ['dummy'])
         self._num_errors = 0
+
+    def process_files(self, files):
+        for f, contents in files:
+            self.process(f, contents)
 
     def _munge_output_line(self, line):
         """Modify the line to have the canonical form for lint lines."""
@@ -185,6 +186,10 @@ class Pyflakes(object):
     def __init__(self):
         self._num_errors = 0
 
+    def process_files(self, files):
+        for f, contents in files:
+            self.process(f, contents)
+
     def _munge_output_line(self, line):
         """Modify the line to have the canonical form for lint lines."""
         # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
@@ -271,48 +276,31 @@ class Pyflakes(object):
         return self._num_errors
 
 
-class ClosureLinter(object):
+class JsHint(object):
     """Linter for javascript.  process() processes one file."""
     def __init__(self):
         self._num_errors = 0
 
-    _MUNGE_RE = re.compile(r'\((?:New Error )?-?(\d+)\)', re.I)
-
-    @classmethod
-    def _munge_output_line(cls, line):
-        """Modify the line to have the canonical form for lint lines."""
-        # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-        # Closure --unix_mode form: <file>:<line>:(<code>) <msg>
-        # We just need to remove some parens and add an E.
-        # We also strip the trailing newline.
-        return cls._MUNGE_RE.sub(r'E\1', line.rstrip(), count=1)
-
-    def _process_one_line(self, output_line, contents_lines,
-                          console_log_is_ok):
+    def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
 
-        closure-linter prints all errors to stdout.  But we want to
+        jshint prints all errors to stdout.  But we want to
         ignore some 'errors' that are ok for us, in particular ones
         that have been commented out with @Nolint.
 
         Arguments:
-           output_line: one line of the closure-linter error-output
+           filename: path to file being linted
+           output_line: one line of the jshint error-output
            contents_lines: the contents of the file being linted,
               as a list of lines.
 
         Returns:
            1 (indicating one error) if we print the error line, 0 else.
         """
-        # We often have console.log in development code, so don't treat
-        # it as an error.
-        if ('reference to console.log - Leftover debug code?' in output_line
-            and console_log_is_ok):
-            return 0
-
-        # Get the lint message to a canonical format so we can parse it.
-        lintline = self._munge_output_line(output_line)
-
-        bad_linenum = int(lintline.split(':', 2)[1])   # first line is '1'
+        # output_line is like:
+        #   <file>:<line>:<col>: W<code> <message>
+        # which is just what we need!
+        bad_linenum = int(output_line.split(':', 2)[1])   # first line is '1'
         bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
 
         # If the line has a nolint directive, ignore it.
@@ -320,69 +308,101 @@ class ClosureLinter(object):
             return 0
 
         # Otherwise, it's a legitimate error.
-        print lintline
+        print output_line
         return 1
 
-    def process(self, f, contents_of_f):
-        (has_any_errors, closure_linter_stdout) = _capture_stdout_of(
-            closure_linter.gjslint.main,
-            # TODO(csilvers): could pass in contents_of_f, though it's
-            # work to thread it through main() and Run() and into Check().
-            # TODO(joel): do this using closure_lint
-            argv=[closure_linter.gjslint.__file__,
-                  '--nobeep', '--unix_mode', f])
-
-        # Now go through the output and remove the 'actually ok' lines.
-        if not has_any_errors:
-            return
-
-        # We allow console.log messages in the deploy/ directory, and
-        # in javascript/test/.
-        console_log_is_ok = (
-            ('deploy' + os.sep) in f or (os.sep + 'test' + os.sep) in f)
-
+    def process(self, f, contents_of_f, jshint_lines):
         contents_lines = contents_of_f.splitlines()  # need these for filtering
-        for output_line in closure_linter_stdout.readlines():
-            self._num_errors += self._process_one_line(output_line,
-                                                       contents_lines,
-                                                       console_log_is_ok)
+        for output_line in jshint_lines:
+            self._num_errors += self._process_one_line(f, output_line,
+                                                       contents_lines)
+
+    def process_files(self, files):
+        jshint_output = jshint_files(files)
+        for f, contents in files:
+            if f in jshint_output:
+                lintlines = jshint_output[f]
+                self.process(f, contents, lintlines)
 
     def num_errors(self):
         """A count of all the errors we've seen (and emitted) so far."""
         return self._num_errors
 
 
-def closure_lint(file_name, file_contents):
-    error_handler = errorprinter.ErrorPrinter(closure_linter.errors.NEW_ERRORS)
-    error_handler.SetFormat(errorprinter.UNIX_FORMAT)
-    js_checker = closure_linter.checker.JavaScriptStyleChecker(error_handler)
+def jshint_files(files):
+    """Given a list of files, return jshint stdout for each file.
 
-    _, output = _capture_stdout_of(js_checker.Check, file_name, file_contents)
-    has_errors = error_handler.HasOldErrors() or error_handler.HasNewErrors()
-    return has_errors, output
+    Arguments:
+        files: list of files as [(filename, contents)]
+
+    Returns:
+        dict of {f: stdout_lines} from filename to stdout as an array of stdout
+        lines only containing files that had output; if there are no lint
+        errors, an empty dict
+    """
+    jshint_executable = os.path.join(os.path.dirname(__file__),
+        'node_modules', '.bin', 'jshint')
+    config = os.path.join(os.path.dirname(__file__),
+        'jshintrc')
+    reporter = os.path.join(os.path.dirname(__file__),
+        'jshint_reporter.js')
+
+    pipe = subprocess.Popen([
+        jshint_executable,
+        '--config', config,
+        '--reporter', reporter,
+        ] + [f for f, contents in files],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
+    stdout, stderr = pipe.communicate()
+
+    if stderr:
+        raise Exception("Unexpected stderr from jshint:\n%s" % stderr)
+
+    output = {}
+
+    key = lambda line: line.split(':', 1)[0]
+    lines = sorted(stdout.splitlines(), key=key)
+    for filename, flines in itertools.groupby(lines, key):
+        output[filename] = list(flines)
+
+    return output
+
+
+def jshint(contents_of_f):
+    jshint_executable = os.path.join(os.path.dirname(__file__),
+        'node_modules', '.bin', 'jshint')
+    config = os.path.join(os.path.dirname(__file__),
+        'jshintrc')
+    reporter = os.path.join(os.path.dirname(__file__),
+        'jshint_reporter.js')
+
+    pipe = subprocess.Popen([
+        jshint_executable,
+        '--config', config,
+        '--reporter', reporter,
+        '-'],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
+    stdout, stderr = pipe.communicate(contents_of_f)
+
+    if stderr:
+        raise Exception("Unexpected stderr from jshint:\n%s" % stderr)
+    return stdout
 
 
 class JsxLinter(object):
-    """Linter for jsx files.  process() processes one file.
-
-    This is very barebones at the moment - it just checks line length.
-    """
-
-    # Errors sometimes introduced by the jsx transformer. Jsx files use a
-    # comment at the top that the closure linter flags as being a jsdoc tag.
-    # The transformer also outputs a space before and after parens
-    # ("React.DOM.input( {..."), outputs no space around colons ("ref:'secs'),
-    # and uses single quotes instead of double.
-    _lint_whitelist = [
-        'E0001',  # Extra space after "(" / before ")"
-        'E0002',  # Missing space after ":"
-        'E0200',  # Invalid JsDoc tag: jsx
-        'E0131',  # Double-quoted string preferred over single-quoted string
-    ]
+    """Linter for jsx files.  process() processes one file."""
 
     def __init__(self, verbose):
         self._num_errors = 0
         self._verbose = verbose
+
+    def process_files(self, files):
+        # TODO(alpert): Run all the jshint calls in one invocation for speed
+        for f, contents in files:
+            self.process(f, contents)
 
     def process(self, f, contents_of_f):
         self._check_line_length(f, contents_of_f)
@@ -417,27 +437,15 @@ class JsxLinter(object):
             raise RuntimeError('jsx exited with error code %d:\n%s' %
                 (result, indent(err)))
 
-        has_any_errors, closure_linter_stdout = closure_lint(f,
-            transformed_source)
-
-        # Now go through the output and remove the 'actually ok' lines.
-        if not has_any_errors:
-            return
-
-        # We allow console.log messages in the deploy/ directory, and
-        # in javascript/test/.
-        console_log_is_ok = (
-            ('deploy' + os.sep) in f or (os.sep + 'test' + os.sep) in f)
+        stdout = jshint(transformed_source)
 
         # need these for filtering
         contents_lines = transformed_source.splitlines()
-        for output_line in closure_linter_stdout.readlines():
-            self._num_errors += self._process_one_line(output_line,
-                                                       contents_lines,
-                                                       console_log_is_ok)
+        for output_line in stdout.splitlines():
+            self._num_errors += self._process_one_line(f, output_line,
+                                                       contents_lines)
 
-    def _process_one_line(self, output_line, contents_lines,
-                          console_log_is_ok):
+    def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
 
         closure-linter prints all errors to stdout.  But we want to
@@ -446,6 +454,7 @@ class JsxLinter(object):
         is known to create.
 
         Arguments:
+           filename: path to file being linted
            output_line: one line of the closure-linter error-output
            contents_lines: the contents of the file being linted,
               as a list of lines.
@@ -453,27 +462,15 @@ class JsxLinter(object):
         Returns:
            1 (indicating one error) if we print the error line, 0 else.
         """
-        # We often have console.log in development code, so don't treat
-        # it as an error.
-        if ('reference to console.log - Leftover debug code?' in output_line
-            and console_log_is_ok):
-            return 0
-
-        # Get the lint message to a canonical format so we can parse it.
-        lintline = ClosureLinter._munge_output_line(output_line)
-
+        # output_line is like:
+        #   stdin:<line>:<col>: W<code> <message>
+        # so replace `stdin` with the actual filename before doing more
+        lintline = "%s:%s" % (filename, output_line.split(':', 1)[1])
         bad_linenum = int(lintline.split(':', 2)[1])   # first line is '1'
         bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
-        try:
-            line_error_code = re.search('E\d{4}', lintline).group()
-        except:
-            line_error_code = None
 
         # If the line has a nolint directive, ignore it.
         if '@Nolint' in bad_line:
-            return 0
-
-        if any([line_error_code == x for x in self._lint_whitelist]):
             return 0
 
         # Otherwise, it's a legitimate error.
@@ -514,6 +511,10 @@ class HtmlLinter(object):
     """
     def __init__(self):
         self._num_errors = 0
+
+    def process_files(self, files):
+        for f, contents in files:
+            self.process(f, contents)
 
     def process(self, f, contents_of_f):
         if ('templates' + os.sep) in f:
@@ -837,7 +838,7 @@ def main(files_and_directories,
         'python': (Pep8([sys.argv[0]] + _DEFAULT_PEP8_ARGS),
                    Pyflakes(),
                    ),
-        'javascript': (ClosureLinter(),
+        'javascript': (JsHint(),
                        ),
         'html': (HtmlLinter(),
                  ),
@@ -848,6 +849,9 @@ def main(files_and_directories,
 
     files_to_lint = find_files_to_lint(files_and_directories,
                                        blacklist, blacklist_pattern, verbose)
+
+    # Dict of {lint_processor: [(filename, contents)]}
+    files_by_linter = {}
 
     num_errors = 0
     for f in files_to_lint:
@@ -865,18 +869,21 @@ def main(files_and_directories,
             num_errors += 1
             continue
 
-        if verbose:
-            print '--- linting %s (%s)' % (f, file_lang)
         for lint_processor in lint_processors:
             # To make the lint errors look nicer, let's pass in the
             # filename relative to the current-working directory,
             # rather than using the abspath.
-            try:
-                lint_processor.process(os.path.relpath(f), contents)
-            except Exception, why:
-                print "ERROR linting %s: %s" % (f, why)
-                num_errors += 1
-                continue
+            files_by_linter.setdefault(lint_processor, []).append(
+                    (os.path.relpath(f), contents))
+
+    for lint_processor in files_by_linter:
+        files = files_by_linter[lint_processor]
+        try:
+            lint_processor.process_files(files)
+        except Exception, why:
+            print "ERROR linting %r: %s" % ([f for f, c in files], why)
+            num_errors += 1
+            continue
 
     # Count up all the errors we've seen:
     for lint_processors in processor_dict.itervalues():
