@@ -65,6 +65,31 @@ _DEFAULT_PEP8_ARGS = ['--repeat',
                       '--ignore=W291,W293,W391']
 
 
+class Linter(object):
+    """Superclass for all linters.
+
+    When subclassing, override either process_files or process (or both,
+    though if you override process_files then it doesn't matter what
+    process does).
+    """
+    def process_files(self, files):
+        """Print lint errors for a list of filenames and return error count."""
+        num_errors = 0
+        for f in files:
+            try:
+                contents = open(f, 'U').read()
+            except (IOError, OSError), why:
+                print "SKIPPING lint of %s: %s" % (f, why.args[1])
+                num_errors += 1
+                continue
+            num_errors += self.process(f, contents)
+        return num_errors
+
+    def process(self, file, contents):
+        """Lint one file given its path and contents, returning error count."""
+        raise NotImplementedError("Subclasses must override process()")
+
+
 def _capture_stdout_of(fn, *args, **kwargs):
     """Call fn(*args, **kwargs) and return (fn_retval, fn_stdout_output_fp)."""
     try:
@@ -77,15 +102,10 @@ def _capture_stdout_of(fn, *args, **kwargs):
         sys.stdout = orig_stdout
 
 
-class Pep8(object):
+class Pep8(Linter):
     """Linter for python.  process() processes one file."""
     def __init__(self, pep8_args):
         pep8.process_options(pep8_args + ['dummy'])
-        self._num_errors = 0
-
-    def process_files(self, files):
-        for f, contents in files:
-            self.process(f, contents)
 
     def _munge_output_line(self, line):
         """Modify the line to have the canonical form for lint lines."""
@@ -170,26 +190,17 @@ class Pep8(object):
 
         # Go through the output and remove the 'actually ok' lines.
         if num_candidate_errors == 0:
-            return
+            return 0
 
+        num_errors = 0
         for output_line in pep8_stdout.readlines():
-            self._num_errors += self._process_one_line(output_line,
-                                                       contents_lines)
-
-    def num_errors(self):
-        """A count of all the errors we've seen (and emitted) so far."""
-        return self._num_errors
+            num_errors += self._process_one_line(output_line,
+                                                 contents_lines)
+        return num_errors
 
 
-class Pyflakes(object):
+class Pyflakes(Linter):
     """Linter for python.  process() processes one file."""
-    def __init__(self):
-        self._num_errors = 0
-
-    def process_files(self, files):
-        for f, contents in files:
-            self.process(f, contents)
-
     def _munge_output_line(self, line):
         """Modify the line to have the canonical form for lint lines."""
         # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
@@ -264,23 +275,18 @@ class Pyflakes(object):
 
         # Now go through the output and remove the 'actually ok' lines.
         if num_candidate_errors == 0:
-            return
+            return 0
 
+        num_errors = 0
         contents_lines = contents_of_f.splitlines()  # need these for filtering
         for output_line in pyflakes_stdout.readlines():
-            self._num_errors += self._process_one_line(output_line,
-                                                       contents_lines)
-
-    def num_errors(self):
-        """A count of all the errors we've seen (and emitted) so far."""
-        return self._num_errors
+            num_errors += self._process_one_line(output_line,
+                                                 contents_lines)
+        return num_errors
 
 
-class JsHint(object):
+class JsHint(Linter):
     """Linter for javascript.  process() processes one file."""
-    def __init__(self):
-        self._num_errors = 0
-
     def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
 
@@ -312,21 +318,27 @@ class JsHint(object):
         return 1
 
     def process(self, f, contents_of_f, jshint_lines):
+        num_errors = 0
         contents_lines = contents_of_f.splitlines()  # need these for filtering
         for output_line in jshint_lines:
-            self._num_errors += self._process_one_line(f, output_line,
-                                                       contents_lines)
+            num_errors += self._process_one_line(f, output_line,
+                                                 contents_lines)
+        return num_errors
 
     def process_files(self, files):
+        num_errors = 0
         jshint_output = jshint_files(files)
-        for f, contents in files:
+        for f in files:
             if f in jshint_output:
                 lintlines = jshint_output[f]
-                self.process(f, contents, lintlines)
-
-    def num_errors(self):
-        """A count of all the errors we've seen (and emitted) so far."""
-        return self._num_errors
+                try:
+                    contents = open(f, 'U').read()
+                except (IOError, OSError), why:
+                    print "SKIPPING lint of %s: %s" % (f, why.args[1])
+                    num_errors += 1
+                    continue
+                num_errors += self.process(f, contents, lintlines)
+        return num_errors
 
 
 def jshint_files(files):
@@ -351,7 +363,7 @@ def jshint_files(files):
         jshint_executable,
         '--config', config,
         '--reporter', reporter,
-        ] + [f for f, contents in files],
+        ] + files,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE)
     stdout, stderr = pipe.communicate()
@@ -392,33 +404,26 @@ def jshint(contents_of_f):
     return stdout
 
 
-class JsxLinter(object):
+class JsxLinter(Linter):
     """Linter for jsx files.  process() processes one file."""
-
     def __init__(self, verbose):
-        self._num_errors = 0
         self._verbose = verbose
 
-    def process_files(self, files):
-        # TODO(alpert): Run all the jshint calls in one invocation for speed
-        for f, contents in files:
-            self.process(f, contents)
-
     def process(self, f, contents_of_f):
-        self._check_line_length(f, contents_of_f)
-        self._lint_generated_js(f, contents_of_f)
-
-    def num_errors(self):
-        """A count of all the errors we've seen (and emitted) so far."""
-        return self._num_errors
+        num_errors = 0
+        num_errors += self._check_line_length(f, contents_of_f)
+        num_errors += self._lint_generated_js(f, contents_of_f)
+        return num_errors
 
     def _check_line_length(self, f, contents_of_f):
+        num_errors = 0
         lineno = 1
         for line in contents_of_f.splitlines():
             if len(line) >= 80:
-                self._num_errors += 1
+                num_errors += 1
                 print ('%s:%s: line too long' % (f, lineno))
             lineno += 1
+        return num_errors
 
     def _lint_generated_js(self, f, contents_of_f):
         # Pipe the source of the file to `jsx` and get the result from stdout
@@ -437,13 +442,16 @@ class JsxLinter(object):
             raise RuntimeError('jsx exited with error code %d:\n%s' %
                 (result, indent(err)))
 
+        # TODO(alpert): Run all the jshint calls in one invocation for speed
         stdout = jshint(transformed_source)
 
+        num_errors = 0
         # need these for filtering
         contents_lines = transformed_source.splitlines()
         for output_line in stdout.splitlines():
-            self._num_errors += self._process_one_line(f, output_line,
-                                                       contents_lines)
+            num_errors += self._process_one_line(f, output_line,
+                                                 contents_lines)
+        return num_errors
 
     def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
@@ -502,20 +510,13 @@ def line_with_context(lines, line_no, context_size):
     return message
 
 
-class HtmlLinter(object):
+class HtmlLinter(Linter):
     """Linter for html.  process() processes one file.
 
     The main thing we look for with html is that the static images
     are properly escaped using the |static_url filter.  This is
     applied only to files in the 'templates' directory.
     """
-    def __init__(self):
-        self._num_errors = 0
-
-    def process_files(self, files):
-        for f, contents in files:
-            self.process(f, contents)
-
     def process(self, f, contents_of_f):
         if ('templates' + os.sep) in f:
             # s_c_r.lint_one_file() happily ignores @Nolint lines for us.
@@ -524,11 +525,9 @@ class HtmlLinter(object):
                 # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
                 print ('%s:%s:%s: E=static_url= %s'
                        % (fname, linenum, colnum, msg))
-            self._num_errors += len(errors)
-
-    def num_errors(self):
-        """A count of all the errors we've seen (and emitted) so far."""
-        return self._num_errors
+            return len(errors)
+        else:
+            return 0
 
 
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
@@ -862,33 +861,21 @@ def main(files_and_directories,
                 print '--- skipping %s (language unknown)' % f
             continue
 
-        try:
-            contents = open(f, 'U').read()
-        except (IOError, OSError), why:
-            print "SKIPPING lint of %s: %s" % (f, why.args[1])
-            num_errors += 1
-            continue
-
         for lint_processor in lint_processors:
             # To make the lint errors look nicer, let's pass in the
             # filename relative to the current-working directory,
             # rather than using the abspath.
             files_by_linter.setdefault(lint_processor, []).append(
-                    (os.path.relpath(f), contents))
+                    os.path.relpath(f))
 
     for lint_processor in files_by_linter:
         files = files_by_linter[lint_processor]
         try:
-            lint_processor.process_files(files)
+            num_errors += lint_processor.process_files(files)
         except Exception, why:
-            print "ERROR linting %r: %s" % ([f for f, c in files], why)
+            print "ERROR linting %r: %s" % (files, why)
             num_errors += 1
             continue
-
-    # Count up all the errors we've seen:
-    for lint_processors in processor_dict.itervalues():
-        for lint_processor in (lint_processors or []):
-            num_errors += lint_processor.num_errors()
 
     # If they asked for an extra linter to run over these files, do that.
     if extra_linter_filename:
