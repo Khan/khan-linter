@@ -419,7 +419,8 @@ class JsxLinter(Linter):
         num_errors = 0
         lineno = 1
         for line in contents_of_f.splitlines():
-            if len(line) >= 80:
+            if len(line) >= 80 and not (
+                    'http://' in line or 'https://' in line):
                 num_errors += 1
                 print ('%s:%s: line too long' % (f, lineno))
             lineno += 1
