@@ -37,6 +37,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 import static_content_refs
 try:
@@ -815,6 +816,27 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
     return num_errors
 
 
+def _maybe_pull(verbose):
+    """If the repo hasn't been updated in 24 hours, pull and return True."""
+    # If we're not a git repo, we can't pull.
+    if not os.path.isdir(os.path.join(os.path.dirname(__file__), '.git')):
+        return False
+
+    try:
+        last_pull_time = os.stat('/tmp/khan-linter.pull').st_mtime
+    except (IOError, OSError):
+        last_pull_time = 0
+    if last_pull_time + 24 * 60 * 60 >= time.time():
+        return False
+
+    if verbose:
+        print 'Updating the khan-linter repo'
+    subprocess.check_call(['git', 'pull', '-q', '--no-rebase', '--ff-only'],
+                          cwd=os.path.dirname(__file__))
+    open('/tmp/khan-linter.pull', 'w').close()     # update the last-pull time
+    return True
+
+
 def main(files_and_directories,
          blacklist='auto', blacklist_pattern=_DEFAULT_BLACKLIST_PATTERN,
          extra_linter_filename=_DEFAULT_EXTRA_LINTER, lang='', verbose=False):
@@ -916,6 +938,8 @@ if __name__ == '__main__':
                       default='',
                       help=('Treat all input files as written in the given '
                             'language.  If empty, guess from extension.'))
+    parser.add_option('--no-auto-pull', action='store_true', default=False,
+                      help=("Don't try to update this repo once a day."))
     parser.add_option('--always-exit-0', action='store_true', default=False,
                       help=('Exit 0 even if there are lint errors. '
                             'Only useful when used with phabricator.'))
@@ -925,6 +949,13 @@ if __name__ == '__main__':
     options, args = parser.parse_args()
     if not args:
         args = ['.']
+
+    # Once a day, we do a 'git pull' in our repo to make sure we are
+    # the most up-to-date khan-linter we can be.
+    if not options.no_auto_pull and _maybe_pull(options.verbose):
+        # We have to re-exec ourselves since we may have changed.
+        os.execv(sys.argv[0], sys.argv)
+
     num_errors = main(args,
                       options.blacklist, options.blacklist_filename,
                       options.extra_linter, options.lang,
