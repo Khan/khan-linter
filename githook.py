@@ -46,7 +46,13 @@ def main():
 
     # Lint the commit message itself!
     commit_message = open(sys.argv[1]).read()
-    num_errors += hook_lib.lint_commit_message(commit_message)
+
+    # For the phabricator workflow, some people always have the git
+    # commit message be 'WIP', and put in the actual message at 'arc
+    # diff' time.  We don't require a 'real' commit message in that
+    # case.
+    if not commit_message.strip().lower().startswith('wip'):
+        num_errors += hook_lib.lint_commit_message(commit_message)
 
     # Report what we found, and exit with the proper status code.
     # We want to extract out lines starting with '#' from the commit message
