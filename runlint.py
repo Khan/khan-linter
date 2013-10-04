@@ -407,6 +407,8 @@ def jshint(contents_of_f):
 
 class JsxLinter(Linter):
     """Linter for jsx files.  process() processes one file."""
+    _JSX_ERROR_MESSAGE_RE = re.compile(r'Error: Line (\d+): (.*)')
+
     def __init__(self, verbose):
         self._verbose = verbose
 
@@ -441,8 +443,16 @@ class JsxLinter(Linter):
         result = process.wait()
 
         if result != 0:
-            raise RuntimeError('jsx exited with error code %d:\n%s' %
-                (result, indent(err)))
+            # If jsx failed to even process the file due to a parse
+            # error that it found, report that error.
+            m = self._JSX_ERROR_MESSAGE_RE.search(err)
+            if m:
+                # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
+                print '%s:%s: E=parse= %s' % (f, m.group(1), m.group(2))
+                return 1
+            else:
+                raise RuntimeError('%s: jsx exited with error code %d:\n%s' %
+                                   (f, result, indent(err)))
 
         # TODO(alpert): Run all the jshint calls in one invocation for speed
         stdout = jshint(transformed_source)
