@@ -19,8 +19,9 @@ blacklist (this behavior is controlled by the --blacklist flag).
 
 If --extra-linter-filename is set (as it is by default), and that
 file exists and is executable, then this script will run that program
-as well, passing in all the files listed on the commandline.
-Any such program must give output in the canonical form:
+as well, passing in '-' on the commandline and all the files listed on
+stdin.  Any such program must support the '-' argument and also give
+output in the canonical form:
    filename:linenum: E<error_code> error message
 and its exit code should be the number of lint errors seen.
 
@@ -812,16 +813,13 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
     for (linter_filename, files) in linter_to_files.iteritems():
         if not os.access(linter_filename, os.R_OK | os.X_OK):
             continue
-        group_size = 100
         files = sorted(files)
-        while files:
-            if verbose:
-                print ('--- running extra linter: %s %s'
-                       % (linter_filename, ' '.join(files[:group_size])))
-            rc = subprocess.call([linter_filename] + files[:group_size])
-            # extra_linter should return the number of errors seen
-            num_errors += rc
-            files = files[group_size:]
+        if verbose:
+            print ('--- running extra linter %s on these files: %s'
+                   % (linter_filename, files))
+        p = subprocess.Popen([linter_filename, '-'], stdin=subprocess.PIPE)
+        p.communicate(input='\n'.join(files))
+        num_errors += p.returncode
 
     return num_errors
 
