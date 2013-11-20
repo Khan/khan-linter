@@ -904,7 +904,16 @@ def main(files_and_directories,
     for lint_processor in files_by_linter:
         files = files_by_linter[lint_processor]
         try:
-            num_errors += lint_processor.process_files(files)
+            if verbose:
+                print '--- Running %s:' % lint_processor.__class__.__name__
+
+            start_time = time.time()
+            num_new_errors = lint_processor.process_files(files)
+            num_errors += num_new_errors
+            elapsed = time.time() - start_time
+
+            if verbose:
+                print '%d errors (%.2f seconds)' % (num_new_errors, elapsed)
         except Exception, why:
             print "ERROR linting %r: %s" % (files, why)
             num_errors += 1
