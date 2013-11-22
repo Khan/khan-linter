@@ -19,6 +19,13 @@ import sys
 import hook_lib
 
 
+def _normalized_commit_message(text):
+    """Remove lines starting with '#' and other stuff that git ignores."""
+    lines = text.splitlines(True)
+    lines = [l for l in lines if not l.startswith('#')]
+    return ''.join(lines).strip()
+
+
 def main():
     """Run a git pre-commit lint-check."""
     # If we're a merge, don't try to do a lint-check.
@@ -26,6 +33,25 @@ def main():
     if os.path.exists(os.path.join(git_root.strip(), 'MERGE_HEAD')):
         print "Skipping lint on merge..."
         return 0
+
+    commit_message = open(sys.argv[1]).read()
+    # Get rid of the comment lines, and leading and trailing whitespace.
+    commit_message = _normalized_commit_message(commit_message)
+
+    # If the commit message is empty or unchanged from the template, abort.
+    if not commit_message:
+        print "Aborting commit, empty commit message"
+        return 1
+
+    try:
+        with open(os.path.join(git_root.strip(), 'commit_template')) as f:
+            template = f.read()
+    except (IOError, OSError):       # user doesn't have a commit template
+        pass
+    else:
+        if commit_message == _normalized_commit_message(template):
+            print "Aborting commit, commit message unchanged"
+            return 1
 
     # Go through all modified or added files.
     try:
@@ -45,20 +71,14 @@ def main():
     num_errors = hook_lib.lint_files(files_to_lint)
 
     # Lint the commit message itself!
-    commit_message = open(sys.argv[1]).read()
-
     # For the phabricator workflow, some people always have the git
     # commit message be 'WIP', and put in the actual message at 'arc
     # diff' time.  We don't require a 'real' commit message in that
     # case.
-    if not commit_message.strip().lower().startswith('wip'):
+    if not commit_message.lower().startswith('wip'):
         num_errors += hook_lib.lint_commit_message(commit_message)
 
     # Report what we found, and exit with the proper status code.
-    # We want to extract out lines starting with '#' from the commit message
-    # before saving it.
-    commit_message = '\n'.join(l for l in commit_message.splitlines()
-                               if not l.startswith('#'))
     hook_lib.report_errors_and_exit(num_errors, commit_message,
                                     os.path.join('.git', 'commit.save'))
 
