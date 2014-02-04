@@ -32,6 +32,7 @@ Files with unknown or unsupported extensions will be skipped.
 
 import cStringIO
 import itertools
+import fcntl
 import fnmatch
 import optparse
 import os
@@ -837,11 +838,19 @@ def _maybe_pull(verbose):
     if last_pull_time + 24 * 60 * 60 >= time.time():
         return False
 
-    if verbose:
-        print 'Updating the khan-linter repo'
-    subprocess.check_call(['git', 'pull', '-q', '--no-rebase', '--ff-only'],
-                          cwd=os.path.dirname(__file__))
-    open('/tmp/khan-linter.pull', 'w').close()     # update the last-pull time
+    # Update the last-pull time, and create an fd for the lockf call.
+    with open('/tmp/khan-linter.pull', 'w') as f:
+        # Phabricator often runs two linters at the same time, meaning
+        # they could both contend for the 'git pull' call.  This lock
+        # prevents that.  (It does mean that we pull twice, but that's
+        # the safest way to make sure neither linter runs before the
+        # update is complete.)
+        fcntl.lockf(f, fcntl.LOCK_EX)
+        if verbose:
+            print 'Updating the khan-linter repo'
+        subprocess.check_call(
+            ['git', 'pull', '-q', '--no-rebase', '--ff-only'],
+            cwd=os.path.dirname(__file__))
     return True
 
 
