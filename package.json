@@ -1,6 +1,10 @@
 {
     "name": "khan-linter",
     "version": "0.0.1",
+    "repository": {
+      "type" : "git",
+      "url" : "https://github.com/Khan/khan-linter.git"
+    },
     "dependencies": {
         "jshint": "2.1.10",
         "react-tools": "0.4.1"
