@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-var transform = require("react-tools").transform;
+var visitors = require("react-tools/vendor/fbtransform/visitors");
+var jstransform = require('jstransform');
+
 
 process.stdin.resume();
 process.stdin.setEncoding("utf-8");
@@ -8,6 +10,10 @@ var js = "";
 process.stdin.on("data", function(data) {
     js += data;
 });
+
 process.stdin.on("end", function() {
-    process.stdout.write(transform(js));
+    var visitorList = visitors.getAllVisitors();
+    js = jstransform.transform(visitorList, js).code;
+
+    process.stdout.write(js);
 });
