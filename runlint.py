@@ -357,6 +357,9 @@ def jshint_files(files):
     """
     jshint_executable = os.path.join(os.path.dirname(__file__),
         'node_modules', '.bin', 'jshint')
+    assert os.path.isfile(jshint_executable), ("The linter jshint is missing. "
+                                               "Expected it at '%s'" %
+                                               jshint_executable)
     config = os.path.join(os.path.dirname(__file__),
         'jshintrc')
     reporter = os.path.join(os.path.dirname(__file__),
