@@ -430,7 +430,7 @@ class JsxLinter(Linter):
             if len(line) >= 80 and not (
                     'http://' in line or
                     'https://' in line or
-                    'require' in line):
+                    'require(' in line):
                 num_errors += 1
                 print ('%s:%s: W101 Line is too long.' % (f, lineno))
             lineno += 1
