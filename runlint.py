@@ -288,6 +288,36 @@ class Pyflakes(Linter):
         return num_errors
 
 
+class Git(Linter):
+    """Complain if the file has git merge-conflict markers in it.
+
+    git will merrily let you 'resolve' a file that still has merge
+    conflict markers in it.  This lint check will hopefully catch
+    that.
+    """
+    # We don't check for ======= because it might legitimately be in
+    # a file (for purposes other than as a git conflict marker).
+    _MARKERS = ('<' * 7, '|' * 7, '>' * 7)
+    _MARKERS_RE = re.compile(r'^(%s)( |$)'
+                             % '|'.join(re.escape(m) for m in _MARKERS),
+                             re.MULTILINE)
+
+    def process(self, f, contents_of_f):
+        # Ignore files that git thinks are binary; those don't ever
+        # get merge conflict markers.  This is how we check, sez
+        # http://stackoverflow.com/questions/6119956/how-to-determine-if-git-handles-a-file-as-binary-or-as-text:
+        if '\0' in contents_of_f[:8000]:
+            return 0      # a binary file
+
+        num_errors = 0
+        for m in self._MARKERS_RE.finditer(contents_of_f):
+            linenum = contents_of_f.count('\n', 0, m.start()) + 1
+            print ('%s:%s:1: E1 git conflict marker "%s" found'
+                   % (f, linenum, m.group(1)))
+            num_errors += 1
+        return num_errors
+
+
 class JsHint(Linter):
     """Linter for javascript.  process() processes one file."""
     def _process_one_line(self, filename, output_line, contents_lines):
@@ -881,14 +911,19 @@ def main(files_and_directories,
     processor_dict = {
         'python': (Pep8([sys.argv[0]] + _DEFAULT_PEP8_ARGS),
                    Pyflakes(),
+                   Git(),
                    ),
         'javascript': (JsHint(),
+                       Git(),
                        ),
         'html': (HtmlLinter(),
+                 Git(),
                  ),
         'jsx': (JsxLinter(verbose),
+                Git(),
                 ),
-        'unknown': None,
+        'unknown': (Git(),
+                    ),
         }
 
     files_to_lint = find_files_to_lint(files_and_directories,
