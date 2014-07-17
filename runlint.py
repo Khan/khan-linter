@@ -862,7 +862,10 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
 
 
 def _maybe_pull(verbose):
-    """If the repo hasn't been updated in 24 hours, pull and return True."""
+    """If the repo hasn't been updated in 24 hours, pull. If the working copy
+    changed as a result, return True. If no pull was done or there were no
+    changes, return False.
+    """
     # If we're not a git repo, we can't pull.
     if not os.path.isdir(os.path.join(os.path.dirname(__file__), '.git')):
         return False
@@ -884,10 +887,18 @@ def _maybe_pull(verbose):
         fcntl.lockf(f, fcntl.LOCK_EX)
         if verbose:
             print 'Updating the khan-linter repo'
+
+        old_sha = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=os.path.dirname(__file__))
         subprocess.check_call(
             ['git', 'pull', '-q', '--no-rebase', '--ff-only'],
             cwd=os.path.dirname(__file__))
-    return True
+        new_sha = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=os.path.dirname(__file__))
+
+    return new_sha != old_sha
 
 
 def main(files_and_directories,
@@ -1020,6 +1031,9 @@ if __name__ == '__main__':
     # Once a day, we do a 'git pull' in our repo to make sure we are
     # the most up-to-date khan-linter we can be.
     if not options.no_auto_pull and _maybe_pull(options.verbose):
+        subprocess.check_call(
+            ['make', 'post_pull'],
+            cwd=os.path.dirname(__file__))
         # We have to re-exec ourselves since we may have changed.
         os.execv(sys.argv[0], sys.argv)
 
