@@ -108,7 +108,7 @@ def _capture_stdout_of(fn, *args, **kwargs):
 class Pep8(Linter):
     """Linter for python.  process() processes one file."""
     def __init__(self, pep8_args):
-        pep8.process_options(pep8_args + ['dummy'])
+        self.options = pep8.StyleGuide({'paths': pep8_args}).options
 
     def _munge_output_line(self, line):
         """Modify the line to have the canonical form for lint lines."""
@@ -188,8 +188,9 @@ class Pep8(Linter):
     def process(self, f, contents_of_f):
         contents_lines = contents_of_f.splitlines(True)
 
+        checker = pep8.Checker(f, lines=contents_lines, options=self.options)
         (num_candidate_errors, pep8_stdout) = _capture_stdout_of(
-            pep8.Checker(f, lines=contents_lines).check_all)
+            checker.check_all)
 
         # Go through the output and remove the 'actually ok' lines.
         if num_candidate_errors == 0:
