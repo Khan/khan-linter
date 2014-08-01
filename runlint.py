@@ -68,6 +68,18 @@ _DEFAULT_PEP8_ARGS = ['--repeat',
                       '--ignore=W291,W293,W391']
 
 
+def propose_arc_fix_str(to_remove, to_add):
+    """Return a string to be matched by arc's autopatching functionality.
+
+    This gets picked up as part of the regex used by arc to present linting
+    results. When it seems these null delimited strings, it prompts if you'd
+    like to apply the patch.
+
+    See "config/linter.scriptandregex.regex" in your ~/.arcrc.
+    """
+    return "\0%s\0%s\0" % (to_remove, to_add)
+
+
 class Linter(object):
     """Superclass for all linters.
 
@@ -107,8 +119,9 @@ def _capture_stdout_of(fn, *args, **kwargs):
 
 class Pep8(Linter):
     """Linter for python.  process() processes one file."""
-    def __init__(self, pep8_args):
+    def __init__(self, pep8_args, propose_arc_fixes=False):
         pep8.process_options(pep8_args + ['dummy'])
+        self._propose_arc_fixes = propose_arc_fixes
 
     def _munge_output_line(self, line):
         """Modify the line to have the canonical form for lint lines."""
@@ -116,6 +129,17 @@ class Pep8(Linter):
         # Pep8 already has that form, so we're good.  We only need to
         # strip the trailing newline.
         return line.rstrip()
+
+    def _maybe_add_arc_fix(self, lintline, bad_line):
+        """Optionally add a patch for arc lint to use for autofixing."""
+        if not self._propose_arc_fixes:
+            return lintline
+
+        errcode = lintline.split(' ')[1]
+
+        # expected 2 blank lines, found 1
+        if errcode == 'E302':
+            return lintline + propose_arc_fix_str('', '\n')
 
     def _process_one_line(self, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
@@ -182,7 +206,7 @@ class Pep8(Linter):
                     return 0
 
         # OK, looks like it's a legitimate error.
-        print lintline
+        print self._maybe_add_arc_fix(lintline, bad_line)
         return 1
 
     def process(self, f, contents_of_f):
@@ -204,6 +228,9 @@ class Pep8(Linter):
 
 class Pyflakes(Linter):
     """Linter for python.  process() processes one file."""
+    def __init__(self, propose_arc_fixes=False):
+        self._propose_arc_fixes = propose_arc_fixes
+
     def _munge_output_line(self, line):
         """Modify the line to have the canonical form for lint lines."""
         # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
@@ -212,7 +239,15 @@ class Pyflakes(Linter):
         # pyflakes doesn't have an error code, so we just use
         # 'pyflakes'.  We also strip the trailing newline.
         (file, line, error) = line.rstrip().split(':')
-        return '%s:%s: E=pyflakes=%s' % (file, line, error)
+        return '%s:%s:1: E=pyflakes=%s' % (file, line, error)
+
+    def _maybe_add_arc_fix(self, lintline, bad_line):
+        """Optionally add a patch for arc lint to use for autofixing."""
+        if not self._propose_arc_fixes:
+            return lintline
+
+        if 'imported but unused' in lintline:
+            return lintline + propose_arc_fix_str(bad_line + '\n', '')
 
     def _process_one_line(self, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
@@ -265,7 +300,7 @@ class Pyflakes(Linter):
             return 0
 
         # OK, looks like it's a legitimate error.
-        print lintline
+        print self._maybe_add_arc_fix(lintline, bad_line)
         return 1
 
     def process(self, f, contents_of_f):
@@ -320,6 +355,20 @@ class Git(Linter):
 
 class JsHint(Linter):
     """Linter for javascript.  process() processes one file."""
+    def __init__(self, propose_arc_fixes=False):
+        self._propose_arc_fixes = propose_arc_fixes
+
+    def _maybe_add_arc_fix(self, lintline, bad_line):
+        """Optionally add a patch for arc lint to use for autofixing."""
+        if not self._propose_arc_fixes:
+            return lintline
+
+        errcode = lintline.split(' ')[1]
+
+        # W033: Missing semicolon
+        if errcode == 'W033':
+            return lintline + propose_arc_fix_str('', ';')
+
     def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
 
@@ -346,8 +395,7 @@ class JsHint(Linter):
         if '@Nolint' in bad_line:
             return 0
 
-        # Otherwise, it's a legitimate error.
-        print output_line
+        print self._maybe_add_arc_fix(output_line, bad_line)
         return 1
 
     def process(self, f, contents_of_f, jshint_lines):
@@ -444,8 +492,9 @@ class JsxLinter(Linter):
     """Linter for jsx files.  process() processes one file."""
     _JSX_ERROR_MESSAGE_RE = re.compile(r'Error: Line (\d+): (.*)')
 
-    def __init__(self, verbose):
+    def __init__(self, verbose, propose_arc_fixes=False):
         self._verbose = verbose
+        self._propose_arc_fixes = propose_arc_fixes
 
     def process(self, f, contents_of_f):
         num_errors = 0
@@ -503,6 +552,17 @@ class JsxLinter(Linter):
                                                  contents_lines)
         return num_errors
 
+    def _maybe_add_arc_fix(self, lintline, bad_line):
+        """Optionally add a patch for arc lint to use for autofixing."""
+        if not self._propose_arc_fixes:
+            return lintline
+
+        errcode = lintline.split(' ')[1]
+
+        # W033: Missing semicolon
+        if errcode == 'W033':
+            return lintline + propose_arc_fix_str('', ';')
+
     def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
 
@@ -532,7 +592,7 @@ class JsxLinter(Linter):
             return 0
 
         # Otherwise, it's a legitimate error.
-        print lintline
+        print self._maybe_add_arc_fix(lintline, bad_line)
         if self._verbose:
             # TODO(joel) consider using a real color library
             print '\033[93mCompiled jsx:\033[0m'
@@ -903,7 +963,8 @@ def _maybe_pull(verbose):
 
 def main(files_and_directories,
          blacklist='auto', blacklist_pattern=_DEFAULT_BLACKLIST_PATTERN,
-         extra_linter_filename=_DEFAULT_EXTRA_LINTER, lang='', verbose=False):
+         extra_linter_filename=_DEFAULT_EXTRA_LINTER, lang='', verbose=False,
+         propose_arc_fixes=False):
     """Call the appropriate linters on all given files and directory trees.
 
     Arguments:
@@ -914,6 +975,10 @@ def main(files_and_directories,
       extra_linter_filename: what auxilliary linter to run, described by --help
       lang: the language to interpret all files to be in, or '' to auto-detect
       verbose: print messages about what we're doing, to stdout
+      propose_arc_fixes: append special strings to the end of lint lines where
+        we know how to automatically fix the problem. `arc lint` consumes these
+        special strings and prompts the user to see if they want to accept the
+        patch.
 
     Returns:
       The number of errors seen while linting.  0 means lint-cleanliness!
@@ -921,17 +986,18 @@ def main(files_and_directories,
     # A dict that maps from language (output of _lang) to a list of processors.
     # None means that we skip files of this language.
     processor_dict = {
-        'python': (Pep8([sys.argv[0]] + _DEFAULT_PEP8_ARGS),
-                   Pyflakes(),
+        'python': (Pep8([sys.argv[0]] + _DEFAULT_PEP8_ARGS,
+                        propose_arc_fixes=propose_arc_fixes),
+                   Pyflakes(propose_arc_fixes=propose_arc_fixes),
                    Git(),
                    ),
-        'javascript': (JsHint(),
+        'javascript': (JsHint(propose_arc_fixes),
                        Git(),
                        ),
         'html': (HtmlLinter(),
                  Git(),
                  ),
-        'jsx': (JsxLinter(verbose),
+        'jsx': (JsxLinter(verbose, propose_arc_fixes),
                 Git(),
                 ),
         'unknown': (Git(),
@@ -1021,6 +1087,10 @@ if __name__ == '__main__':
     parser.add_option('--always-exit-0', action='store_true', default=False,
                       help=('Exit 0 even if there are lint errors. '
                             'Only useful when used with phabricator.'))
+    parser.add_option('--propose-arc-fixes', action='store_true',
+                      default=False,
+                      help=('Propose patches that arc can apply to fix lint'
+                            'errors. Only useful when used with phabricator.'))
     parser.add_option('--verbose', '-v', action='store_true', default=False,
                       help='Print information about what is happening.')
 
@@ -1040,7 +1110,7 @@ if __name__ == '__main__':
     num_errors = main(args,
                       options.blacklist, options.blacklist_filename,
                       options.extra_linter, options.lang,
-                      options.verbose)
+                      options.verbose, options.propose_arc_fixes)
 
     if options.always_exit_0:
         sys.exit(0)
