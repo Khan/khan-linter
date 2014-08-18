@@ -6,7 +6,7 @@
       "url" : "https://github.com/Khan/khan-linter.git"
     },
     "dependencies": {
-        "jshint": "2.1.10",
+        "jshint": "2.5.4",
         "react-tools": "0.11.1",
         "jstransform": "~6.0.1"
     }
