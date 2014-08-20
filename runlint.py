@@ -141,6 +141,8 @@ class Pep8(Linter):
         if errcode == 'E302':
             return lintline + propose_arc_fix_str('', '\n')
 
+        return lintline
+
     def _process_one_line(self, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
 
@@ -248,6 +250,8 @@ class Pyflakes(Linter):
 
         if 'imported but unused' in lintline:
             return lintline + propose_arc_fix_str(bad_line + '\n', '')
+
+        return lintline
 
     def _process_one_line(self, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
@@ -368,6 +372,8 @@ class JsHint(Linter):
         # W033: Missing semicolon
         if errcode == 'W033':
             return lintline + propose_arc_fix_str('', ';')
+
+        return lintline
 
     def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
@@ -562,6 +568,8 @@ class JsxLinter(Linter):
         # W033: Missing semicolon
         if errcode == 'W033':
             return lintline + propose_arc_fix_str('', ';')
+
+        return lintline
 
     def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
