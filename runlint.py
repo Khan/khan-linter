@@ -141,6 +141,10 @@ class Pep8(Linter):
         if errcode == 'E302':
             return lintline + propose_arc_fix_str('', '\n')
 
+        # at least two spaces before inline comment
+        if errcode == 'E261':
+            return lintline + propose_arc_fix_str('', ' ')
+
         return lintline
 
     def _process_one_line(self, output_line, contents_lines):
