@@ -17,6 +17,7 @@
     "noempty"       : false,    // Prohibit use of empty blocks.
     "nonew"         : false,    // Prohibit use of constructors for side-effects.
     "regexp"        : true,     // Prohibit `.` and `[^...]` in regular expressions.
+    "unused"        : "vars",   // Prohibit use of vars (but not func args) that are unused
     
     // == Relaxing Options ================================================
     //
