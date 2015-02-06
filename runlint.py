@@ -818,7 +818,7 @@ def _file_in_blacklist(fname, blacklist_pattern):
     return False
 
 
-def _files_under_directory(rootdir, blacklist_pattern):
+def _files_under_directory(rootdir, blacklist_pattern, verbose):
     """Return a set of files under rootdir not in the blacklist."""
     retval = set()
     for root, dirs, files in os.walk(rootdir):
@@ -827,12 +827,17 @@ def _files_under_directory(rootdir, blacklist_pattern):
         # calling del on an element of dirs suppresses os.walk()'s
         # traversal into that dir.)
         for i in xrange(len(dirs) - 1, -1, -1):
-            if _file_in_blacklist(os.path.join(root, dirs[i]),
-                                  blacklist_pattern):
+            absdir = os.path.join(root, dirs[i])
+            if _file_in_blacklist(absdir, blacklist_pattern):
+                if verbose:
+                    print '... skipping directory %s: in blacklist' % absdir
                 del dirs[i]
         # Prune the files that are in the blacklist.
         for f in files:
-            if _file_in_blacklist(os.path.join(root, f), blacklist_pattern):
+            abspath = os.path.join(root, f)
+            if _file_in_blacklist(abspath, blacklist_pattern):
+                if verbose:
+                    print '... skipping file %s: in blacklist' % abspath
                 continue
             retval.add(os.path.join(root, f))
     return retval
@@ -886,7 +891,8 @@ def find_files_to_lint(files_and_directories,
     # TODO(csilvers): log if we skip a file in a directory because
     # it's in the blacklist?
     for directory in directories_to_lint:
-        files_to_lint.extend(_files_under_directory(directory, dir_blacklist))
+        files_to_lint.extend(_files_under_directory(directory, dir_blacklist,
+                                                    verbose))
 
     files_to_lint.sort()    # just to be pretty
     return files_to_lint
