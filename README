@@ -20,6 +20,9 @@ Usage
 First, install dependent packages via the requirements.txt file
    $ pip install -r requirements.txt
 
+Then install node.js dependencies
+   $ npm install
+
 Then you can automatically invoke lints on modified or added files in
 Mercurial.  Add to .hgrc to use:
 
