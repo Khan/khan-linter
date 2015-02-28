@@ -557,6 +557,8 @@ class JsxLinter(Linter):
         num_errors = 0
         # need these for filtering
         contents_lines = transformed_source.splitlines()
+        # guard against errors on the last line
+        contents_lines.append("");
         for output_line in stdout.splitlines():
             num_errors += self._process_one_line(f, output_line,
                                                  contents_lines)
