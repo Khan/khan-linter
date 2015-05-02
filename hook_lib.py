@@ -7,6 +7,7 @@ to get the data that needs linting.
 """
 
 import re
+import os
 import sys
 
 import runlint
@@ -67,9 +68,10 @@ def report_errors_and_exit(num_errors, commit_message, save_filename):
             f.write(commit_message)
         print >> sys.stderr, ('\n--- %s lint errors ---\n'
                               'Commit message saved to %s'
-                              ' (use --template=%s on'
-                              ' commit to resume editing)'
-                              % (num_errors, save_filename, save_filename))
+                              % (num_errors, save_filename))
+        if os.path.basename(save_filename) == 'commit.save':
+            print >> sys.stderr, ('Use "git recommit -a" when the errors'
+                                  ' are fixed, to re-use this commit message')
         sys.exit(1)
     print >> sys.stderr, 'khan-linter: all lint checks passed'
     sys.exit(0)
