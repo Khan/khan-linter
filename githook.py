@@ -68,7 +68,7 @@ def main():
     if not files_to_lint or files_to_lint == ['']:
         return 0
 
-    num_errors = hook_lib.lint_files(files_to_lint)
+    lint_errors = hook_lib.lint_files(files_to_lint)
 
     # Lint the commit message itself!
     # For the phabricator workflow, some people always have the git
@@ -76,11 +76,23 @@ def main():
     # diff' time.  We don't require a 'real' commit message in that
     # case.
     if not commit_message.lower().startswith('wip'):
-        num_errors += hook_lib.lint_commit_message(commit_message)
+        msg_errors = hook_lib.lint_commit_message(commit_message)
+
+    num_errors = lint_errors + msg_errors
+
+    if lint_errors:
+        recommendation = ('Use "git recommit -a" when the errors'
+                          ' are fixed, to re-use this commit message')
+    elif msg_errors:
+        recommendation = ('Use "git commit -a --template .git/commit.save"'
+                          ' to commit with a fixed message.')
+    else:
+        recommendation = None
 
     # Report what we found, and exit with the proper status code.
     hook_lib.report_errors_and_exit(num_errors, commit_message,
-                                    os.path.join('.git', 'commit.save'))
+                                    os.path.join('.git', 'commit.save'),
+                                    recommendation=recommendation)
 
 
 if __name__ == '__main__':
