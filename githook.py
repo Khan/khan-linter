@@ -30,9 +30,6 @@ def main():
     """Run a git pre-commit lint-check."""
     # If we're a merge, don't try to do a lint-check.
     git_root = subprocess.check_output(['git', 'rev-parse', '--git-dir'])
-    if os.path.exists(os.path.join(git_root.strip(), 'MERGE_HEAD')):
-        print "Skipping lint on merge..."
-        return 0
 
     commit_message = open(sys.argv[1]).read()
     # Get rid of the comment lines, and leading and trailing whitespace.
@@ -53,18 +50,34 @@ def main():
             print "Aborting commit, commit message unchanged"
             return 1
 
-    # Go through all modified or added files.
-    try:
-        subprocess.check_output(['git', 'rev-parse', '--verify', 'HEAD'],
-                                stderr=subprocess.STDOUT)
-        parent = 'HEAD'
-    except subprocess.CalledProcessError:
-        parent = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'  # empty repo
+    is_merge_commit = os.path.exists(os.path.join(git_root.strip(),
+                                                  'MERGE_HEAD'))
 
-    # Look at Added, Modified, and Renamed files.
-    files = subprocess.check_output(['git', 'diff', '--cached', '--name-only',
-                                     '--diff-filter=AMR', '-z', parent])
-    files_to_lint = files.strip('\0').split('\0')    # that's what -z is for
+    # Go through all modified or added files.  We handle the case
+    # separately if we're a merge or a 'normal' commit.  If we're a
+    # merge, the pre-commit hook will only trigger if the merge had
+    # conflicts; in this case we only care about linting the files
+    # that were edited to resolve the conflict.  For a normal commit,
+    # we of course care about linting *all* the changes files.
+    if is_merge_commit:
+        # This seems to be the magic incantation that lists
+        # conflict-only files.  Normally diff-tree wouldn't work with
+        # uncommitted changes (which is what exist when this hook is
+        # run), but it does for merge-commits when --cc is specified.
+        files = subprocess.check_output(['git', 'diff-tree', '-r', '--cc',
+                                         '--name-only', '--diff-filter=AMR',
+                                         '-z', 'HEAD'])
+        files_to_lint = files.strip('\0').split('\0')  # that's what -z is for
+        files_to_lint.pop(0)   # get rid of the leading commit hash
+    else:
+        # Look at Added, Modified, and Renamed files.
+        # When no commit is specified, it defaults to HEAD which is
+        # what we want.
+        files = subprocess.check_output(['git', 'diff', '--cached',
+                                         '--name-only', '--diff-filter=AMR',
+                                         '-z'])
+        files_to_lint = files.strip('\0').split('\0')  # that's what -z is for
+
     if not files_to_lint or files_to_lint == ['']:
         return 0
 
@@ -75,8 +88,9 @@ def main():
     # commit message be 'WIP', and put in the actual message at 'arc
     # diff' time.  We don't require a 'real' commit message in that
     # case.
-    if not commit_message.lower().startswith('wip'):
-        msg_errors = hook_lib.lint_commit_message(commit_message)
+    msg_errors = 0
+    if not is_merge_commit and not commit_message.lower().startswith('wip'):
+        msg_errors += hook_lib.lint_commit_message(commit_message)
 
     num_errors = lint_errors + msg_errors
 
