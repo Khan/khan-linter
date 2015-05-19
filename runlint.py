@@ -41,18 +41,14 @@ import subprocess
 import sys
 import time
 
-import static_content_refs
-try:
-    import pep8
-except ImportError, why:
-    # TODO(csilvers): don't die yet, only if trying to lint python.
-    sys.exit('FATAL ERROR: %s.  Install pep8 via "pip install pep8"' % why)
-try:
-    from pyflakes.scripts import pyflakes
-except ImportError, why:
-    sys.exit('FATAL ERROR: %s.  Install pyflakes via "pip install pyflakes"'
-             % why)
+# Add vendor path so we can find (our packaged versions of) pep8 and pyflakes.
+_parent_dir = os.path.abspath(os.path.dirname(__file__))
+_vendor_dir = os.path.join(_parent_dir, 'vendor')
+sys.path.append(_vendor_dir)
 
+import static_content_refs
+import pep8
+from pyflakes.scripts import pyflakes
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
 _DEFAULT_EXTRA_LINTER = '<ancestor>/tools/runlint.py'
@@ -558,7 +554,7 @@ class JsxLinter(Linter):
         # need these for filtering
         contents_lines = transformed_source.splitlines()
         # guard against errors on the last line
-        contents_lines.append("");
+        contents_lines.append("")
         for output_line in stdout.splitlines():
             num_errors += self._process_one_line(f, output_line,
                                                  contents_lines)
@@ -1132,9 +1128,6 @@ if __name__ == '__main__':
     # Once a day, we do a 'git pull' in our repo to make sure we are
     # the most up-to-date khan-linter we can be.
     if not options.no_auto_pull and _maybe_pull(options.verbose):
-        subprocess.check_call(
-            ['make', 'post_pull'],
-            cwd=os.path.dirname(__file__))
         # We have to re-exec ourselves since we may have changed.
         os.execv(sys.argv[0], sys.argv)
 

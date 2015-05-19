@@ -1,6 +1,9 @@
+# Note: these requirements are vendored manually via the Makefile.
+# - if you are an end user of this tool, you don't need to install via pip.
+# - if you are a maintainer of this tool, be sure to use `make vendor_deps`
+#   anytime you make changes to this file, and check the corresponding changes
+#   to the /vendor/* directory in with your change as well.
+
 # Required by python lint checking
 pep8==1.0.1
 pyflakes==0.7.3
-
-# Required by js lint checking
-python-gflags==2.0
