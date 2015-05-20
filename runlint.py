@@ -41,8 +41,15 @@ import subprocess
 import sys
 import time
 
+
+# convenience function to make sure we get cwd in symlink aware way everywhere
+def get_real_cwd():
+    """Return the CWD of script in a symlink aware fashion."""
+    return os.path.dirname(os.path.realpath(__file__))
+
+
 # Add vendor path so we can find (our packaged versions of) pep8 and pyflakes.
-_parent_dir = os.path.abspath(os.path.dirname(__file__))
+_parent_dir = os.path.abspath(get_real_cwd())
 _vendor_dir = os.path.join(_parent_dir, 'vendor')
 sys.path.append(_vendor_dir)
 
@@ -439,14 +446,15 @@ def jshint_files(files):
         lines only containing files that had output; if there are no lint
         errors, an empty dict
     """
-    jshint_executable = os.path.join(os.path.dirname(__file__),
+    cwd = get_real_cwd()
+    jshint_executable = os.path.join(cwd,
         'node_modules', '.bin', 'jshint')
     assert os.path.isfile(jshint_executable), ("The linter jshint is missing. "
                                                "Expected it at '%s'" %
                                                jshint_executable)
-    config = os.path.join(os.path.dirname(__file__),
+    config = os.path.join(cwd,
         'jshintrc')
-    reporter = os.path.join(os.path.dirname(__file__),
+    reporter = os.path.join(cwd,
         'jshint_reporter.js')
 
     pipe = subprocess.Popen([
@@ -472,12 +480,11 @@ def jshint_files(files):
 
 
 def jshint(contents_of_f):
-    jshint_executable = os.path.join(os.path.dirname(__file__),
+    cwd = get_real_cwd()
+    jshint_executable = os.path.join(cwd,
         'node_modules', '.bin', 'jshint')
-    config = os.path.join(os.path.dirname(__file__),
-        'jshintrc')
-    reporter = os.path.join(os.path.dirname(__file__),
-        'jshint_reporter.js')
+    config = os.path.join(cwd, 'jshintrc')
+    reporter = os.path.join(cwd, 'jshint_reporter.js')
 
     pipe = subprocess.Popen([
         jshint_executable,
@@ -526,7 +533,7 @@ class JsxLinter(Linter):
         # Pipe the source of the file to `jsx` and get the result from stdout
         # as `transformed_source`. Ignore when it prints out "build Module" to
         # stderr.
-        jsx_executable = os.path.join(os.path.dirname(__file__),
+        jsx_executable = os.path.join(get_real_cwd(),
             'compile_jsx_file')
         process = subprocess.Popen([jsx_executable],
             stdin=subprocess.PIPE,
@@ -954,7 +961,7 @@ def _maybe_pull(verbose):
     changes, return False.
     """
     # If we're not a git repo, we can't pull.
-    if not os.path.isdir(os.path.join(os.path.dirname(__file__), '.git')):
+    if not os.path.isdir(os.path.join(get_real_cwd(), '.git')):
         return False
 
     try:
@@ -977,13 +984,13 @@ def _maybe_pull(verbose):
 
         old_sha = subprocess.check_output(
             ['git', 'rev-parse', 'HEAD'],
-            cwd=os.path.dirname(__file__))
+            cwd=get_real_cwd())
         subprocess.check_call(
             ['git', 'pull', '-q', '--no-rebase', '--ff-only'],
-            cwd=os.path.dirname(__file__))
+            cwd=get_real_cwd())
         new_sha = subprocess.check_output(
             ['git', 'rev-parse', 'HEAD'],
-            cwd=os.path.dirname(__file__))
+            cwd=get_real_cwd())
 
     return new_sha != old_sha
 

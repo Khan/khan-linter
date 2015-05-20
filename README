@@ -1,46 +1,50 @@
 This repository contains linting tools for Khan Academy's codebase.
 
-Most of the JavaScript linting code is based on Google's freely
-available and open-source Closure Linter:
-   http://code.google.com/closure/utilities/
+It uses existing linting tools (pep8, pyflakes, jshint, etc), but has been
+modified to suit Khan Academy's slightly different style guides.
 
-It has been modified to suit Khan Academy's slightly different style
-guides.
+This repository also contains a wrapper scripts that can be used as a
+pre-commit hook for Git or Mercurial.
 
-The python linting is based on pep8, with some slight modifications
-(captured in runlint.py).
+Installation
+============
+You should add the local `bin/` directory to your system $PATH, for example:
 
-This repository also contains a wrapper script that can be used as a
-pre-commit hook for Mercurial.
+    export PATH=$PATH:~/path/to/khan-linter/bin
 
+All dependencies are vendored within the repository itself, so no installation
+beyond cloning this repository is required.
 
 Usage
 =====
 
-First, install dependent packages via the requirements.txt file
-   $ pip install -r requirements.txt
+Manual
+------
+If you would like to lint manually, invoke `/path/to/runlint.py` or `ka-lint`.
 
-Then install node.js dependencies
-   $ npm install
+By default, this will lint all files under the current directory.  Alternately,
+you can specify files on the command line to lint.  See
 
-Then you can automatically invoke lints on modified or added files in
+    ka-lint --help
+
+for more options.
+
+Automatic
+---------
+You can automatically invoke lints on modified or added files in
 Mercurial.  Add to .hgrc to use:
 
-[hooks]
-pretxncommit.lint = /path/to/khan-linter/hghook.py
+    [hooks]
+    pretxncommit.lint = /path/to/khan-linter/hghook.py
+
+For git hooks, dotfiles probably already took care of it for you.
 
 You can update the blacklist file in this repository to control what
 files should not be linted at all.  Alternately, you can create a
 blacklist of your own, and use the --blacklist_file flag to runlint.py
-(you'll have to modify hghook.py to pass in the name of the blacklist
-file as well).
+(you'll have to modify hghook.py or githook.py to pass in the name of the
+blacklist file as well).
 
 To suppress the lint check, set the environment variable FORCE_COMMIT
-to 1 prior to calling 'hg commit' (there doesn't seem to be a way to
+to 1 prior to calling `hg commit` (there doesn't seem to be a way to
 pass args to a pretxncommit script otherwise).
-
-If you would like to lint manually, invoke runlint.py.  By default,
-this will lint all files under the current directory.  Alternately,
-you can specify files on the commandline to lint.  See
-   runlint.py --help
-for more options.
