@@ -26,12 +26,12 @@ def _normalized_commit_message(text):
     return ''.join(lines).strip()
 
 
-def main():
+def main(commit_message_file):
     """Run a git pre-commit lint-check."""
     # If we're a merge, don't try to do a lint-check.
     git_root = subprocess.check_output(['git', 'rev-parse', '--git-dir'])
-
-    commit_message = open(sys.argv[1]).read()
+    # read the commit message contents from the file specified
+    commit_message = open(commit_message_file).read()
     # Get rid of the comment lines, and leading and trailing whitespace.
     commit_message = _normalized_commit_message(commit_message)
 
@@ -112,4 +112,4 @@ def main():
 if __name__ == '__main__':
     suppress_lint = os.getenv('FORCE_COMMIT', '')
     if suppress_lint.lower() not in ('1', 'true'):
-        sys.exit(main())
+        sys.exit(main(sys.argv[1]))

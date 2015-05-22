@@ -4,7 +4,7 @@ It uses existing linting tools (pep8, pyflakes, jshint, etc), but has been
 modified to suit Khan Academy's slightly different style guides.
 
 This repository also contains a wrapper scripts that can be used as a
-pre-commit hook for Git or Mercurial.
+pre-commit hook for Git.
 
 Installation
 ============
@@ -31,14 +31,6 @@ for more options.
 
 Automatic
 ---------
-You can automatically invoke lints on modified or added files in
-Mercurial.  Add to .hgrc to use:
-
-    [hooks]
-    pretxncommit.lint = /path/to/khan-linter/hghook.py
-
-For git hooks, dotfiles probably already took care of it for you.
-
 You can update the blacklist file in this repository to control what
 files should not be linted at all.  Alternately, you can create a
 blacklist of your own, and use the --blacklist_file flag to runlint.py
@@ -46,5 +38,4 @@ blacklist of your own, and use the --blacklist_file flag to runlint.py
 blacklist file as well).
 
 To suppress the lint check, set the environment variable FORCE_COMMIT
-to 1 prior to calling `hg commit` (there doesn't seem to be a way to
-pass args to a pretxncommit script otherwise).
+to 1 prior to calling `git commit`.
