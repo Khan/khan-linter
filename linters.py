@@ -131,8 +131,10 @@ class Pep8(Linter):
         # should work well enough.
         if ('E501 line too long' in lintline and
             bad_line.lstrip().startswith('"') and
-            bad_line.rstrip(',\n').endswith('"')):
-            for linenum in xrange(bad_linenum - 1, 0, -1):
+            bad_line.rstrip(',\n').endswith('"') and
+            bad_linenum):
+
+            for linenum in xrange(bad_linenum, 0, -1):
                 if (contents_lines[linenum].lstrip().startswith('"""') or
                     contents_lines[linenum].lstrip().startswith("'''")):
                     break
