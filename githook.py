@@ -60,15 +60,21 @@ def main(commit_message_file):
     # that were edited to resolve the conflict.  For a normal commit,
     # we of course care about linting *all* the changes files.
     if is_merge_commit:
-        # This seems to be the magic incantation that lists
-        # conflict-only files.  Normally diff-tree wouldn't work with
-        # uncommitted changes (which is what exist when this hook is
-        # run), but it does for merge-commits when --cc is specified.
-        files = subprocess.check_output(['git', 'diff-tree', '-r', '--cc',
+        # I used to run
+        #    git diff-tree -r --cc --name-only --diff-filter=AMR -z HEAD
+        # but this wouldn't catch changes made to resolve conflicts, so
+        # I try this other approach instead.  It doesn't properly ignore
+        # files that have changed in both branches but the system was
+        # able to do an automatic merge though, sadly.
+        a_files = subprocess.check_output(['git', 'diff', '--cached',
                                          '--name-only', '--diff-filter=AMR',
-                                         '-z', 'HEAD'])
-        files_to_lint = files.strip('\0').split('\0')  # that's what -z is for
-        files_to_lint.pop(0)   # get rid of the leading commit hash
+                                         '-z', 'ORIG_HEAD'])
+        b_files = subprocess.check_output(['git', 'diff', '--cached',
+                                         '--name-only', '--diff-filter=AMR',
+                                         '-z', 'MERGE_HEAD'])
+        a_files = frozenset(a_files.strip('\0').split('\0'))
+        b_files = frozenset(b_files.strip('\0').split('\0'))
+        files_to_lint = list(a_files & b_files)
     else:
         # Look at Added, Modified, and Renamed files.
         # When no commit is specified, it defaults to HEAD which is
