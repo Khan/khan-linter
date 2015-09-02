@@ -273,6 +273,34 @@ class Pyflakes(Linter):
         return num_errors
 
 
+class CustomPythonLinter(Linter):
+    """A linter for generic python errors that are not caught by pep8/pyflakes.
+
+    This is a linter for general (as opposed to application-specific)
+    python errors that are not caught by third-party linters.  We add
+    those checks here.
+    """
+    def _bad_super(self, line):
+        # We don't want this linter to fire on this line itself!
+        return ('super(type(self)' in line or      # @Nolint
+                'super(self.__class__' in line)    # @Nolint
+
+    def process(self, f, contents_of_f):
+        num_errors = 0
+        for (linenum_minus_1, line) in enumerate(contents_of_f.splitlines()):
+            if '@Nolint' in line:
+                continue
+
+            if self._bad_super(line):
+                # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
+                print ('%s:%s: E999 first argument to super() must be '
+                       'an explicit classname, not type(self)'
+                       % (f, linenum_minus_1 + 1))
+                num_errors += 1
+
+        return num_errors
+
+
 class Git(Linter):
     """Complain if the file has git merge-conflict markers in it.
 
