@@ -7,10 +7,10 @@ import re
 import subprocess
 import sys
 
-import util
+import lint_util
 
 # Add vendor path so we can find (our packaged versions of) pep8 and pyflakes.
-_CWD = util.get_real_cwd()
+_CWD = lint_util.get_real_cwd()
 _parent_dir = os.path.abspath(_CWD)
 _vendor_dir = os.path.join(_parent_dir, 'vendor')
 sys.path.append(_vendor_dir)
@@ -79,11 +79,11 @@ class Pep8(Linter):
 
         # expected 2 blank lines, found 1
         if errcode == 'E302':
-            return lintline + util.propose_arc_fix_str('', '\n')
+            return lintline + lint_util.propose_arc_fix_str('', '\n')
 
         # at least two spaces before inline comment
         if errcode == 'E261':
-            return lintline + util.propose_arc_fix_str('', ' ')
+            return lintline + lint_util.propose_arc_fix_str('', ' ')
 
         return lintline
 
@@ -195,7 +195,8 @@ class Pyflakes(Linter):
             return lintline
 
         if 'imported but unused' in lintline:
-            return lintline + util.propose_arc_fix_str(bad_line + '\n', '')
+            return lintline + lint_util.propose_arc_fix_str(bad_line + '\n',
+                                                            '')
 
         return lintline
 
@@ -345,7 +346,7 @@ class JsHint(Linter):
 
         # W033: Missing semicolon
         if errcode == 'W033':
-            return lintline + util.propose_arc_fix_str('', ';')
+            return lintline + lint_util.propose_arc_fix_str('', ';')
 
         return lintline
 
@@ -541,7 +542,7 @@ class JsxLinter(Linter):
 
         # W033: Missing semicolon
         if errcode == 'W033':
-            return lintline + util.propose_arc_fix_str('', ';')
+            return lintline + lint_util.propose_arc_fix_str('', ';')
 
         return lintline
 

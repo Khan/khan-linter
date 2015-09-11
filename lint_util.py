@@ -1,4 +1,5 @@
 """Common utility functions used across the application."""
+
 import os
 
 

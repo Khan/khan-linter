@@ -40,11 +40,11 @@ import sys
 import time
 
 import linters
-import util
+import lint_util
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
 _DEFAULT_EXTRA_LINTER = '<ancestor>/tools/runlint.py'
-_CWD = util.get_real_cwd()
+_CWD = lint_util.get_real_cwd()
 
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
 
