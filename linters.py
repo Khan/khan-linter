@@ -387,64 +387,73 @@ class JsHint(Linter):
                                                  contents_lines)
         return num_errors
 
+    def _lint_with_jshint_reporter(self, exec_path, files, extra_flags=None):
+        """Execute a linter on a list of files and return the stdout for each.
+
+        Arguments:
+            exec_path: A path to the linter's executable
+            files: A list of filenames
+            extra_flags: (optional) A list of commandline flags to include in
+                         the subprocess call
+
+        Returns:
+            dict of {f: stdout_lines} from filename to stdout as an array of
+            stdout lines only containing files that had output; if there are
+            no lint errors, an empty dict.
+        """
+        extra_flags = extra_flags or []
+
+        reporter_path = os.path.join(_CWD, 'jshint_reporter.js')
+        subprocess_args = (
+            [exec_path, '--reporter', reporter_path] + extra_flags + files)
+
+        pipe = subprocess.Popen(
+            subprocess_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        stdout, stderr = pipe.communicate()
+
+        if stderr:
+            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+
+        output = {}
+
+        # jshint_reporter specifies that errors are reported on individual
+        # lines starting with "filename:line:character"
+        get_filename = lambda line: line.split(':', 1)[0]
+        lines = sorted(stdout.splitlines(), key=get_filename)
+        for filename, flines in itertools.groupby(lines, get_filename):
+            output[filename] = list(flines)
+
+        return output
+
+    def lint_files(self, files):
+        """Lint an array of files (specified by path) with jshint."""
+        jshint_executable = os.path.join(
+            _CWD, 'node_modules', '.bin', 'jshint')
+        assert os.path.isfile(jshint_executable), (
+            "jshint is missing. Expected it at '%s'" % jshint_executable)
+
+        config = os.path.join(_CWD, 'jshintrc')
+        extra_flags = ['--config', config]
+        return self._lint_with_jshint_reporter(
+            jshint_executable, files, extra_flags)
+
     def process_files(self, files):
+        """Lint a series of files, and self.process() each with an error."""
         num_errors = 0
-        jshint_output = jshint_files(files)
-        for f in files:
-            if f in jshint_output:
-                lintlines = jshint_output[f]
+        file_to_lint_output = self.lint_files(files)
+        for filename in files:
+            if filename in file_to_lint_output:
+                lintlines = file_to_lint_output[filename]
                 try:
-                    contents = open(f, 'U').read()
+                    contents = open(filename, 'U').read()
                 except (IOError, OSError), why:
-                    print "SKIPPING lint of %s: %s" % (f, why.args[1])
+                    print "SKIPPING lint of %s: %s" % (filename, why.args[1])
                     num_errors += 1
                     continue
-                num_errors += self.process(f, contents, lintlines)
+                num_errors += self.process(filename, contents, lintlines)
         return num_errors
-
-
-def jshint_files(files):
-    """Given a list of files, return jshint stdout for each file.
-
-    Arguments:
-        files: list of files as [(filename, contents)]
-
-    Returns:
-        dict of {f: stdout_lines} from filename to stdout as an array of stdout
-        lines only containing files that had output; if there are no lint
-        errors, an empty dict
-    """
-
-    jshint_executable = os.path.join(_CWD,
-        'node_modules', '.bin', 'jshint')
-    assert os.path.isfile(jshint_executable), ("The linter jshint is missing. "
-                                               "Expected it at '%s'" %
-                                               jshint_executable)
-    config = os.path.join(_CWD,
-        'jshintrc')
-    reporter = os.path.join(_CWD,
-        'jshint_reporter.js')
-
-    pipe = subprocess.Popen([
-        jshint_executable,
-        '--config', config,
-        '--reporter', reporter,
-        ] + files,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
-    stdout, stderr = pipe.communicate()
-
-    if stderr:
-        raise Exception("Unexpected stderr from jshint:\n%s" % stderr)
-
-    output = {}
-
-    key = lambda line: line.split(':', 1)[0]
-    lines = sorted(stdout.splitlines(), key=key)
-    for filename, flines in itertools.groupby(lines, key):
-        output[filename] = list(flines)
-
-    return output
 
 
 def jshint(contents_of_f):
@@ -466,6 +475,20 @@ def jshint(contents_of_f):
     if stderr:
         raise Exception("Unexpected stderr from jshint:\n%s" % stderr)
     return stdout
+
+
+class LessHint(JsHint):
+    """Linter for less."""
+    def lint_files(self, files):
+        """Lint an array of files (specified by path) with lesshint."""
+        lesshint_executable = os.path.join(
+            _CWD, 'node_modules', '.bin', 'lesshint')
+
+        assert os.path.isfile(lesshint_executable), (
+            "lesshint is missing. Expected it at '%s'" %
+            lesshint_executable)
+
+        return self._lint_with_jshint_reporter(lesshint_executable, files)
 
 
 class JsxLinter(Linter):

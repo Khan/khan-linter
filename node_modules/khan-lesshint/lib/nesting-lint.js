@@ -14,9 +14,15 @@ function nestingLint(code, ast, options, callback) {
             // Fetch the character index of this rule, which is the index of
             // the first element (i.e. "p") of the first selector
             // (i.e. ".first, .second { }").
-            //
-            // Both of these fields are guaranteed to exist.
             var index = rule.selectors[0].elements[0].index;
+
+            // Nested @media queries create element fields with no index.
+            // Nesting these doesn't contribute to specificity, so we'll just
+            // ignore them.
+            if (index === undefined) {
+                return done();
+            }
+
             var location = indexToLocation(code, index);
 
             violations.push({

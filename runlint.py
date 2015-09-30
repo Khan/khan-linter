@@ -296,6 +296,7 @@ _EXTENSION_DICT = {'.py': 'python',
                    '.js': 'javascript',
                    '.html': 'html',
                    '.jsx': 'jsx',
+                   '.less': 'less',
                    }
 
 
@@ -431,6 +432,9 @@ def main(files_and_directories,
         'jsx': (linters.JsxLinter(verbose, propose_arc_fixes),
                 linters.Git(),
                 ),
+        'less': (linters.LessHint(),
+                 linters.Git(),
+                 ),
         'unknown': (linters.Git(),
                     ),
         }

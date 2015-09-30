@@ -17,7 +17,7 @@ describe("Nesting linter", function() {
         `.trim();
 
         lintCode(lessCode, function(violations) {
-            assert(violations.length === 0);
+            assert.equal(violations.length, 0);
             done();
         });
     });
@@ -36,7 +36,7 @@ describe("Nesting linter", function() {
         `.trim();
 
         lintCode(lessCode, function(violations) {
-            assert(violations.length === 0);
+            assert.equal(violations.length, 0);
             done();
         });
     });
@@ -59,7 +59,7 @@ describe("Nesting linter", function() {
         `.trim();
 
         lintCode(lessCode, function(violations) {
-            assert(violations.length === 0);
+            assert.equal(violations.length, 0);
             done();
         });
     });
@@ -86,7 +86,7 @@ describe("Nesting linter", function() {
         `.trim();
 
         lintCode(lessCode, function(violations) {
-            assert(violations.length === 0);
+            assert.equal(violations.length, 0);
             done();
         });
     });
@@ -120,9 +120,35 @@ describe("Nesting linter", function() {
         `.trim();
 
         lintCode(lessCode, function(violations) {
-            assert(violations.length === 2);
-            assert(violations[0].line === 15);
-            assert(violations[1].line === 20);
+            assert.equal(violations.length, 2);
+            assert.equal(violations[0].line, 15);
+            assert.equal(violations[1].line, 20);
+            done();
+        });
+    });
+
+    it("should not fail for nested @media queries", function(done) {
+        var lessCode = `
+            div {
+                div {
+                    div {
+                        div {
+                            // Don't fail here
+                            @media screen and (max-width: 480px) {
+                                // Fail here
+                                div {
+                                    font-weight: bold;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `.trim();
+
+        lintCode(lessCode, function(violations) {
+            assert.equal(violations.length, 1);
+            assert.equal(violations[0].line, 8);
             done();
         });
     });
@@ -147,10 +173,10 @@ describe("Nesting linter", function() {
         `.trim();
 
         lintCode(lessCode, function(violations) {
-            assert(violations.length === 3);
-            assert(violations[0].line === 5);
-            assert(violations[1].line === 6);
-            assert(violations[2].line === 7);
+            assert.equal(violations.length, 3);
+            assert.equal(violations[0].line, 5);
+            assert.equal(violations[1].line, 6);
+            assert.equal(violations[2].line, 7);
             done();
         });
     });
