@@ -513,7 +513,8 @@ class JsxLinter(Linter):
                     '@Nolint' in line or
                     'http://' in line or
                     'https://' in line or
-                    'require(' in line):
+                    'require(' in line or
+                    'eslint-disable' in line):
                 num_errors += 1
                 print ('%s:%s: W101 Line is too long.' % (f, lineno))
             lineno += 1
