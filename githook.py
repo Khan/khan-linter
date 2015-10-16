@@ -101,8 +101,9 @@ def main(commit_message_file):
     num_errors = lint_errors + msg_errors
 
     if lint_errors:
-        recommendation = ('Use "git recommit -a" when the errors'
-                          ' are fixed, to re-use this commit message')
+        recommendation = ('Running `arc lint` may help to autofix the errors.'
+                          '\nUse "git recommit -a" when the errors'
+                          ' are fixed, to re-use this commit message.')
     elif msg_errors:
         recommendation = ('Use "git commit -a --template .git/commit.save"'
                           ' to commit with a fixed message.')
