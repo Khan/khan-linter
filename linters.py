@@ -332,7 +332,7 @@ class Git(Linter):
         return num_errors
 
 
-class JsHint(Linter):
+class Eslint(Linter):
     """Linter for javascript.  process() processes one file."""
     def __init__(self, propose_arc_fixes=False):
         self._propose_arc_fixes = propose_arc_fixes
@@ -344,22 +344,22 @@ class JsHint(Linter):
 
         errcode = lintline.split(' ')[1]
 
-        # W033: Missing semicolon
-        if errcode == 'W033':
+        if errcode == 'Esemi':
             return lintline + lint_util.propose_arc_fix_str('', ';')
+        # TODO(csilvers): fix a bunch more rules.
 
         return lintline
 
     def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
 
-        jshint prints all errors to stdout.  But we want to
+        eslint prints all errors to stdout.  But we want to
         ignore some 'errors' that are ok for us, in particular ones
         that have been commented out with @Nolint.
 
         Arguments:
            filename: path to file being linted
-           output_line: one line of the jshint error-output
+           output_line: one line of the eslint error-output
            contents_lines: the contents of the file being linted,
               as a list of lines.
 
@@ -379,15 +379,15 @@ class JsHint(Linter):
         print self._maybe_add_arc_fix(output_line, bad_line)
         return 1
 
-    def process(self, f, contents_of_f, jshint_lines):
+    def process(self, f, contents_of_f, eslint_lines):
         num_errors = 0
         contents_lines = contents_of_f.splitlines()  # need these for filtering
-        for output_line in jshint_lines:
+        for output_line in eslint_lines:
             num_errors += self._process_one_line(f, output_line,
                                                  contents_lines)
         return num_errors
 
-    def _lint_with_jshint_reporter(self, exec_path, files, extra_flags=None):
+    def lint_files(self, files):
         """Execute a linter on a list of files and return the stdout for each.
 
         Arguments:
@@ -401,11 +401,14 @@ class JsHint(Linter):
             stdout lines only containing files that had output; if there are
             no lint errors, an empty dict.
         """
-        extra_flags = extra_flags or []
+        exec_path = os.path.join(_CWD, 'node_modules', '.bin', 'eslint')
+        reporter_path = os.path.join(_CWD, 'eslint_reporter.js')
+        config_path = os.path.join(_CWD, 'eslintrc')
+        assert os.path.isfile(exec_path), (
+            "Vendoring error: eslint is missing from '%s'" % exec_path)
 
-        reporter_path = os.path.join(_CWD, 'jshint_reporter.js')
-        subprocess_args = (
-            [exec_path, '--reporter', reporter_path] + extra_flags + files)
+        subprocess_args = [exec_path, '--config', config_path,
+                           '-f', reporter_path, '--no-color'] + files
 
         pipe = subprocess.Popen(
             subprocess_args,
@@ -418,26 +421,19 @@ class JsHint(Linter):
 
         output = {}
 
-        # jshint_reporter specifies that errors are reported on individual
-        # lines starting with "filename:line:character"
+        # eslint_reporter specifies that errors are reported on
+        # individual lines starting with "filename:line:col".  It
+        # converts all filenames to an absolute path; we convert them
+        # back to relpaths here.
+        lint_lines = ['%s:%s' % (os.path.relpath(line.split(':', 1)[0]),
+                                 line.split(':', 1)[1])
+                      for line in stdout.splitlines()]
         get_filename = lambda line: line.split(':', 1)[0]
-        lines = sorted(stdout.splitlines(), key=get_filename)
+        lines = sorted(lint_lines, key=get_filename)
         for filename, flines in itertools.groupby(lines, get_filename):
             output[filename] = list(flines)
 
         return output
-
-    def lint_files(self, files):
-        """Lint an array of files (specified by path) with jshint."""
-        jshint_executable = os.path.join(
-            _CWD, 'node_modules', '.bin', 'jshint')
-        assert os.path.isfile(jshint_executable), (
-            "jshint is missing. Expected it at '%s'" % jshint_executable)
-
-        config = os.path.join(_CWD, 'jshintrc')
-        extra_flags = ['--config', config]
-        return self._lint_with_jshint_reporter(
-            jshint_executable, files, extra_flags)
 
     def process_files(self, files):
         """Lint a series of files, and self.process() each with an error."""
@@ -456,175 +452,78 @@ class JsHint(Linter):
         return num_errors
 
 
-def jshint(contents_of_f):
-    jshint_executable = os.path.join(_CWD,
-        'node_modules', '.bin', 'jshint')
-    config = os.path.join(_CWD, 'jshintrc')
-    reporter = os.path.join(_CWD, 'jshint_reporter.js')
-
-    pipe = subprocess.Popen([
-        jshint_executable,
-        '--config', config,
-        '--reporter', reporter,
-        '-'],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
-    stdout, stderr = pipe.communicate(contents_of_f)
-
-    if stderr:
-        raise Exception("Unexpected stderr from jshint:\n%s" % stderr)
-    return stdout
-
-
-class LessHint(JsHint):
+class LessHint(Linter):
     """Linter for less."""
-    def lint_files(self, files):
-        """Lint an array of files (specified by path) with lesshint."""
-        lesshint_executable = os.path.join(
-            _CWD, 'node_modules', '.bin', 'lesshint')
-
-        assert os.path.isfile(lesshint_executable), (
-            "lesshint is missing. Expected it at '%s'" %
-            lesshint_executable)
-
-        return self._lint_with_jshint_reporter(lesshint_executable, files)
-
-
-class JsxLinter(Linter):
-    """Linter for jsx files.  process() processes one file."""
-    _JSX_ERROR_MESSAGE_RE = re.compile(r'Error: Line (\d+): (.*)')
-
-    def __init__(self, verbose, propose_arc_fixes=False):
-        self._verbose = verbose
-        self._propose_arc_fixes = propose_arc_fixes
-
-    def process(self, f, contents_of_f):
-        num_errors = 0
-        num_errors += self._check_line_length(f, contents_of_f)
-        num_errors += self._lint_generated_js(f, contents_of_f)
-        return num_errors
-
-    def _check_line_length(self, f, contents_of_f):
-        num_errors = 0
-        lineno = 1
-        for line in contents_of_f.splitlines():
-            if len(line) >= 80 and not (
-                    '@Nolint' in line or
-                    'http://' in line or
-                    'https://' in line or
-                    'require(' in line or
-                    'eslint-disable' in line):
-                num_errors += 1
-                print ('%s:%s: W101 Line is too long.' % (f, lineno))
-            lineno += 1
-        return num_errors
-
-    def _lint_generated_js(self, f, contents_of_f):
-        # Pipe the source of the file to `jsx` and get the result from stdout
-        # as `transformed_source`. Ignore when it prints out "build Module" to
-        # stderr.
-        jsx_executable = os.path.join(_CWD, 'compile_jsx_file')
-        process = subprocess.Popen([jsx_executable],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
-        transformed_source, err = process.communicate(contents_of_f)
-        result = process.wait()
-
-        if result != 0:
-            # If jsx failed to even process the file due to a parse
-            # error that it found, report that error.
-            m = self._JSX_ERROR_MESSAGE_RE.search(err)
-            if m:
-                # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-                print '%s:%s: E=parse= %s' % (f, m.group(1), m.group(2))
-                return 1
-            else:
-                raise RuntimeError('%s: jsx exited with error code %d:\n%s' %
-                                   (f, result, indent(err)))
-
-        # TODO(alpert): Run all the jshint calls in one invocation for speed
-        stdout = jshint(transformed_source)
-
-        num_errors = 0
-        # need these for filtering
-        contents_lines = transformed_source.splitlines()
-        # guard against errors on the last line
-        contents_lines.append("")
-        for output_line in stdout.splitlines():
-            num_errors += self._process_one_line(f, output_line,
-                                                 contents_lines)
-        return num_errors
-
-    def _maybe_add_arc_fix(self, lintline, bad_line):
-        """Optionally add a patch for arc lint to use for autofixing."""
-        if not self._propose_arc_fixes:
-            return lintline
-
-        errcode = lintline.split(' ')[1]
-
-        # W033: Missing semicolon
-        if errcode == 'W033':
-            return lintline + lint_util.propose_arc_fix_str('', ';')
-
-        return lintline
-
     def _process_one_line(self, filename, output_line, contents_lines):
-        """If line is an 'error', print it and return 1.  Else return 0.
-
-        closure-linter prints all errors to stdout.  But we want to
-        ignore some 'errors' that are ok for us, in particular ones
-        that have been commented out with @Nolint and errors the jsx compiler
-        is known to create.
-
-        Arguments:
-           filename: path to file being linted
-           output_line: one line of the closure-linter error-output
-           contents_lines: the contents of the file being linted,
-              as a list of lines.
-
-        Returns:
-           1 (indicating one error) if we print the error line, 0 else.
-        """
         # output_line is like:
-        #   stdin:<line>:<col>: W<code> <message>
-        # so replace `stdin` with the actual filename before doing more
-        lintline = "%s:%s" % (filename, output_line.split(':', 1)[1])
-        bad_linenum = int(lintline.split(':', 2)[1])   # first line is '1'
+        #   <file>:<line>:<col>: W<code> <message>
+        bad_linenum = int(output_line.split(':', 2)[1])   # first line is '1'
         bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
 
         # If the line has a nolint directive, ignore it.
         if '@Nolint' in bad_line:
             return 0
 
-        # Otherwise, it's a legitimate error.
-        print self._maybe_add_arc_fix(lintline, bad_line)
-        if self._verbose:
-            # TODO(joel) consider using a real color library
-            print '\033[93mCompiled jsx:\033[0m'
-            print line_with_context(contents_lines, bad_linenum - 1, 2)
         return 1
 
+    def process(self, f, contents_of_f, lesshint_lines):
+        num_errors = 0
+        contents_lines = contents_of_f.splitlines()  # need these for filtering
+        for output_line in lesshint_lines:
+            num_errors += self._process_one_line(f, output_line,
+                                                 contents_lines)
+        return num_errors
 
-def indent(string, n=4):
-    return ('\n' + ' ' * n).join(string.splitlines())
+    def lint_files(self, files):
+        """Execute a linter on a list of files and return the stdout for each.
 
+        Returns:
+            dict of {f: stdout_lines} from filename to stdout as an array of
+            stdout lines only containing files that had output; if there are
+            no lint errors, an empty dict.
+        """
+        exec_path = os.path.join(_CWD, 'node_modules', '.bin', 'lesshint')
+        reporter_path = os.path.join(_CWD, 'lesshint_reporter.js')
+        assert os.path.isfile(exec_path), (
+            "Vendoring error: lesshint is missing from '%s'" % exec_path)
 
-def line_with_context(lines, line_no, context_size):
-    """Surround the specified line with a context, like grep -C.
+        subprocess_args = [exec_path, '--reporter', reporter_path] + files
 
-    This also highlights the specified line with an error color.
-    """
-    message = ''
-    for i in xrange(max(line_no - context_size, 0),
-                    min(line_no + context_size, len(lines))):
-        if i == line_no:
-            message += '\033[91m' + lines[i] + '\033[0m'
-        else:
-            message += lines[i]
-        message += '\n'
-    return message
+        pipe = subprocess.Popen(
+            subprocess_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        stdout, stderr = pipe.communicate()
+
+        if stderr:
+            raise RuntimeError("Unexpected stderr from lesshint:\n%s" % stderr)
+
+        output = {}
+
+        # lesshint_reporter specifies that errors are reported on individual
+        # lines starting with "filename:line:col"
+        get_filename = lambda line: line.split(':', 1)[0]
+        lines = sorted(stdout.splitlines(), key=get_filename)
+        for filename, flines in itertools.groupby(lines, get_filename):
+            output[filename] = list(flines)
+
+        return output
+
+    def process_files(self, files):
+        """Lint a series of files, and self.process() each with an error."""
+        num_errors = 0
+        file_to_lint_output = self.lint_files(files)
+        for filename in files:
+            if filename in file_to_lint_output:
+                lintlines = file_to_lint_output[filename]
+                try:
+                    contents = open(filename, 'U').read()
+                except (IOError, OSError), why:
+                    print "SKIPPING lint of %s: %s" % (filename, why.args[1])
+                    num_errors += 1
+                    continue
+                num_errors += self.process(filename, contents, lintlines)
+        return num_errors
 
 
 class HtmlLinter(Linter):

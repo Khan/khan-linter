@@ -1,8 +1,8 @@
 /* jshint node: true */
 
 module.exports = {
-    reporter: function (res) {
-        res.forEach(function (r) {
+    reporter: function(res) {
+        res.forEach(function(r) {
             var file = r.file;
             var err = r.error;
 
@@ -12,5 +12,5 @@ module.exports = {
                     err.line + ":" + err.character + ": " +
                     err.code + " " + err.reason + "\n");
         });
-    }
+    },
 };
