@@ -79,11 +79,11 @@ class Pep8(Linter):
 
         # expected 2 blank lines, found 1
         if errcode == 'E302':
-            return lintline + lint_util.propose_arc_fix_str('', '\n')
+            return lint_util.add_arc_fix_str(lintline, bad_line, '', '\n')
 
         # at least two spaces before inline comment
         if errcode == 'E261':
-            return lintline + lint_util.propose_arc_fix_str('', ' ')
+            return lint_util.add_arc_fix_str(lintline, bad_line, '', ' ')
 
         return lintline
 
@@ -195,8 +195,8 @@ class Pyflakes(Linter):
             return lintline
 
         if 'imported but unused' in lintline:
-            return lintline + lint_util.propose_arc_fix_str(bad_line + '\n',
-                                                            '')
+            return lint_util.add_arc_fix_str(lintline, bad_line,
+                                             bad_line + '\n', '')
 
         return lintline
 
@@ -342,11 +342,35 @@ class Eslint(Linter):
         if not self._propose_arc_fixes:
             return lintline
 
-        errcode = lintline.split(' ')[1]
+        (_, errcode, msg) = lintline.split(' ', 2)
 
         if errcode == 'Esemi':
-            return lintline + lint_util.propose_arc_fix_str('', ';')
-        # TODO(csilvers): fix a bunch more rules.
+            return lint_util.add_arc_fix_str(lintline, bad_line, '', ';')
+        if errcode == 'Eno-extra-semi':
+            return lint_util.add_arc_fix_str(lintline, bad_line, ';', '')
+        if errcode == 'Ecomma-dangle':
+            return lint_util.add_arc_fix_str(lintline, bad_line, '', ',')
+        if errcode == 'Ecomma-spacing':
+            return lint_util.add_arc_fix_str(lintline, bad_line, ',', ', ')
+        if errcode == 'Espace-before-function-paren':
+            return lint_util.add_arc_fix_str(lintline, bad_line, ' ', '')
+        if errcode == 'Eprefer-const':
+            return lint_util.add_arc_fix_str(lintline, bad_line,
+                                             'let', 'const',
+                                             search_backwards=True)
+        if errcode == 'Eindent':
+            m = re.search(r'Expected indentation of (\d+) space characters '
+                          r'but found (\d+)',
+                          msg)
+            if m:
+                spaces_to_add = int(m.group(1)) - int(m.group(2))
+                if spaces_to_add > 0:
+                    return lint_util.add_arc_fix_str(
+                        lintline, bad_line, '', ' ' * spaces_to_add)
+                else:
+                    return lint_util.add_arc_fix_str(
+                        lintline, bad_line, ' ' * -spaces_to_add, '',
+                        search_backwards=True)
 
         return lintline
 
