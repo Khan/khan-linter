@@ -400,6 +400,11 @@ class Eslint(Linter):
         if '@Nolint' in bad_line:
             return 0
 
+        # Allow long lines in fixture files, which just hold test data.
+        if (' Emax-len ' in output_line and
+                filename.endswith(('.fixture.js', 'fixture.jsx'))):
+            return 0
+
         print self._maybe_add_arc_fix(output_line, bad_line)
         return 1
 
