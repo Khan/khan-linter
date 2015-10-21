@@ -46,7 +46,9 @@
         // This triggers a ton on stuff like 'if (window.x) { x(...) }'.
         "react/jsx-no-undef": 2,
         "react/jsx-sort-prop-types": 2,
-        "react/jsx-sort-props": 2,
+        // We turned this off since it was too much work for too
+        // little benefit, especially for one-line props.
+        "react/jsx-sort-props": 0,
         "react/jsx-uses-react": 2,
         // (Maybe we can be more strict and not need allow-in-func?)
         "react/no-did-mount-set-state": [2, "allow-in-func"],
