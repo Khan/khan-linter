@@ -38,6 +38,7 @@
         "one-var": [2, "never"],
         "prefer-const": 2,
         "prefer-spread": 2,
+        "react/forbid-prop-types": [2, { "forbid": [ "array", "object" ] }],
         "react/jsx-closing-bracket-location": 2,
         "react/jsx-curly-spacing": [2, "never"],
         "react/jsx-indent-props": 2,
@@ -73,12 +74,6 @@
         "arrow-parens": 0,
         // ---------------------------------------
         // Stuff that's disabled for now, but maybe shouldn't be.
-        //
-        // TODO(csilvers): enable this once the eslint-plugin-react bug
-        //                 if fixed, that causes this to die:
-        //   if (isForbidden(declaration.value.property.name)) {
-        //   TypeError: Cannot read property 'name' of undefined
-        "react/forbid-prop-types": [0, { "forbid": [ "array", "object" ] }],
         // TODO(csilvers): enable this once we've done the auto var->let fixit.
         "no-var": 0,
         // TODO(csilvers): enable these if/when community agrees on it.
