@@ -7,7 +7,7 @@
     },
     "dependencies": {
         "eslint": "1.6.0",
-        "eslint-plugin-react": "3.6.3",
+        "eslint-plugin-react": "3.7.1",
         "jstransform": "~6.3.2",
         "khan-lesshint": "0.1.0"
     }

@@ -1,0 +1,12 @@
+../pep8.py
+../pep8.pyc
+./
+requires.txt
+not-zip-safe
+SOURCES.txt
+entry_points.txt
+top_level.txt
+dependency_links.txt
+PKG-INFO
+namespace_packages.txt
+../../../bin/pep8
