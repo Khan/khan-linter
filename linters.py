@@ -493,6 +493,7 @@ class LessHint(Linter):
         if '@Nolint' in bad_line:
             return 0
 
+        print output_line
         return 1
 
     def process(self, f, contents_of_f, lesshint_lines):
