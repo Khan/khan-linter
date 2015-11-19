@@ -321,7 +321,8 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
     of files that is used for the blacklist.  We limit each run to
     100 files at a time to avoid shell overflow.
     """
-    num_errors = 0
+    num_lint_errors = 0
+    num_framework_errors = 0
 
     # Probably all these files will use the same linter, but let's
     # make sure.
@@ -338,11 +339,22 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
         if verbose:
             print ('--- running extra linter %s on these files: %s'
                    % (linter_filename, files))
-        p = subprocess.Popen([linter_filename, '-'], stdin=subprocess.PIPE)
-        p.communicate(input='\n'.join(files))
-        num_errors += p.returncode
+        p = subprocess.Popen([linter_filename, '-'], stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (stdout, stderr) = p.communicate(input='\n'.join(files))
+        # If the subprocess returned 1, it's possible this was due to a
+        # raised exception rather than a lint error.  We try to detect
+        # this by checking if stdout is empty: if so, it means that there
+        # was no actual lint error found, so this must be an exception.
+        if p.returncode > 0 and not stdout:
+            print ('ERROR running the extra linter %s on these files: %s: %s'
+                   % (linter_filename, files, stderr))
+            num_framework_errors += 1
+        else:
+            print stdout + stderr   # print the lint errors seen
+            num_lint_errors += p.returncode
 
-    return num_errors
+    return (num_lint_errors, num_framework_errors)
 
 
 def _maybe_pull(verbose):
@@ -412,7 +424,9 @@ def main(files_and_directories,
         patch.
 
     Returns:
-      The number of errors seen while linting.  0 means lint-cleanliness!
+      A pair: (number of lint errors seen, number of unlintable files seen).
+      (0, 0) means lint-cleanliness.  If the second value is non-zero, it
+      means there was a problem in the lint framework itself somewhere.
     """
     # A dict that maps from language (output of _lang) to a list of processors.
     # None means that we skip files of this language.
@@ -445,7 +459,8 @@ def main(files_and_directories,
     # Dict of {lint_processor: [(filename, contents)]}
     files_by_linter = {}
 
-    num_errors = 0
+    num_lint_errors = 0
+    num_framework_errors = 0
     for f in files_to_lint:
         file_lang = _lang(f, lang)
         lint_processors = processor_dict.get(file_lang, None)
@@ -469,22 +484,24 @@ def main(files_and_directories,
 
             start_time = time.time()
             num_new_errors = lint_processor.process_files(files)
-            num_errors += num_new_errors
+            num_lint_errors += num_new_errors
             elapsed = time.time() - start_time
 
             if verbose:
                 print '%d errors (%.2f seconds)' % (num_new_errors, elapsed)
         except Exception, why:
             print "ERROR linting %r: %s" % (files, why)
-            num_errors += 1
+            num_framework_errors += 1
             continue
 
     # If they asked for an extra linter to run over these files, do that.
     if extra_linter_filename:
-        num_errors += _run_extra_linter(extra_linter_filename, files_to_lint,
-                                        verbose)
+        (extra_lint_errors, extra_framework_errors) = (
+            _run_extra_linter(extra_linter_filename, files_to_lint, verbose))
+        num_lint_errors += extra_lint_errors
+        num_framework_errors += extra_framework_errors
 
-    return num_errors
+    return (num_lint_errors, num_framework_errors)
 
 
 if __name__ == '__main__':
@@ -520,7 +537,9 @@ if __name__ == '__main__':
     parser.add_option('--no-auto-pull', action='store_true', default=False,
                       help=("Don't try to update this repo once a day."))
     parser.add_option('--always-exit-0', action='store_true', default=False,
-                      help=('Exit 0 even if there are lint errors. '
+                      help=('Exit 0 even if there are lint errors (though we '
+                            'will still exit non-zero if there are errors in '
+                            'the lint framework itself). '
                             'Only useful when used with phabricator.'))
     parser.add_option('--propose-arc-fixes', action='store_true',
                       default=False,
@@ -540,13 +559,15 @@ if __name__ == '__main__':
         os.execv(sys.argv[0], sys.argv)
 
     # normal operation
-    num_errors = main(args,
-                      options.blacklist, options.blacklist_filename,
-                      options.extra_linter, options.lang,
-                      options.verbose, options.propose_arc_fixes)
+    (num_lint_errors, num_framework_errors) = main(
+        args,
+        options.blacklist, options.blacklist_filename,
+        options.extra_linter, options.lang,
+        options.verbose, options.propose_arc_fixes)
 
     if options.always_exit_0:
-        sys.exit(0)
+        # If the framework itself had an error, we want to report that.
+        sys.exit(num_framework_errors)
     else:
         # Don't exit with error code of 128+, which means 'killed by a signal'
-        sys.exit(min(num_errors, 127))
+        sys.exit(min(num_lint_errors + num_framework_errors, 127))

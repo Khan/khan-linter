@@ -19,7 +19,9 @@ def lint_files(files_to_lint):
 
     Returns the number of lint errors seen.
     """
-    return runlint.main(files_to_lint, blacklist='yes')
+    (lint_errors, framework_errors) = runlint.main(files_to_lint,
+                                                   blacklist='yes')
+    return lint_errors + framework_errors
 
 
 def lint_commit_message(commit_message):
