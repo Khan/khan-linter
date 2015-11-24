@@ -342,7 +342,7 @@ class Eslint(Linter):
         if not self._propose_arc_fixes:
             return lintline
 
-        (_, errcode, msg) = lintline.split(' ', 2)
+        (file_line_col, errcode, msg) = lintline.split(' ', 2)
 
         if errcode == 'Esemi':
             return lint_util.add_arc_fix_str(lintline, bad_line, '', ';')
@@ -358,6 +358,32 @@ class Eslint(Linter):
             return lint_util.add_arc_fix_str(lintline, bad_line,
                                              'let', 'const',
                                              search_backwards=True)
+
+        if errcode == 'Ereact/jsx-closing-bracket-location':
+            try:
+                col = file_line_col.split(':')[2]
+            except IndexError:
+                col = None
+            m = re.search(r'\(expected column (\d+)\)', msg)
+
+            if col is not None and m is not None:
+                spaces_to_add = int(m.group(1)) - int(col)
+                if spaces_to_add > 0:
+                    return lint_util.add_arc_fix_str(
+                        lintline, bad_line, '', ' ' * spaces_to_add)
+                else:
+                    return lint_util.add_arc_fix_str(
+                        lintline, bad_line, ' ' * -spaces_to_add, '',
+                        search_backwards=True)
+
+            # Also handle the case the \> should go on the next line
+            m = re.search(r'\(expected column (\d+) on the next line\)', msg)
+            if m:
+                indent = int(m.group(1)) - 1
+                if indent >= 0:
+                    return lint_util.add_arc_fix_str(
+                        lintline, bad_line, '', '\n' + ' ' * indent)
+
         if errcode == 'Eindent':
             m = re.search(r'Expected indentation of (\d+) space characters '
                           r'but found (\d+)',
