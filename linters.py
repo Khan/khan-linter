@@ -130,11 +130,11 @@ class Pep8(Linter):
         # checking for multi-line def's).  This can be fooled, but
         # should work well enough.
         if ('E501 line too long' in lintline and
-            bad_line.lstrip().startswith('"') and
-            bad_line.rstrip(',\n').endswith('"') and
-            bad_linenum):
-
-            for linenum in xrange(bad_linenum, 0, -1):
+                bad_line.lstrip().startswith('"') and
+                bad_line.rstrip(',\n').endswith('"') and
+                bad_linenum):
+            linenum = 0           # in case the xrange() below is empty
+            for linenum in xrange(bad_linenum - 1, 0, -1):
                 if (contents_lines[linenum].lstrip().startswith('"""') or
                     contents_lines[linenum].lstrip().startswith("'''")):
                     break
