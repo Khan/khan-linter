@@ -230,6 +230,11 @@ class Pyflakes(Linter):
              "local variable 'unused_" in output_line)):
             return 0
 
+        # It's OK to redefine variables that are unused by convention.
+        if ("list comprehension redefines '_'" in output_line or
+            "list comprehension redefines 'unused_" in output_line):
+            return 0
+
         # Get rid of some warnings too.
         if 'unable to detect undefined names' in output_line:
             return 0
