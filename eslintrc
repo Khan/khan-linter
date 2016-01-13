@@ -185,7 +185,8 @@
         "methodDraw": true,
         "mocha": true,
         "moment": true,
-        "xlsx": true
+        "xlsx": true,
+        "UserVoice": true
     },
     "env": {
         "es6": true,
