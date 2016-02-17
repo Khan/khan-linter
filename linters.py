@@ -338,8 +338,13 @@ class Git(Linter):
 
 
 class Eslint(Linter):
-    """Linter for javascript.  process() processes one file."""
-    def __init__(self, propose_arc_fixes=False):
+    """Linter for javascript.  process() processes one file.
+
+    Arguments:
+        config_path: the path of the eslintrc file
+    """
+    def __init__(self, config_path, propose_arc_fixes=False):
+        self._config_path = config_path
         self._propose_arc_fixes = propose_arc_fixes
 
     def _maybe_add_arc_fix(self, lintline, bad_line):
@@ -463,17 +468,23 @@ class Eslint(Linter):
         """
         exec_path = os.path.join(_CWD, 'node_modules', '.bin', 'eslint')
         reporter_path = os.path.join(_CWD, 'eslint_reporter.js')
-        config_path = os.path.join(_CWD, 'eslintrc')
         assert os.path.isfile(exec_path), (
             "Vendoring error: eslint is missing from '%s'" % exec_path)
 
-        subprocess_args = [exec_path, '--config', config_path,
+        subprocess_args = [exec_path, '--config', self._config_path,
                            '-f', reporter_path, '--no-color'] + files
+
+        env = os.environ.copy()
+        if 'NODE_PATH' in env:
+            env['NODE_PATH'] += ':' + os.path.dirname(self._config_path)
+        else:
+            env['NODE_PATH'] = os.path.dirname(self._config_path)
 
         pipe = subprocess.Popen(
             subprocess_args,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+            stderr=subprocess.PIPE,
+            env=env)
         stdout, stderr = pipe.communicate()
 
         if stderr:

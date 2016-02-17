@@ -404,6 +404,46 @@ _DEFAULT_PEP8_ARGS = ['--repeat',
                       '--ignore=W291,W293,W391']
 
 
+def _find_base_eslint_config(files_to_lint, default_location):
+    """Return a .eslintrc file in the repo's root directory if it exists.
+
+    If this file exists, it will replace khan-linter's `eslintrc` as the
+    config file used for javascript linting. If you'd like a repo to use
+    khan-linter's eslintrc plus other stuff, create a .eslintrc in the root
+    directory of that repo and have it include a field:
+        "extends": "../devtoools/khan-linter/eslintrc"`
+
+    If the custom eslintrc depends on any extra node modules, for plugins or
+    parsers, these node modules should be referenced as relative to the
+    eslintrc file, but without the preceeding "./" often used to denote
+    relative paths. For example, if the parser module `babel-eslint` is in
+    `repo/javascript/node_modules/babel-eslint` and the custom `.eslint` file
+    is in `repo/.eslint`, then the path in the eslint file should be
+    `javascript/node_modules/babel-eslint`.
+    """
+    if not files_to_lint:
+        return default_location
+
+    def _find_eslint_for_path(path):
+        base_git = _resolve_ancestor('<ancestor>/.git', path)
+        base_directory = os.path.dirname(base_git)
+
+        base_eslint_config = os.path.join(base_directory, '.eslintrc')
+        if os.path.exists(base_eslint_config):
+            return base_eslint_config
+        return default_location
+
+    config_path = _find_eslint_for_path(files_to_lint[0])
+    for path in files_to_lint[1:]:
+        if _find_eslint_for_path(path) != config_path:
+            # TODO(jared): partition files_to_lint by config file, and run
+            # eslint once for each config file instead of bailing.
+            raise Exception("Files to lint depend on multiple custom eslint "
+                    "config files. This is currently unsupported.")
+
+    return config_path
+
+
 def main(files_and_directories,
          blacklist='auto', blacklist_pattern=_DEFAULT_BLACKLIST_PATTERN,
          extra_linter_filename=_DEFAULT_EXTRA_LINTER, lang='', verbose=False,
@@ -428,6 +468,13 @@ def main(files_and_directories,
       (0, 0) means lint-cleanliness.  If the second value is non-zero, it
       means there was a problem in the lint framework itself somewhere.
     """
+    files_to_lint = find_files_to_lint(files_and_directories,
+                                       blacklist, blacklist_pattern, verbose)
+
+    default_eslint_config = os.path.join(_CWD, "eslintrc")
+    base_eslint_config = _find_base_eslint_config(files_to_lint,
+            default_eslint_config)
+
     # A dict that maps from language (output of _lang) to a list of processors.
     # None means that we skip files of this language.
     processor_dict = {
@@ -437,13 +484,13 @@ def main(files_and_directories,
                    linters.CustomPythonLinter(),
                    linters.Git(),
                    ),
-        'javascript': (linters.Eslint(propose_arc_fixes),
+        'javascript': (linters.Eslint(base_eslint_config, propose_arc_fixes),
                        linters.Git(),
                        ),
         'html': (linters.HtmlLinter(),
                  linters.Git(),
                  ),
-        'jsx': (linters.Eslint(propose_arc_fixes),
+        'jsx': (linters.Eslint(default_eslint_config, propose_arc_fixes),
                 linters.Git(),
                 ),
         'less': (linters.LessHint(),
@@ -452,9 +499,6 @@ def main(files_and_directories,
         'unknown': (linters.Git(),
                     ),
         }
-
-    files_to_lint = find_files_to_lint(files_and_directories,
-                                       blacklist, blacklist_pattern, verbose)
 
     # Dict of {lint_processor: [(filename, contents)]}
     files_by_linter = {}
