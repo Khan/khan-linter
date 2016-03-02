@@ -35,6 +35,7 @@
         "no-unused-vars": [2, {"args": "none", "varsIgnorePattern": "^_*$"}],
         "no-useless-call": 2,
         "no-with": 2,
+        "no-var": 2,
         "one-var": [2, "never"],
         "prefer-const": 2,
         "prefer-spread": 2,
@@ -74,8 +75,6 @@
         "arrow-parens": 0,
         // ---------------------------------------
         // Stuff that's disabled for now, but maybe shouldn't be.
-        // TODO(csilvers): enable this once we've done the auto var->let fixit.
-        "no-var": 0,
         // TODO(csilvers): enable these if/when community agrees on it.
         "prefer-arrow-callback": 0,
         "object-curly-spacing": [0, "always"],
