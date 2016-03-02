@@ -441,6 +441,10 @@ class Eslint(Linter):
                 filename.endswith(('.fixture.js', 'fixture.jsx'))):
             return 0
 
+        # I don't know why it prints this.  Shrug.
+        if 'File ignored because of your .eslintignore file' in output_line:
+            return 0
+
         print self._maybe_add_arc_fix(output_line, bad_line)
         return 1
 
