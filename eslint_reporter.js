@@ -1,5 +1,8 @@
 /** Similar to eslint's built-in 'unix' mode, but the ruleId comes first. */
 
+// This reporter is used within eslint, I don't know that it supports ES6-isms
+/* eslint-disable no-var */
+
 module.exports = function(results) {
     results.forEach(function(result) {
         result.messages.forEach(function(message) {

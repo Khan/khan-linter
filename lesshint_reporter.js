@@ -1,5 +1,8 @@
 /* jshint node: true */
 
+// This reporter is used within eslint, I don't know that it supports ES6-isms
+/* eslint-disable no-var */
+
 module.exports = {
     reporter: function(res) {
         res.forEach(function(r) {
