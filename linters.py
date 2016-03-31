@@ -475,6 +475,11 @@ class Eslint(Linter):
         assert os.path.isfile(exec_path), (
             "Vendoring error: eslint is missing from '%s'" % exec_path)
 
+        # TODO(csilvers): split out files based on whether they're intended
+        # for node.js or not, and use eslintrc.node for the node.js files.
+        # Two ways to tell:
+        #    1) shebang line at the top of the file
+        #    2) '"use strict";' in the file somewhere
         subprocess_args = [exec_path, '--config', self._config_path,
                            '-f', reporter_path, '--no-color'] + files
 
