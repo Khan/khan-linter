@@ -130,7 +130,6 @@
         "TooltipEngine": true,
         "WebpageOutput": true,
         "after": true,
-        "babelHelpers": true,
         "before": true,
         "com": true,
         "describe": true,
