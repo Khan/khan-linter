@@ -43,7 +43,7 @@ import linters
 import lint_util
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
-_DEFAULT_EXTRA_LINTER = '<ancestor>/tools/runlint.py'
+_DEFAULT_EXTRA_LINTER = '<ancestor_within_repo>/tools/runlint.py'
 _CWD = lint_util.get_real_cwd()
 
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
@@ -115,10 +115,20 @@ def _parse_blacklist(blacklist_filename):
     return retval
 
 
+def _is_toplevel_repository_dir(directory):
+    """Returns if a directory is a git or mercurial directory.
+
+    This works by searching for a file or directory named `.git` or `.hg` in
+    the directory. This works for both submodules and normal repositories.
+    """
+    return (os.path.exists(os.path.join(directory, ".git")) or
+            os.path.exists(os.path.join(directory, ".hg")))
+
+
 # Map of a directory to the ancestor filename in the closest parent
 # directory to the given directory (or possibly the given directory
 # itself).  Ancestor-filenames are ones that can start with
-# '<ancestor>/'.
+# '<ancestor>/' or '<ancestor_within_repo>/'.
 _ANCESTOR_DIR_CACHE = {}
 
 
@@ -130,26 +140,38 @@ def _resolve_ancestor(ancestor_pattern, file_to_lint):
     return it.  Otherwise, go up one level in the directory tree and
     try again, replacing '<ancestor>/' with the parent-dir.  Continue
     until we succeed or get to /, at which point we return None.
+
+    If ancestor_pattern starts with '<ancestor_within_repo>/', then we do the
+    same thing as above except we also stop if we reach the top level of a
+    repository or submodule.
     """
     if not ancestor_pattern:
         return None
 
-    if not ancestor_pattern.startswith('<ancestor>/'):
+    if ancestor_pattern.startswith('<ancestor>/'):
+        ancestor_basename = ancestor_pattern[len('<ancestor>/'):]
+        stop_at_repository = False
+    elif ancestor_pattern.startswith('<ancestor_within_repo>/'):
+        ancestor_basename = ancestor_pattern[len('<ancestor_within_repo>/'):]
+        stop_at_repository = True
+    else:
         return ancestor_pattern   # the 'pattern' is an actual filename
 
-    # The hard case: resolve '<ancestor>/' to the proper directory.
-    ancestor_basename = ancestor_pattern[len('<ancestor>/'):]
+    # The hard case: resolve '<ancestor>/' or '<ancestor_within_repo>/' to the
+    # proper directory.
     ancestor_dir = None
     if os.path.isdir(file_to_lint):
         d = file_to_lint
     else:
         d = os.path.dirname(file_to_lint)
     d = os.path.abspath(d)
-    while os.path.dirname(d) != d:     # not at the root level (/) yet
+    while os.path.dirname(d) != d:  # not at the root level (/) yet
         if (ancestor_pattern, d) in _ANCESTOR_DIR_CACHE:
             return _ANCESTOR_DIR_CACHE[(ancestor_pattern, d)]
         if os.path.exists(os.path.join(d, ancestor_basename)):
             ancestor_dir = d
+            break
+        if stop_at_repository and _is_toplevel_repository_dir(d):
             break
         d = os.path.dirname(d)
 
@@ -160,6 +182,8 @@ def _resolve_ancestor(ancestor_pattern, file_to_lint):
         d = os.path.dirname(file_to_lint)
         while d != os.path.dirname(d):
             _ANCESTOR_DIR_CACHE[(ancestor_pattern, d)] = None
+            if stop_at_repository and _is_toplevel_repository_dir(d):
+                break
             d = os.path.dirname(d)
         return None
     else:
