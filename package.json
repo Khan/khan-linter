@@ -6,7 +6,7 @@
         "url": "https://github.com/Khan/khan-linter.git"
     },
     "dependencies": {
-        "eslint": "1.6.0",
+        "eslint": "1.10.3",
         "eslint-plugin-react": "3.9.0",
         "jstransform": "~6.3.2",
         "khan-lesshint": "0.1.0"
