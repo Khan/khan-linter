@@ -14,6 +14,7 @@
         // ---------------------------------------
         // ES6 and jsx rules.
         "arrow-spacing": 2,
+        "computed-property-spacing": 2,
         "constructor-super": 2,
         "no-const-assign": 2,
         "no-this-before-super": 2,
@@ -36,6 +37,8 @@
         "react/prop-types": 2,
         "react/self-closing-comp": 2,
         "react/sort-comp": 2,
+        // TODO(riley): Introduce this rule once we upgrade to >= 2.0.0.
+        // "template-curly-spacing": 2,
         // ---------------------------------------
         // ES6/jsx stuff we explicitly disable.
         // We turned this off since it was too much work for too

@@ -363,7 +363,8 @@ class Eslint(Linter):
         if errcode == 'Ecomma-spacing':
             return lint_util.add_arc_fix_str(lintline, bad_line, ',', ', ')
         if errcode == 'Espace-before-function-paren':
-            return lint_util.add_arc_fix_str(lintline, bad_line, ' ', '')
+            return lint_util.add_arc_fix_str(lintline, bad_line,
+                                             re.compile(r' +'), '')
         if errcode == 'Eprefer-const':
             return lint_util.add_arc_fix_str(lintline, bad_line,
                                              'let', 'const',
@@ -407,6 +408,28 @@ class Eslint(Linter):
                     return lint_util.add_arc_fix_str(
                         lintline, bad_line, ' ' * -spaces_to_add, '',
                         search_backwards=True)
+
+        if errcode in {'Ecomputed-property-spacing', 'Earray-bracket-spacing',
+                       'Eobject-curly-spacing'}:
+            search_backwards = 'space before' in lintline
+            return lint_util.add_arc_fix_str(lintline, bad_line,
+                                             re.compile(r' +'), '',
+                                             search_backwards=search_backwards)
+
+        if errcode == 'Espace-in-parens':
+            try:
+                col = int(file_line_col.split(':')[2]) - 2
+            except IndexError:
+                col = None
+
+            if col is not None:
+                paren = bad_line[col]
+                search_backwards = {'(': False, ')': True}.get(paren)
+
+                if search_backwards is not None:
+                    return lint_util.add_arc_fix_str(
+                        lintline, bad_line, re.compile(r' +'), '',
+                        search_backwards=search_backwards)
 
         return lintline
 
