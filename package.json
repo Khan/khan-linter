@@ -1,14 +1,17 @@
 {
-    "name": "khan-linter",
-    "version": "0.0.1",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/Khan/khan-linter.git"
-    },
-    "dependencies": {
-        "eslint": "1.10.3",
-        "eslint-plugin-react": "3.9.0",
-        "jstransform": "~6.3.2",
-        "khan-lesshint": "0.1.0"
-    }
+  "name": "khan-linter",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Khan/khan-linter.git"
+  },
+  "dependencies": {
+    "eslint": "1.10.3",
+    "eslint-plugin-react": "3.9.0",
+    "jstransform": "~6.3.2",
+    "khan-lesshint": "0.1.0"
+  },
+  "devDependencies": {
+    "babel-eslint": "^5.0.4"
+  }
 }
