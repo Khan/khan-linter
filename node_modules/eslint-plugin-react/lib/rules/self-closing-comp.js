@@ -8,42 +8,88 @@
 // Rule Definition
 // ------------------------------------------------------------------------------
 
-module.exports = function(context) {
+module.exports = {
+  meta: {
+    docs: {
+      description: 'Prevent extra closing tags for components without children',
+      category: 'Stylistic Issues',
+      recommended: false
+    },
+    fixable: 'code',
 
-  var tagConvention = /^[a-z]|\-/;
-  function isTagName(name) {
-    return tagConvention.test(name);
-  }
+    schema: [{
+      type: 'object',
+      properties: {
+        component: {
+          default: true,
+          type: 'boolean'
+        },
+        html: {
+          default: true,
+          type: 'boolean'
+        }
+      },
+      additionalProperties: false
+    }]
+  },
 
-  function isComponent(node) {
-    return node.name && node.name.type === 'JSXIdentifier' && !isTagName(node.name.name);
-  }
+  create: function(context) {
 
-  function hasChildren(node) {
-    var childrens = node.parent.children;
-    if (
-      !childrens.length ||
-      (childrens.length === 1 && childrens[0].type === 'Literal' && !childrens[0].value.trim())
-    ) {
-      return false;
+    var tagConvention = /^[a-z]|\-/;
+    function isTagName(name) {
+      return tagConvention.test(name);
     }
-    return true;
-  }
 
-  // --------------------------------------------------------------------------
-  // Public
-  // --------------------------------------------------------------------------
+    function isComponent(node) {
+      return node.name && node.name.type === 'JSXIdentifier' && !isTagName(node.name.name);
+    }
 
-  return {
-
-    JSXOpeningElement: function(node) {
-      if (!isComponent(node) || node.selfClosing || hasChildren(node)) {
-        return;
+    function hasChildren(node) {
+      var childrens = node.parent.children;
+      if (
+        !childrens.length ||
+        (childrens.length === 1 && childrens[0].type === 'Literal' && !childrens[0].value.replace(/(?!\xA0)\s/g, ''))
+      ) {
+        return false;
       }
-      context.report(node, 'Empty components are self-closing');
+      return true;
     }
-  };
 
+    function isShouldBeSelfClosed(node) {
+      var configuration = context.options[0] || {component: true, html: true};
+      return (
+        configuration.component && isComponent(node) ||
+        configuration.html && isTagName(node.name.name)
+      ) && !node.selfClosing && !hasChildren(node);
+    }
+
+    // --------------------------------------------------------------------------
+    // Public
+    // --------------------------------------------------------------------------
+
+    return {
+
+      JSXOpeningElement: function(node) {
+
+        if (!isShouldBeSelfClosed(node)) {
+          return;
+        }
+        context.report({
+          node: node,
+          message: 'Empty components are self-closing',
+          fix: function(fixer) {
+            // Represents the last character of the JSXOpeningElement, the '>' character
+            var openingElementEnding = node.end - 1;
+            // Represents the last character of the JSXClosingElement, the '>' character
+            var closingElementEnding = node.parent.closingElement.end;
+
+            // Replace />.*<\/.*>/ with '/>'
+            var range = [openingElementEnding, closingElementEnding];
+            return fixer.replaceTextRange(range, ' />');
+          }
+        });
+      }
+    };
+
+  }
 };
-
-module.exports.schema = [];
