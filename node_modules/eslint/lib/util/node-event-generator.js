@@ -1,8 +1,6 @@
 /**
  * @fileoverview The event generator for AST nodes.
  * @author Toru Nagashima
- * @copyright 2015 Toru Nagashima. All rights reserved.
- * See LICENSE file in root directory for full license.
  */
 
 "use strict";
@@ -48,7 +46,7 @@ NodeEventGenerator.prototype = {
      * @returns {void}
      */
     leaveNode: function leaveNode(node) {
-        this.emitter.emit(node.type + ":exit", node);
+        this.emitter.emit(`${node.type}:exit`, node);
     }
 };
 
