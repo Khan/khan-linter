@@ -4,31 +4,46 @@
  */
 'use strict';
 
-var variableUtil = require('../util/variable');
-
 // ------------------------------------------------------------------------------
 // Rule Definition
 // ------------------------------------------------------------------------------
 
-module.exports = function(context) {
-
-  return {
-    JSXExpressionContainer: function(node) {
-      if (node.expression.type !== 'Identifier') {
-        return;
-      }
-      variableUtil.markVariableAsUsed(context, node.expression.name);
+module.exports = {
+  meta: {
+    docs: {
+      description: 'Prevent variables used in JSX to be marked as unused',
+      category: 'Best Practices',
+      recommended: true
     },
+    schema: []
+  },
 
-    JSXIdentifier: function(node) {
-      if (node.parent.type === 'JSXAttribute') {
-        return;
+  create: function(context) {
+
+    return {
+      JSXOpeningElement: function(node) {
+        var name;
+        if (node.name.namespace && node.name.namespace.name) {
+          // <Foo:Bar>
+          name = node.name.namespace.name;
+        } else if (node.name.name) {
+          // <Foo>
+          name = node.name.name;
+        } else if (node.name.object) {
+          // <Foo...Bar>
+          var parent = node.name.object;
+          while (parent.object) {
+            parent = parent.object;
+          }
+          name = parent.name;
+        } else {
+          return;
+        }
+
+        context.markVariableAsUsed(name);
       }
-      variableUtil.markVariableAsUsed(context, node.name);
-    }
 
-  };
+    };
 
+  }
 };
-
-module.exports.schema = [];
