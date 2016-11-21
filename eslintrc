@@ -28,9 +28,10 @@
         "react/jsx-no-duplicate-props": 2,
         // This triggers a ton on stuff like 'if (window.x) { x(...) }'.
         "react/jsx-no-undef": 2,
+        "react/jsx-sort-prop-types": 2,
         "react/jsx-uses-react": 2,
-        "react/jsx-uses-vars": 2,
-        "react/no-did-mount-set-state": [2],
+        // (Maybe we can be more strict and not need allow-in-func?)
+        "react/no-did-mount-set-state": [2, "allow-in-func"],
         "react/no-did-update-set-state": 2,
         "react/no-direct-mutation-state": 2,
         "react/prop-types": 2,
@@ -43,8 +44,6 @@
         // We turned this off since it was too much work for too
         // little benefit, especially for one-line props.
         "react/jsx-sort-props": 0,
-        // We turned this off too as we didn't see an explicit benefit
-        "react/sort-prop-types": 0,
         // We turned this off because it complains when you have a
         // multi-line string, which I think is going too far.
         "prefer-template": 0,
