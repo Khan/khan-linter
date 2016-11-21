@@ -4,41 +4,41 @@
  */
 'use strict';
 
-var variableUtil = require('../util/variable');
 var pragmaUtil = require('../util/pragma');
 
 // ------------------------------------------------------------------------------
 // Rule Definition
 // ------------------------------------------------------------------------------
 
-module.exports = function(context) {
-
-  var pragma = pragmaUtil.getFromContext(context);
-
-  // --------------------------------------------------------------------------
-  // Public
-  // --------------------------------------------------------------------------
-
-  return {
-
-    JSXOpeningElement: function() {
-      variableUtil.markVariableAsUsed(context, pragma);
+module.exports = {
+  meta: {
+    docs: {
+      description: 'Prevent React to be marked as unused',
+      category: 'Best Practices',
+      recommended: true
     },
-
-    BlockComment: function(node) {
-      pragma = pragmaUtil.getFromNode(node) || pragma;
-    }
-
-  };
-
-};
-
-module.exports.schema = [{
-  type: 'object',
-  properties: {
-    pragma: {
-      type: 'string'
-    }
+    schema: []
   },
-  additionalProperties: false
-}];
+
+  create: function(context) {
+
+    var pragma = pragmaUtil.getFromContext(context);
+
+    // --------------------------------------------------------------------------
+    // Public
+    // --------------------------------------------------------------------------
+
+    return {
+
+      JSXOpeningElement: function() {
+        context.markVariableAsUsed(pragma);
+      },
+
+      BlockComment: function(node) {
+        pragma = pragmaUtil.getFromNode(node) || pragma;
+      }
+
+    };
+
+  }
+};

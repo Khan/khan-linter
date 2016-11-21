@@ -8,46 +8,59 @@
 // Rule Definition
 // ------------------------------------------------------------------------------
 
-module.exports = function(context) {
+module.exports = {
+  meta: {
+    docs: {
+      description: 'Prevent usage of setState in componentDidUpdate',
+      category: 'Best Practices',
+      recommended: false
+    },
 
-  var mode = context.options[0] || 'never';
+    schema: [{
+      enum: ['disallow-in-func']
+    }]
+  },
 
-  // --------------------------------------------------------------------------
-  // Public
-  // --------------------------------------------------------------------------
+  create: function(context) {
 
-  return {
+    var mode = context.options[0] || 'allow-in-func';
 
-    CallExpression: function(node) {
-      var callee = node.callee;
-      if (
-        callee.type !== 'MemberExpression' ||
-        callee.object.type !== 'ThisExpression' ||
-        callee.property.name !== 'setState'
-      ) {
-        return;
-      }
-      var ancestors = context.getAncestors(callee).reverse();
-      var depth = 0;
-      for (var i = 0, j = ancestors.length; i < j; i++) {
-        if (/Function(Expression|Declaration)$/.test(ancestors[i].type)) {
-          depth++;
-        }
+    // --------------------------------------------------------------------------
+    // Public
+    // --------------------------------------------------------------------------
+
+    return {
+
+      CallExpression: function(node) {
+        var callee = node.callee;
         if (
-          (ancestors[i].type !== 'Property' && ancestors[i].type !== 'MethodDefinition') ||
-          ancestors[i].key.name !== 'componentDidUpdate' ||
-          (mode === 'allow-in-func' && depth > 1)
+          callee.type !== 'MemberExpression' ||
+          callee.object.type !== 'ThisExpression' ||
+          callee.property.name !== 'setState'
         ) {
-          continue;
+          return;
         }
-        context.report(callee, 'Do not use setState in componentDidUpdate');
-        break;
+        var ancestors = context.getAncestors(callee).reverse();
+        var depth = 0;
+        for (var i = 0, j = ancestors.length; i < j; i++) {
+          if (/Function(Expression|Declaration)$/.test(ancestors[i].type)) {
+            depth++;
+          }
+          if (
+            (ancestors[i].type !== 'Property' && ancestors[i].type !== 'MethodDefinition') ||
+            ancestors[i].key.name !== 'componentDidUpdate' ||
+            (mode !== 'disallow-in-func' && depth > 1)
+          ) {
+            continue;
+          }
+          context.report({
+            node: callee,
+            message: 'Do not use setState in componentDidUpdate'
+          });
+          break;
+        }
       }
-    }
-  };
+    };
 
+  }
 };
-
-module.exports.schema = [{
-  enum: ['allow-in-func']
-}];
