@@ -5,14 +5,14 @@
 // packages that expose globals, or for backwards-compatibility
 // reasons.
 //
-// If you want to adjust/add a rule that is not ES6- or jsx-specific,
+// If you want to adjust/add a rule that is not ES6-, flow-, or jsx-specific,
 // modify eslintrc.shared instead.  In particular, when adjusting the
 // list of built-in globals (useful for both javascript files and
 // <script> contents inside html), do that in eslintrc.shared.
 {
     "rules": {
         // ---------------------------------------
-        // ES6 and jsx rules.
+        // ES6 rules.
         "arrow-spacing": 2,
         "computed-property-spacing": 2,
         "constructor-super": 2,
@@ -21,30 +21,6 @@
         "no-var": 2,
         "prefer-const": 2,
         "prefer-spread": 2,
-        "react/forbid-prop-types": [2, { "forbid": [ "array", "object" ] }],
-        "react/jsx-closing-bracket-location": [2, "line-aligned"],
-        "react/jsx-curly-spacing": [2, "never"],
-        "react/jsx-indent-props": 2,
-        "react/jsx-no-duplicate-props": 2,
-        // This triggers a ton on stuff like 'if (window.x) { x(...) }'.
-        "react/jsx-no-undef": 2,
-        "react/jsx-uses-react": 2,
-        "react/jsx-uses-vars": 2,
-        "react/no-did-mount-set-state": [2],
-        "react/no-did-update-set-state": 2,
-        "react/no-direct-mutation-state": 2,
-        "react/prop-types": 2,
-        "react/self-closing-comp": 2,
-        "react/sort-comp": 2,
-        // TODO(riley): Introduce this rule once we upgrade to >= 2.0.0.
-        // "template-curly-spacing": 2,
-        // ---------------------------------------
-        // ES6/jsx stuff we explicitly disable.
-        // We turned this off since it was too much work for too
-        // little benefit, especially for one-line props.
-        "react/jsx-sort-props": 0,
-        // We turned this off too as we didn't see an explicit benefit
-        "react/sort-prop-types": 0,
         // We turned this off because it complains when you have a
         // multi-line string, which I think is going too far.
         "prefer-template": 0,
@@ -68,9 +44,6 @@
         "templateStrings": true
     },
     "parser": "babel-eslint",
-    "plugins": [
-        "react"
-    ],
     "env": {
         // TODO(csilvers): once we properly use eslintrc.node for node
         // files, get rid of this next line.
@@ -78,5 +51,9 @@
         "browser": true,
         "es6": true
     },
-    "extends": "./eslintrc.shared"
+    "extends": [
+        "./eslintrc.shared",
+        "./eslintrc.flow",
+        "./eslintrc.react",
+    ]
 }
