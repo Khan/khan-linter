@@ -23,6 +23,7 @@
         "keyword-spacing": 2,
         "linebreak-style": [2, "unix"],
         "max-len": [2, 80, 4, {"ignoreUrls": true, "ignorePattern": "\\brequire(?:WithVars)?\\([\"']|eslint-disable"}],
+        "max-lines": [2, 1000],
         "no-alert": 2,
         "no-array-constructor": 2,
         "no-console": 2,
