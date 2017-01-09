@@ -31,7 +31,6 @@ Files with unknown or unsupported extensions will be skipped.
 """
 
 import fcntl
-import fnmatch
 import optparse
 import os
 import re
@@ -49,40 +48,88 @@ _CWD = lint_util.get_real_cwd()
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
 
 
+def _extended_fnmatch_compile(pattern):
+    """RE-ify *, ?, etc, and also **.
+
+    It also turns '*' into [^/]*, '?' into ., etc.  This is what
+    fnmatch is supposed to do, but fnmatch turns '*' into '.*' which
+    is not what we want.  We support '**', which turns into '.*',
+    instead.
+
+    For both * and ** we make sure that it doesn't match directories
+    or files beginning with `.`.
+    """
+    retval = ''
+    i = 0
+    while i < len(pattern):
+        if pattern[i] in '*?[':
+            if retval.endswith('/'):
+                # If we're at the start of a directory make sure we
+                # don't match a dotfile (for *, **, ?, and [...]).
+                retval += r'(?!\.)'
+
+        if pattern[i] == '*':
+            if pattern.startswith('**', i):
+                # Match everything as long as it doesn't have a /. in it.
+                retval += r'((?!/\.).)*'
+                i += 1
+            else:
+                retval += '[^/]*'
+        elif pattern[i] == '?':
+            retval += '.'
+        elif pattern[i] == '[':
+            # Find the end of the [...]
+            j = i + 1
+            if pattern.startswith('!', j):     # [!...]
+                j += 1
+            if pattern.startswith(']', j):     # []...]
+                j += 1
+            j = pattern.find(']', j)
+            if j == -1:   # must have something like 'a[b'
+                retval += '\\['
+            else:
+                match = pattern[i + 1:j].replace('\\', '\\\\')
+                if match[0] == '!':
+                    match = '^' + match[1:]
+                elif match[0] == '^':
+                    match = '\\' + match
+                retval += '[%s]' % match
+                i = j
+        else:
+            retval += re.escape(pattern[i])
+        i += 1
+
+    return re.compile(retval + '$')
+
+
+# If the code below this line has horrible syntax highlighting, check
+# this out:  http://stackoverflow.com/questions/13210816/sublime-texts-syntax-highlighting-of-regexes-in-python-leaks-into-surrounding-c
+_METACHAR_RE = re.compile(r'[[*?!]')
+
+
 def _parse_one_blacklist_line(line):
-    if line.endswith('/'):
-        # When blacklisting a directory, we add two entries: one for the
-        # directory name itself (to make pruning easier), and one for the
-        # entire directory tree (as a regexp).  This recursive call does
-        # the first of these.
-        retval = _parse_one_blacklist_line(line[:-1])
-    # If the code below this line has horrible syntax highlighting, check
-    # this out:  http://stackoverflow.com/questions/13210816/sublime-texts-syntax-highlighting-of-regexes-in-python-leaks-into-surrounding-c
-    elif not re.search(r'[[*?!]', line):
-        # Easy case: no char meaningful to glob()
-        return set((os.path.normpath(line),))
+    # We don't know if the blacklist line is intended to match a
+    # directory or not, so we add both `line` and `line/**`, just in
+    # case.  Even if line ends with a `/`, so we know it's a
+    # directory, we still add `line` (with the trailing / cut off) to
+    # make pruning easier.  As an optimization, if the file actually
+    # exists, we check if it's a directory or not that way.
+    retval = set()
+    line = line.rstrip('/')
+    if _METACHAR_RE.search(line):
+        retval.add(_extended_fnmatch_compile(line))
+        retval.add(_extended_fnmatch_compile(line + '/**'))
+        # A leading '**/' is interpreted as '(.*/)?' -- that is,
+        # '**/foo' matches 'foo', even though the regexp has a leading
+        # '/'.  We just do that as multiple regexps.
+        if line.startswith('**/'):
+            retval.add(_extended_fnmatch_compile(line[len('**/'):]))
+            retval.add(_extended_fnmatch_compile(line[len('**/'):] + '/**'))
     else:
-        retval = set()
+        retval.add(os.path.normpath(line))
+        if not os.path.isfile(line):
+            retval.add(_extended_fnmatch_compile(line + '/**'))
 
-    # If we get here, the pattern is a glob pattern.
-    if line.startswith('**/'):   # magic 'many directory' matcher
-        fnmatch_line = line[len('**/'):]
-        re_prefix = '.*'
-    else:
-        fnmatch_line = line
-        re_prefix = ''
-
-    fnmatch_re = fnmatch.translate(fnmatch_line)   # glob -> re
-    # For some unknown reason, fnmatch.translate tranlates '*'
-    # to '.*' rather than '[^/]*'.  We have to fix that.
-    fnmatch_re = fnmatch_re.replace('.*', '[^/]*')
-    # fnmatch.translate also puts in a \Z (same as $, basically).
-    # But if the blacklist pattern is a directory, we don't want
-    # that, since we want to do exactly a prefix match.
-    if fnmatch_line.endswith('/'):
-        fnmatch_re = fnmatch_re.replace(r'\Z', '')
-
-    retval.add(re.compile(re_prefix + fnmatch_re))
     return retval
 
 
