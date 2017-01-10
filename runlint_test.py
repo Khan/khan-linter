@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import unittest
 
 import runlint
@@ -7,6 +8,11 @@ import runlint
 
 class TestBlacklist(unittest.TestCase):
     _BLACKLIST = 'lint_blacklist_for_testing.txt'
+
+    def setUp(self):
+        # This test only works if we're in the directory we are linting, sigh.
+        self.addCleanup(lambda d=os.getcwd(): os.chdir(d))
+        os.chdir(os.path.dirname(__file__))
 
     def assert_in_blacklist(self, fname):
         self.assertTrue(runlint._file_in_blacklist(fname, self._BLACKLIST))
