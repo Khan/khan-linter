@@ -26,8 +26,6 @@ class TestBlacklist(unittest.TestCase):
         self.assert_not_in_blacklist('main.pyy')
 
     def test_directory(self):
-        self.assert_in_blacklist('.git')
-        self.assert_in_blacklist('.git/foo/bar')
         self.assert_in_blacklist('vendor')
         self.assert_in_blacklist('vendor/baz/bang')
 
