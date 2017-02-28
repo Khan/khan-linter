@@ -22,7 +22,7 @@
         "indent": [2, 4, {"SwitchCase": 1}],
         "keyword-spacing": 2,
         "linebreak-style": [2, "unix"],
-        "max-len": [2, 80, 4, {"ignoreUrls": true, "ignorePattern": "\\brequire(?:WithVars)?\\([\"']|eslint-disable"}],
+        "max-len": [2, 80, 4, {"ignoreUrls": true, "ignorePattern": "\\brequire(?:WithVars)?\\([\"']|^\\s*import\\s+['\"]|^\\s*import\\s+[\\w_{}*,\\s]*?\\s+from\\s+['\"]|eslint-disable"}],
         "max-lines": [2, 1000],
         "no-alert": 2,
         "no-array-constructor": 2,
