@@ -47,6 +47,8 @@ _CWD = lint_util.get_real_cwd()
 
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
 
+_LINTERS_BY_LANG = {}    # a cache of linters by language
+
 
 def _extended_fnmatch_compile(pattern):
     """RE-ify *, ?, etc, and also **.
@@ -475,7 +477,7 @@ _DEFAULT_PEP8_ARGS = ['--repeat',
                       '--ignore=W291,W293,W391']
 
 
-def _find_base_eslint_config(files_to_lint, default_location):
+def _find_base_eslint_config(file_to_lint, default_location):
     """Return a .eslintrc file in the repo's root directory if it exists.
 
     If this file exists, it will replace khan-linter's `eslintrc` as the
@@ -492,27 +494,71 @@ def _find_base_eslint_config(files_to_lint, default_location):
     is in `repo/.eslint`, then the path in the eslint file should be
     `javascript/node_modules/babel-eslint`.
     """
-    if not files_to_lint:
+    if not file_to_lint:
         return default_location
 
-    def _find_eslint_for_path(path):
-        base_git = _resolve_ancestor('<ancestor>/.git', path)
-        base_directory = os.path.dirname(base_git)
+    base_git = _resolve_ancestor('<ancestor>/.git', file_to_lint)
+    base_directory = os.path.dirname(base_git)
 
-        base_eslint_config = os.path.join(base_directory, '.eslintrc')
-        if os.path.exists(base_eslint_config):
-            return base_eslint_config
-        return default_location
+    base_eslint_config = os.path.join(base_directory, '.eslintrc')
+    if os.path.exists(base_eslint_config):
+        return base_eslint_config
+    return default_location
 
-    config_path = _find_eslint_for_path(files_to_lint[0])
-    for path in files_to_lint[1:]:
-        if _find_eslint_for_path(path) != config_path:
-            # TODO(jared): partition files_to_lint by config file, and run
-            # eslint once for each config file instead of bailing.
-            raise Exception("Files to lint depend on multiple custom eslint "
-                    "config files. This is currently unsupported.")
 
-    return config_path
+def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
+    """Return the linters we wish to run for this file.
+
+    We keep a cache of linters so that we can run each linter just one time
+    against a set of files (rather than each file individually).
+
+    For most languages, this is a simple mapping of lang -> list of linters,
+    however for javascript and jsx we support each repo having a different
+    eslintrc for configuring style. We need to do a bit more work to find the
+    appropriate config file and cache the resulting Eslint objects.
+    """
+    if not _LINTERS_BY_LANG:
+        # Initialize our linter cache based on runtime params.
+
+        # A dict that maps from language (output of _lang) to a list of
+        # processors.  None means that we skip files of this language.
+        processor_dict = {
+            'python': (linters.Pep8([sys.argv[0]] + _DEFAULT_PEP8_ARGS,
+                            propose_arc_fixes=propose_arc_fixes),
+                       linters.Pyflakes(propose_arc_fixes=propose_arc_fixes),
+                       linters.CustomPythonLinter(),
+                       linters.Git(),
+                       ),
+            'html': (linters.HtmlLinter(),
+                     linters.Git(),
+                     ),
+            'less': (linters.LessHint(),
+                     linters.Git(),
+                     ),
+            'unknown': (linters.Git(),
+                        ),
+        }
+        _LINTERS_BY_LANG.update(processor_dict)
+
+    file_lang = _lang(file_to_lint, lang)
+
+    # We support multiple configuration files for eslint, which allows runlint
+    # to run against subrepos with different eslint configurations.
+    if file_lang in ['javascript', 'jsx']:
+        default_eslint_config = os.path.join(_CWD, "eslintrc")
+        eslint_config = _find_base_eslint_config(file_to_lint,
+            default_eslint_config)
+        cache_key = "js-%s" % eslint_config
+
+        if cache_key not in _LINTERS_BY_LANG:
+            _LINTERS_BY_LANG[cache_key] = (
+                linters.Eslint(eslint_config, propose_arc_fixes),
+                linters.Git(),
+            )
+
+        return _LINTERS_BY_LANG[cache_key]
+
+    return _LINTERS_BY_LANG.get(file_lang, None)
 
 
 def main(files_and_directories,
@@ -542,43 +588,14 @@ def main(files_and_directories,
     files_to_lint = find_files_to_lint(files_and_directories,
                                        blacklist, blacklist_pattern, verbose)
 
-    default_eslint_config = os.path.join(_CWD, "eslintrc")
-    base_eslint_config = _find_base_eslint_config(files_to_lint,
-            default_eslint_config)
-
-    # A dict that maps from language (output of _lang) to a list of processors.
-    # None means that we skip files of this language.
-    processor_dict = {
-        'python': (linters.Pep8([sys.argv[0]] + _DEFAULT_PEP8_ARGS,
-                        propose_arc_fixes=propose_arc_fixes),
-                   linters.Pyflakes(propose_arc_fixes=propose_arc_fixes),
-                   linters.CustomPythonLinter(),
-                   linters.Git(),
-                   ),
-        'javascript': (linters.Eslint(base_eslint_config, propose_arc_fixes),
-                       linters.Git(),
-                       ),
-        'html': (linters.HtmlLinter(),
-                 linters.Git(),
-                 ),
-        'jsx': (linters.Eslint(base_eslint_config, propose_arc_fixes),
-                linters.Git(),
-                ),
-        'less': (linters.LessHint(),
-                 linters.Git(),
-                 ),
-        'unknown': (linters.Git(),
-                    ),
-        }
-
     # Dict of {lint_processor: [(filename, contents)]}
     files_by_linter = {}
 
     num_lint_errors = 0
     num_framework_errors = 0
     for f in files_to_lint:
-        file_lang = _lang(f, lang)
-        lint_processors = processor_dict.get(file_lang, None)
+        lint_processors = _get_linters_for_file(f, lang, propose_arc_fixes)
+
         if lint_processors is None:
             if verbose:
                 print '--- skipping %s (language unknown)' % f
