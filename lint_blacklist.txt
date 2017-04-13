@@ -24,6 +24,7 @@
 closure_linter/
 node_modules/
 vendor/
+six.py
 
 # Other files
 main.py
