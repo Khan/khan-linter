@@ -1,6 +1,5 @@
 """Linters process files or lists of files for correctness."""
 
-import cStringIO
 import itertools
 import os
 import re
@@ -8,12 +7,20 @@ import subprocess
 import sys
 
 import lint_util
+import six
+
+from six.moves import cStringIO as StringIO
 
 # Add vendor path so we can find (our packaged versions of) pep8 and pyflakes.
 _CWD = lint_util.get_real_cwd()
 _parent_dir = os.path.abspath(_CWD)
-_vendor_dir = os.path.join(_parent_dir, 'vendor')
-sys.path.append(_vendor_dir)
+if six.PY2:
+    _vendor_version = 'py2'
+else:
+    _vendor_version = 'py3'
+
+_vendor_dir = os.path.join(_parent_dir, 'vendor', _vendor_version)
+sys.path.insert(0, _vendor_dir)
 
 import static_content_refs
 import pep8
@@ -33,8 +40,8 @@ class Linter(object):
         for f in files:
             try:
                 contents = open(f, 'U').read()
-            except (IOError, OSError), why:
-                print "SKIPPING lint of %s: %s" % (f, why.args[1])
+            except (IOError, OSError) as why:
+                six.print_("SKIPPING lint of %s: %s" % (f, why.args[1]))
                 num_errors += 1
                 continue
             num_errors += self.process(f, contents)
@@ -49,9 +56,9 @@ def _capture_stdout_of(fn, *args, **kwargs):
     """Call fn(*args, **kwargs) and return (fn_retval, fn_stdout_output_fp)."""
     try:
         orig_stdout = sys.stdout
-        sys.stdout = cStringIO.StringIO()
+        sys.stdout = StringIO()
         retval = fn(*args, **kwargs)
-        sys.stdout.reset()    # so new read()/readlines() calls will return
+        sys.stdout.seek(0)    # so new read()/readlines() calls will return
         return (retval, sys.stdout)
     finally:
         sys.stdout = orig_stdout
@@ -59,6 +66,16 @@ def _capture_stdout_of(fn, *args, **kwargs):
 
 class Pep8(Linter):
     """Linter for python.  process() processes one file."""
+    GLOBAL_IGNORES = [
+        'E266',  # too many leading '#' for block comment
+        'W291',  # trailing whitespace
+        'W293',  # blank line contains whitespace
+        'W391',  # blank line at end of file
+        'E402',  # module level import not at top of file
+        'W503',  # line break before binary operator
+        'E731',  # do not assign a lambda expression
+    ]
+
     def __init__(self, pep8_args, propose_arc_fixes=False):
         pep8.process_options(pep8_args + ['dummy'])
         self._propose_arc_fixes = propose_arc_fixes
@@ -87,7 +104,7 @@ class Pep8(Linter):
 
         return lintline
 
-    def _process_one_line(self, output_line, contents_lines):
+    def _process_one_line(self, output_line, contents_lines, ignored_rules):
         """If line is an 'error', print it and return 1.  Else return 0.
 
         pep8 prints all errors to stdout.  But we want to ignore some
@@ -99,6 +116,8 @@ class Pep8(Linter):
            output_line: one line of the pep8 error-output
            contents_lines: the contents of the file being linted,
               as a list of lines.
+           ignored_rules: a list of rules (like 'E501') that will be
+              ignored
 
         Returns:
            1 (indicating one error) if we print the error line, 0 else.
@@ -110,6 +129,10 @@ class Pep8(Linter):
         bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
 
         if '@Nolint' in bad_line:
+            return 0
+
+        if any(rule in lintline
+               for rule in (self.GLOBAL_IGNORES + ignored_rules)):
             return 0
 
         # We allow lines to be arbitrarily long if they are urls,
@@ -154,11 +177,33 @@ class Pep8(Linter):
                     return 0
 
         # OK, looks like it's a legitimate error.
-        print self._maybe_add_arc_fix(lintline, bad_line)
+        six.print_(self._maybe_add_arc_fix(lintline, bad_line))
         return 1
+
+    def _get_file_level_nolint_rules(self, contents_lines):
+        """Get a list of rules disabled at the file-level.
+
+        This allows us to upgrade linter without having to fix all the lint
+        immediately.
+
+        We check the first three lines (three to allow for a shebang, and a
+        TODO to fix the lint) for a comment that looks like:
+        # pep8-disable:E101,E102,W405
+        where the part following the colon is a comma-separated list of rules
+        to ignore in the file.  These must all start with E or W.
+        """
+        for line in contents_lines[:3]:
+            match = re.search(r'pep8-disable:([^\s]+)', line)
+            if match:
+                return [
+                    rule for rule in match.group(1).split(',')
+                    if rule.startswith('E') or rule.startswith('W')]
+
+        return []
 
     def process(self, f, contents_of_f):
         contents_lines = contents_of_f.splitlines(True)
+        file_level_nolint = self._get_file_level_nolint_rules(contents_lines)
 
         (num_candidate_errors, pep8_stdout) = _capture_stdout_of(
             pep8.Checker(f, lines=contents_lines).check_all)
@@ -169,8 +214,8 @@ class Pep8(Linter):
 
         num_errors = 0
         for output_line in pep8_stdout.readlines():
-            num_errors += self._process_one_line(output_line,
-                                                 contents_lines)
+            num_errors += self._process_one_line(
+                output_line, contents_lines, file_level_nolint)
         return num_errors
 
 
@@ -186,7 +231,9 @@ class Pyflakes(Linter):
         # now we only use E, since everything we print is an error.
         # pyflakes doesn't have an error code, so we just use
         # 'pyflakes'.  We also strip the trailing newline.
-        (file, line, error) = line.rstrip().split(':')
+        # We limit the number of splits as error messages can occasionally
+        # contain :.
+        (file, line, error) = line.rstrip().split(':', 2)
         return '%s:%s:1: E=pyflakes=%s' % (file, line, error)
 
     def _maybe_add_arc_fix(self, lintline, bad_line):
@@ -256,7 +303,7 @@ class Pyflakes(Linter):
             return 0
 
         # OK, looks like it's a legitimate error.
-        print self._maybe_add_arc_fix(lintline, bad_line)
+        six.print_(self._maybe_add_arc_fix(lintline, bad_line))
         return 1
 
     def process(self, f, contents_of_f):
@@ -299,9 +346,9 @@ class CustomPythonLinter(Linter):
 
             if self._bad_super(line):
                 # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-                print ('%s:%s: E999 first argument to super() must be '
-                       'an explicit classname, not type(self)'
-                       % (f, linenum_minus_1 + 1))
+                six.print_('%s:%s: E999 first argument to super() must be '
+                           'an explicit classname, not type(self)'
+                           % (f, linenum_minus_1 + 1))
                 num_errors += 1
 
         return num_errors
@@ -331,8 +378,8 @@ class Git(Linter):
         num_errors = 0
         for m in self._MARKERS_RE.finditer(contents_of_f):
             linenum = contents_of_f.count('\n', 0, m.start()) + 1
-            print ('%s:%s:1: E1 git conflict marker "%s" found'
-                   % (f, linenum, m.group(1)))
+            six.print_('%s:%s:1: E1 git conflict marker "%s" found'
+                       % (f, linenum, m.group(1)))
             num_errors += 1
         return num_errors
 
@@ -468,7 +515,7 @@ class Eslint(Linter):
         if 'File ignored because of your .eslintignore file' in output_line:
             return 0
 
-        print self._maybe_add_arc_fix(output_line, bad_line)
+        six.print_(self._maybe_add_arc_fix(output_line, bad_line))
         return 1
 
     def process(self, f, contents_of_f, eslint_lines):
@@ -547,8 +594,9 @@ class Eslint(Linter):
                 lintlines = file_to_lint_output[filename]
                 try:
                     contents = open(filename, 'U').read()
-                except (IOError, OSError), why:
-                    print "SKIPPING lint of %s: %s" % (filename, why.args[1])
+                except (IOError, OSError) as why:
+                    six.print_(
+                        "SKIPPING lint of %s: %s" % (filename, why.args[1]))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
@@ -567,7 +615,7 @@ class LessHint(Linter):
         if '@Nolint' in bad_line:
             return 0
 
-        print output_line
+        six.print_(output_line)
         return 1
 
     def process(self, f, contents_of_f, lesshint_lines):
@@ -622,8 +670,9 @@ class LessHint(Linter):
                 lintlines = file_to_lint_output[filename]
                 try:
                     contents = open(filename, 'U').read()
-                except (IOError, OSError), why:
-                    print "SKIPPING lint of %s: %s" % (filename, why.args[1])
+                except (IOError, OSError) as why:
+                    six.print_(
+                        "SKIPPING lint of %s: %s" % (filename, why.args[1]))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
@@ -643,8 +692,8 @@ class HtmlLinter(Linter):
             errors = static_content_refs.lint_one_file(f, contents_of_f)
             for (fname, linenum, colnum, unused_endcol, msg) in errors:
                 # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-                print ('%s:%s:%s: E=static_url= %s'
-                       % (fname, linenum, colnum, msg))
+                six.print_('%s:%s:%s: E=static_url= %s'
+                           % (fname, linenum, colnum, msg))
             return len(errors)
         else:
             return 0

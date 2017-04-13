@@ -42,6 +42,7 @@ import os
 import re
 import sys
 
+import six
 
 _DEFAULT_DIRS = ['templates/']
 
@@ -136,7 +137,7 @@ def fix(errors):
                                                         colnum, endcol))
 
     for (filename, errors) in errors_by_file.iteritems():
-        print 'FIXING %s errors in %s' % (len(errors), filename)
+        six.print_('FIXING %s errors in %s' % (len(errors), filename))
         with open(filename) as f:
             lines = f.read().splitlines(True)
         # Since we change the line-length every time we munge a line,
@@ -158,10 +159,10 @@ def main(file_or_directory_names, should_fix):
     errors = lint(file_or_directory_names)
 
     for (filename, linenum, colnum, unused_endcol, error) in errors:
-        print '%s:%s:%s: %s' % (filename, linenum, colnum, error)
+        six.print_('%s:%s:%s: %s' % (filename, linenum, colnum, error))
 
     if should_fix:
-        print
+        six.print_()
         fix(errors)
 
     return len(errors)

@@ -40,6 +40,9 @@ import time
 
 import linters
 import lint_util
+import six
+
+from six.moves import xrange
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
 _DEFAULT_EXTRA_LINTER = '<ancestor_within_repo>/tools/runlint.py'
@@ -254,9 +257,10 @@ def _file_in_blacklist_helper(fname, blacklist_pattern):
     blacklist_dir = os.path.abspath(os.path.dirname(blacklist_filename))
     fname = os.path.abspath(fname)
     if not fname.startswith(blacklist_dir):
-        print ('WARNING: %s is not under the directory containing the '
-               'blacklist (%s), so we are ignoring the blacklist'
-               % (fname, blacklist_dir))
+        six.print_(
+            'WARNING: %s is not under the directory containing the '
+            'blacklist (%s), so we are ignoring the blacklist'
+            % (fname, blacklist_dir))
     fname = fname[len(blacklist_dir) + 1:]   # +1 for the trailing '/'
 
     blacklist = _parse_blacklist(blacklist_filename)
@@ -266,7 +270,7 @@ def _file_in_blacklist_helper(fname, blacklist_pattern):
     # The blacklist can have regexp patterns in it, so we need to
     # check those too, one by one:
     for blacklist_entry in blacklist:
-        if not isinstance(blacklist_entry, basestring):
+        if not isinstance(blacklist_entry, six.string_types):
             if blacklist_entry.match(fname):
                 return True
 
@@ -297,14 +301,16 @@ def _files_under_directory(rootdir, blacklist_pattern, verbose):
             absdir = os.path.join(root, dirs[i])
             if _file_in_blacklist(absdir, blacklist_pattern):
                 if verbose:
-                    print '... skipping directory %s: in blacklist' % absdir
+                    six.print_(
+                        '... skipping directory %s: in blacklist' % absdir)
                 del dirs[i]
         # Prune the files that are in the blacklist.
         for f in files:
             abspath = os.path.join(root, f)
             if _file_in_blacklist(abspath, blacklist_pattern):
                 if verbose:
-                    print '... skipping file %s: in blacklist' % abspath
+                    six.print_(
+                        '... skipping file %s: in blacklist' % abspath)
                 continue
             retval.add(os.path.join(root, f))
     return retval
@@ -318,13 +324,15 @@ def find_files_to_lint(files_and_directories,
         file_blacklist = blacklist_pattern
         dir_blacklist = blacklist_pattern
         if verbose:
-            print 'Using blacklist %s for all files' % blacklist_pattern
+            six.print_(
+                'Using blacklist %s for all files' % blacklist_pattern)
     elif blacklist == 'auto':
         file_blacklist = None
         dir_blacklist = blacklist_pattern
         if verbose:
-            print ('Using blacklist %s for files under directories'
-                   % blacklist_pattern)
+            six.print_(
+                'Using blacklist %s for files under directories'
+                % blacklist_pattern)
     else:
         file_blacklist = None
         dir_blacklist = None
@@ -340,19 +348,22 @@ def find_files_to_lint(files_and_directories,
             blacklist_for_f = file_blacklist
         blacklist_filename = _resolve_ancestor(blacklist_for_f, f)
         if verbose:
-            print 'Considering %s: blacklist %s' % (f, blacklist_filename),
+            six.print_(
+                'Considering %s: blacklist %s' % (f, blacklist_filename),
+                end='')
 
         if _file_in_blacklist(f, blacklist_for_f):
             if verbose:
-                print '... skipping (in blacklist)'
+                six.print_('... skipping (in blacklist)')
         elif os.path.isdir(f):
             if verbose:
-                print ('... LINTING %s files under this directory'
-                       % ('non-blacklisted' if dir_blacklist else 'all'))
+                six.print_(
+                    '... LINTING %s files under this directory'
+                    % ('non-blacklisted' if dir_blacklist else 'all'))
             directories_to_lint.append(f)
         else:
             if verbose:
-                print '... LINTING'
+                six.print_('... LINTING')
             files_to_lint.append(f)
 
     # TODO(csilvers): log if we skip a file in a directory because
@@ -405,13 +416,13 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
         if linter:
             linter_to_files.setdefault(linter, set()).add(f)
 
-    for (linter_filename, files) in linter_to_files.iteritems():
+    for (linter_filename, files) in six.iteritems(linter_to_files):
         if not os.access(linter_filename, os.R_OK | os.X_OK):
             continue
         files = sorted(files)
         if verbose:
-            print ('--- running extra linter %s on these files: %s'
-                   % (linter_filename, files))
+            six.print_('--- running extra linter %s on these files: %s'
+                       % (linter_filename, files))
         p = subprocess.Popen([linter_filename, '-'], stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (stdout, stderr) = p.communicate(input='\n'.join(files))
@@ -420,11 +431,12 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
         # this by checking if stdout is empty: if so, it means that there
         # was no actual lint error found, so this must be an exception.
         if p.returncode > 0 and not stdout:
-            print ('ERROR running the extra linter %s on these files: %s: %s'
-                   % (linter_filename, files, stderr))
+            six.print_(
+                'ERROR running the extra linter %s on these files: %s: %s'
+                % (linter_filename, files, stderr))
             num_framework_errors += 1
         else:
-            print stdout + stderr   # print the lint errors seen
+            six.print_(stdout + stderr)   # print the lint errors seen
             num_lint_errors += p.returncode
 
     return (num_lint_errors, num_framework_errors)
@@ -455,7 +467,7 @@ def _maybe_pull(verbose):
         # update is complete.)
         fcntl.lockf(f, fcntl.LOCK_EX)
         if verbose:
-            print 'Updating the khan-linter repo'
+            six.print_('Updating the khan-linter repo')
 
         old_sha = subprocess.check_output(
             ['git', 'rev-parse', 'HEAD'],
@@ -470,11 +482,7 @@ def _maybe_pull(verbose):
     return new_sha != old_sha
 
 
-# W291 trailing whitespace
-# W293 blank line contains whitespace
-# W391 blank line at end of file
-_DEFAULT_PEP8_ARGS = ['--repeat',
-                      '--ignore=W291,W293,W391']
+_DEFAULT_PEP8_ARGS = ['--repeat']
 
 
 def _find_base_eslint_config(file_to_lint, default_location):
@@ -598,7 +606,7 @@ def main(files_and_directories,
 
         if lint_processors is None:
             if verbose:
-                print '--- skipping %s (language unknown)' % f
+                six.print_('--- skipping %s (language unknown)' % f)
             continue
 
         for lint_processor in lint_processors:
@@ -612,7 +620,8 @@ def main(files_and_directories,
         files = files_by_linter[lint_processor]
         try:
             if verbose:
-                print '--- Running %s:' % lint_processor.__class__.__name__
+                six.print_('--- Running %s:' %
+                           lint_processor.__class__.__name__)
 
             start_time = time.time()
             num_new_errors = lint_processor.process_files(files)
@@ -620,9 +629,10 @@ def main(files_and_directories,
             elapsed = time.time() - start_time
 
             if verbose:
-                print '%d errors (%.2f seconds)' % (num_new_errors, elapsed)
-        except Exception, why:
-            print "ERROR linting %r: %s" % (files, why)
+                six.print_(
+                    '%d errors (%.2f seconds)' % (num_new_errors, elapsed))
+        except Exception as why:
+            six.print_("ERROR linting %r: %s" % (files, why))
             num_framework_errors += 1
             continue
 
@@ -662,7 +672,7 @@ if __name__ == '__main__':
                             'if it exists and is executable.'
                             ' Default: %default'))
     parser.add_option('--lang',
-                      choices=[''] + list(set(_EXTENSION_DICT.itervalues())),
+                      choices=[''] + list(set(_EXTENSION_DICT.values())),
                       default='',
                       help=('Treat all input files as written in the given '
                             'language.  If empty, guess from extension.'))

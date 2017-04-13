@@ -5,5 +5,5 @@
 #   to the /vendor/* directory in with your change as well.
 
 # Required by python lint checking
-pep8==1.0.1
-pyflakes==0.7.3
+pep8==1.7.0
+pyflakes==1.4.0
