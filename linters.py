@@ -138,7 +138,7 @@ class Pep8(Linter):
         # We allow lines to be arbitrarily long if they are urls,
         # since splitting urls at 80 columns can be annoying.
         if ('E501 line too long' in lintline and
-            ('http://' in bad_line or 'https://' in bad_line)):
+                ('http://' in bad_line or 'https://' in bad_line)):
             return 0
 
         # We sometimes embed json in docstrings (as documentation of
@@ -159,7 +159,7 @@ class Pep8(Linter):
             linenum = 0           # in case the xrange() below is empty
             for linenum in xrange(bad_linenum - 1, 0, -1):
                 if (contents_lines[linenum].lstrip().startswith('"""') or
-                    contents_lines[linenum].lstrip().startswith("'''")):
+                        contents_lines[linenum].lstrip().startswith("'''")):
                     break
             # Now check that the line before the """ is a def or class.
             # Since def's (and classes) can be multiple lines long, we
@@ -171,7 +171,7 @@ class Pep8(Linter):
             for prev_linenum in xrange(linenum - 1, -1, -1):
                 prev = contents_lines[prev_linenum].strip()
                 if (not prev or
-                    prev.startswith('"""') or prev.startswith("'''")):
+                        prev.startswith('"""') or prev.startswith("'''")):
                     break
                 if prev.startswith('def ') or prev.startswith('class '):
                     return 0
@@ -279,7 +279,7 @@ class Pyflakes(Linter):
 
         # It's OK to redefine variables that are unused by convention.
         if ("list comprehension redefines '_'" in output_line or
-            "list comprehension redefines 'unused_" in output_line):
+                "list comprehension redefines 'unused_" in output_line):
             return 0
 
         # Get rid of some warnings too.
@@ -299,7 +299,7 @@ class Pyflakes(Linter):
 
         # An old nolint directive that's specific to imports
         if ('@UnusedImport' in bad_line and
-            'imported but unused' in lintline):
+                'imported but unused' in lintline):
             return 0
 
         # OK, looks like it's a legitimate error.

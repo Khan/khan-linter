@@ -532,7 +532,7 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
         # processors.  None means that we skip files of this language.
         processor_dict = {
             'python': (linters.Pep8([sys.argv[0]] + _DEFAULT_PEP8_ARGS,
-                            propose_arc_fixes=propose_arc_fixes),
+                                    propose_arc_fixes=propose_arc_fixes),
                        linters.Pyflakes(propose_arc_fixes=propose_arc_fixes),
                        linters.CustomPythonLinter(),
                        linters.Git(),
@@ -555,7 +555,7 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
     if file_lang in ['javascript', 'jsx']:
         default_eslint_config = os.path.join(_CWD, "eslintrc")
         eslint_config = _find_base_eslint_config(file_to_lint,
-            default_eslint_config)
+                                                 default_eslint_config)
         cache_key = "js-%s" % eslint_config
 
         if cache_key not in _LINTERS_BY_LANG:

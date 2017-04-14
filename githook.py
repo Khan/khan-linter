@@ -67,11 +67,11 @@ def main(commit_message_file):
         # files that have changed in both branches but the system was
         # able to do an automatic merge though, sadly.
         a_files = subprocess.check_output(['git', 'diff', '--cached',
-                                         '--name-only', '--diff-filter=AMR',
-                                         '-z', 'ORIG_HEAD'])
+                                           '--name-only', '--diff-filter=AMR',
+                                           '-z', 'ORIG_HEAD'])
         b_files = subprocess.check_output(['git', 'diff', '--cached',
-                                         '--name-only', '--diff-filter=AMR',
-                                         '-z', 'MERGE_HEAD'])
+                                           '--name-only', '--diff-filter=AMR',
+                                           '-z', 'MERGE_HEAD'])
         a_files = frozenset(a_files.strip('\0').split('\0'))
         b_files = frozenset(b_files.strip('\0').split('\0'))
         files_to_lint = list(a_files & b_files)
