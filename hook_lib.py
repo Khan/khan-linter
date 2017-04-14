@@ -9,6 +9,8 @@ to get the data that needs linting.
 import re
 import sys
 
+import six
+
 import runlint
 
 
@@ -40,17 +42,18 @@ def lint_commit_message(commit_message):
     num_errors = 0
 
     if not re.search('^(test plan|review):', commit_message, re.I | re.M):
-        print >> sys.stderr, ('Missing "Test plan:" or "Review:" section '
-                              'in the commit message.')
+        six.print_('Missing "Test plan:" or "Review:" section '
+                   'in the commit message.', file=sys.stderr)
         num_errors += 1
 
     elif re.search('^    <see below>$', commit_message, re.M):
-        print >> sys.stderr, ('Must enter a "Test plan:" (or "Review:") '
-                              'in the commit message.')
+        six.print_('Must enter a "Test plan:" (or "Review:") '
+                   'in the commit message.', file=sys.stderr)
         num_errors += 1
 
     if re.search('^<one-line summary, followed by ', commit_message, re.M):
-        print >> sys.stderr, 'Must enter a summary in the commit message.'
+        six.print_('Must enter a summary in the commit message.',
+                   file=sys.stderr)
         num_errors += 1
 
     # TODO(csilvers): verify the first-line summary is actually 1 line long?
@@ -71,11 +74,12 @@ def report_errors_and_exit(num_errors, commit_message, save_filename,
         # save the commit message so we don't need to retype it
         with open(save_filename, 'w') as f:
             f.write(commit_message)
-        print >> sys.stderr, ('\n--- %s lint errors ---\n'
-                              'Commit message saved to %s'
-                              % (num_errors, save_filename))
+        six.print_('\n--- %s lint errors ---\n'
+                   'Commit message saved to %s'
+                   % (num_errors, save_filename),
+                   file=sys.stderr)
         if recommendation:
-            print >> sys.stderr, recommendation
+            six.print_(recommendation, file=sys.stderr)
         sys.exit(1)
-    print >> sys.stderr, 'khan-linter: all lint checks passed'
+    six.print_('khan-linter: all lint checks passed', file=sys.stderr)
     sys.exit(0)

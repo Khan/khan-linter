@@ -16,6 +16,8 @@ import os
 import subprocess
 import sys
 
+import six
+
 import hook_lib
 
 
@@ -29,7 +31,8 @@ def _normalized_commit_message(text):
 def main(commit_message_file):
     """Run a git pre-commit lint-check."""
     # If we're a merge, don't try to do a lint-check.
-    git_root = subprocess.check_output(['git', 'rev-parse', '--git-dir'])
+    git_root = subprocess.check_output(
+        ['git', 'rev-parse', '--git-dir']).decode('utf-8')
     # read the commit message contents from the file specified
     commit_message = open(commit_message_file).read()
     # Get rid of the comment lines, and leading and trailing whitespace.
@@ -37,7 +40,7 @@ def main(commit_message_file):
 
     # If the commit message is empty or unchanged from the template, abort.
     if not commit_message:
-        print "Aborting commit, empty commit message"
+        six.print_("Aborting commit, empty commit message")
         return 1
 
     try:
@@ -47,11 +50,11 @@ def main(commit_message_file):
         pass
     else:
         if commit_message == _normalized_commit_message(template):
-            print "Aborting commit, commit message unchanged"
+            six.print_("Aborting commit, commit message unchanged")
             return 1
 
-    is_merge_commit = os.path.exists(os.path.join(git_root.strip(),
-                                                  'MERGE_HEAD'))
+    is_merge_commit = os.path.exists(os.path.join(
+        git_root.strip(), 'MERGE_HEAD'))
 
     # Go through all modified or added files.  We handle the case
     # separately if we're a merge or a 'normal' commit.  If we're a
@@ -66,12 +69,12 @@ def main(commit_message_file):
         # I try this other approach instead.  It doesn't properly ignore
         # files that have changed in both branches but the system was
         # able to do an automatic merge though, sadly.
-        a_files = subprocess.check_output(['git', 'diff', '--cached',
-                                           '--name-only', '--diff-filter=AMR',
-                                           '-z', 'ORIG_HEAD'])
-        b_files = subprocess.check_output(['git', 'diff', '--cached',
-                                           '--name-only', '--diff-filter=AMR',
-                                           '-z', 'MERGE_HEAD'])
+        a_files = subprocess.check_output(
+            ['git', 'diff', '--cached', '--name-only', '--diff-filter=AMR',
+             '-z', 'ORIG_HEAD']).decode('utf-8')
+        b_files = subprocess.check_output(
+            ['git', 'diff', '--cached', '--name-only', '--diff-filter=AMR',
+             '-z', 'MERGE_HEAD']).decode('utf-8')
         a_files = frozenset(a_files.strip('\0').split('\0'))
         b_files = frozenset(b_files.strip('\0').split('\0'))
         files_to_lint = list(a_files & b_files)
@@ -79,9 +82,9 @@ def main(commit_message_file):
         # Look at Added, Modified, and Renamed files.
         # When no commit is specified, it defaults to HEAD which is
         # what we want.
-        files = subprocess.check_output(['git', 'diff', '--cached',
-                                         '--name-only', '--diff-filter=AMR',
-                                         '-z'])
+        files = subprocess.check_output(
+            ['git', 'diff', '--cached', '--name-only', '--diff-filter=AMR',
+             '-z']).decode('utf-8')
         files_to_lint = files.strip('\0').split('\0')  # that's what -z is for
 
     if not files_to_lint or files_to_lint == ['']:
