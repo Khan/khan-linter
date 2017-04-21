@@ -10,6 +10,7 @@ import lint_util
 import six
 
 from six.moves import cStringIO as StringIO
+from six.moves import xrange
 
 # Add vendor path so we can find (our packaged versions of) pep8 and pyflakes.
 _CWD = lint_util.get_real_cwd()
@@ -565,6 +566,7 @@ class Eslint(Linter):
             stderr=subprocess.PIPE,
             env=env)
         stdout, stderr = pipe.communicate()
+        stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
 
         if stderr:
             raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
