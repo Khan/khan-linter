@@ -74,6 +74,7 @@ class Pep8(Linter):
         'W391',  # blank line at end of file
         'E402',  # module level import not at top of file
         'W503',  # line break before binary operator
+        'E712',  # comparison to True must be 'if cond is True:' or 'if cond:'
         'E731',  # do not assign a lambda expression
     ]
 
