@@ -31,11 +31,10 @@ for more options.
 
 Automatic
 ---------
-You can update the blacklist file in this repository to control what
-files should not be linted at all.  Alternately, you can create a
-blacklist of your own, and use the --blacklist_file flag to runlint.py
-(you'll have to modify hghook.py or githook.py to pass in the name of the
-blacklist file as well).
+You can update the blacklist file in this repository to control what files
+should not be linted at all.  Alternately, you can create a blacklist of your
+own, and use the `--blacklist_file` flag to `runlint.py` (you'll have to modify
+`hghook.py` or `githook.py` to pass in the name of the blacklist file as well).
 
-To suppress the lint check, set the environment variable FORCE_COMMIT
-to 1 prior to calling `git commit`.
+To suppress the lint check, set the environment variable `FORCE_COMMIT=1` prior
+to calling `git commit`.
