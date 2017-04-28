@@ -115,10 +115,10 @@ filePaths.forEach((filePath, index) => {
     }
 
     const updatedLines = headerLines.concat(filteredLines);
-    const updateSource = updatedLines.join('\n');
+    const updatedSource = updatedLines.join('\n');
 
-    if (originalSource !== updateSource) {
-        fs.writeFileSync(filePath, updateSource, {encoding: 'utf-8'});
+    if (originalSource !== updatedSource) {
+        fs.writeFileSync(filePath, updatedSource, {encoding: 'utf-8'});
     }
 
     process.stdout.write(`progress: ${index + 1} of ${total}\r`);
