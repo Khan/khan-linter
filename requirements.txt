@@ -6,4 +6,4 @@
 
 # Required by python lint checking
 pep8==1.7.0
-pyflakes==1.4.0
+pyflakes==1.5.0
