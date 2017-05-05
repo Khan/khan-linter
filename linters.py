@@ -82,6 +82,15 @@ class Pep8(Linter):
         pep8.process_options(pep8_args + ['dummy'])
         self._propose_arc_fixes = propose_arc_fixes
 
+        # Our version of pep8 thinks that python3-style type annotaions are
+        # multiple statements on one line.  We therefore ignore this rule for
+        # python3.  (E701 is "multiple statements on one line".)
+        # TODO(colin): it would be nice to use this lint rule.  Change pep8 to
+        # pycodestyle (its successor; pep8 has had its final release), which
+        # correctly recognizes these annotations, and then remove this ignore.
+        if six.PY3:
+            Pep8.GLOBAL_IGNORES.append('E701')
+
     def _munge_output_line(self, line):
         """Modify the line to have the canonical form for lint lines."""
         # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
