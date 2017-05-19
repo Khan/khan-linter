@@ -587,9 +587,13 @@ class Eslint(Linter):
         # individual lines starting with "filename:line:col".  It
         # converts all filenames to an absolute path; we convert them
         # back to relpaths here.
-        lint_lines = ['%s:%s' % (os.path.relpath(line.split(':', 1)[0]),
-                                 line.split(':', 1)[1])
-                      for line in stdout.splitlines()]
+        lint_lines = []
+        for line in stdout.splitlines():
+            parts = line.split(':', 1)
+            if len(parts) != 2:
+                raise RuntimeError("Unexpected stdout from linter:\n%s" %
+                                   stdout)
+            lint_lines.append('%s:%s' % (os.path.relpath(parts[0]), parts[1]))
         get_filename = lambda line: line.split(':', 1)[0]
         lines = sorted(lint_lines, key=get_filename)
         for filename, flines in itertools.groupby(lines, get_filename):
