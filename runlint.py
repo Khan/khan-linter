@@ -36,6 +36,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 
 import linters
@@ -442,6 +443,35 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
     return (num_lint_errors, num_framework_errors)
 
 
+def _run_command_with_timeout(timeout_sec, *popen_args, **popen_kwargs):
+    """Execute `cmd` in a subprocess and enforce timeout `timeout_sec` seconds.
+
+    Return subprocess exit code on natural completion of the subprocess.
+    Raise an exception if timeout expires before subprocess completes.
+
+    Note that in python 3.2 (or the backported subprocess32 module) we
+    could use the timeout arg to popen instead.
+
+    Taken from http://www.ostricher.com/2015/01/python-subprocess-with-timeout/
+    """
+    proc = subprocess.Popen(*popen_args, **popen_kwargs)
+    proc_thread = threading.Thread(target=proc.communicate)
+    proc_thread.start()
+    proc_thread.join(timeout_sec)
+    if proc_thread.is_alive():
+        # Process still running - kill it and raise timeout error
+        try:
+            proc.kill()
+        except OSError:
+            # The process finished between the `is_alive()` and `kill()`
+            return proc.returncode
+        # OK, the process was definitely killed
+        raise RuntimeError('Timeout running %s/%s'
+                           % (popen_args, popen_kwargs))
+    # Process completed naturally - return exit code
+    return proc.returncode
+
+
 def _maybe_pull(verbose):
     """If the repo hasn't been updated in 24 hours, pull. If the working copy
     changed as a result, return True. If no pull was done or there were no
@@ -457,6 +487,23 @@ def _maybe_pull(verbose):
         last_pull_time = 0
     if last_pull_time + 24 * 60 * 60 >= time.time():
         return False
+
+    # If we're not able to query the remote git repo, fail.
+    with open(os.devnull, 'wb') as devnull:
+        try:
+            rc = _run_command_with_timeout(
+                3,
+                # This is an arbitrary git command that definitely
+                # needs to contact the remote.  If you know of a
+                # faster one, feel free to sub it in!
+                ['git', 'ls-remote', 'origin', 'master'],
+                stdout=devnull, stderr=devnull)
+            if rc != 0:
+                raise RuntimeError('git ls-remote returned %s' % rc)
+        except RuntimeError as why:
+            six.print_('Non-fatal error: not updating the khan-linter repo: '
+                       '%s' % why)
+            return False
 
     # Update the last-pull time, and create an fd for the lockf call.
     with open('/tmp/khan-linter.pull', 'w') as f:
