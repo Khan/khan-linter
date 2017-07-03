@@ -713,3 +713,60 @@ class HtmlLinter(Linter):
             return len(errors)
         else:
             return 0
+
+
+class KtLint(Linter):
+    """Linter for kotlin, using the vendored copy of `ktlint`.
+
+    TODO(colin): add autofixing using `ktlint -F`
+    """
+
+    def _is_not_skipped(self, file, lint_err_lines):
+        """For each lint error in the given file check if it's nolinted.
+
+        Args:
+            lint_err_lines: a list of (line (0-indexed), message) tuples
+        Returns:
+            a list of booleans, one per input, True if that lint error has
+            not been skipped via `@Nolint`.
+        """
+        with open(file) as f:
+            lines = f.readlines()
+            return ['@Nolint' not in lines[lint_err[0]]
+                    for lint_err in lint_err_lines]
+
+    def process_files(self, files):
+        exec_path = os.path.abspath(os.path.join(_CWD, 'vendor', 'ktlint'))
+        assert os.path.isfile(exec_path), (
+            "Vendoring error: ktlint is missing from '%s'" % exec_path)
+
+        pipe = subprocess.Popen(
+            [exec_path] + files,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+        stdout, stderr = pipe.communicate()
+        stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
+
+        if stderr:
+            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+
+        num_errors = 0
+        lint_by_file = {}
+        for line in stdout.splitlines():
+            # Lint line format is file:line:col:message
+            parts = line.split(':')
+            if len(parts) != 4:
+                raise RuntimeError("Unexpected stdout from linter:\n%s" %
+                                   stdout)
+            file, line_number, _, _ = parts
+            lint_by_file.setdefault(file, [])
+            lint_by_file[file].append((int(line_number) - 1, line))
+
+        for file, lint in lint_by_file.items():
+            for _, lint_err in itertools.compress(
+                    lint, self._is_not_skipped(file, lint)):
+                six.print_(lint_err)
+                num_errors += 1
+
+        return num_errors

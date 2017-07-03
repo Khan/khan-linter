@@ -382,6 +382,7 @@ _EXTENSION_DICT = {'.py': 'python',
                    '.html': 'html',
                    '.jsx': 'jsx',
                    '.less': 'less',
+                   '.kt': 'kotlin',
                    }
 
 
@@ -590,6 +591,9 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
             'less': (linters.LessHint(),
                      linters.Git(),
                      ),
+            'kotlin': (linters.KtLint(),
+                       linters.Git(),
+                       ),
             'unknown': (linters.Git(),
                         ),
         }
