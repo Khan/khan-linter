@@ -29,6 +29,18 @@ you can specify files on the command line to lint.  See
 
 for more options.
 
+via Docker image
+----------------
+A built image with all pre-requesites is available on Docker Hub as `khanacademy/khan-linter`.
+
+Mount the directory you wish to lint as a volume (by default, the image CMD is configured to look in `/src` if nothing else is specified).
+
+For example, to lint the current directory:
+
+    docker run -it --rm -v $(pwd):/src khanacademy/khan-linter
+
+If the image is not already on the local environment, it will automatically be downloaded prior to execution.
+
 Automatic
 ---------
 You can update the blacklist file in this repository to control what files
