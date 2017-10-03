@@ -562,6 +562,11 @@ class Eslint(Linter):
         if 'File ignored because of your .eslintignore file' in output_line:
             return 0
 
+        (file_line_col, errcode, msg) = output_line.split(' ', 2)
+
+        output_line += " (Mute with // eslint-disable-line %s)" % (
+            errcode[1:])
+
         six.print_(self._maybe_add_arc_fix(output_line, bad_line))
         return 1
 
