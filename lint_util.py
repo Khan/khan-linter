@@ -60,15 +60,11 @@ def add_arc_fix_str(lintline, bad_line, to_remove, to_add,
             return lintline
         to_remove = match.group()
         new_col = match.start() + col_offset
-    elif '\n' in to_remove:
-        first_endline = to_remove.find('\n')
-        new_col = -1
-        if first_endline == len(to_remove) - 1:  # This is a whole-line match
-            if bad_line[col:] == to_remove[:-1]:
-                new_col = col
-        # There are multiple lines, so we just check the first
-        elif bad_line[col:] == to_remove[:first_endline]:
+    elif to_remove.endswith('\n'):     # This is a whole-line match
+        if bad_line[col:] == to_remove[:-1]:
             new_col = col
+        else:
+            new_col = -1
     elif search_backwards:
         new_col = bad_line.rfind(to_remove, 0, col)
     else:
