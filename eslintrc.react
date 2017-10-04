@@ -4,6 +4,9 @@
 {
     "rules": {
         "react/forbid-prop-types": [2, { "forbid": [ "array", "object" ] }],
+        "react/jsx-closing-bracket-location": [2, "line-aligned"],
+        "react/jsx-curly-spacing": [2, "never"],
+        "react/jsx-indent-props": 2,
         "react/jsx-no-duplicate-props": 2,
         // This triggers a ton on stuff like 'if (window.x) { x(...) }'.
         "react/jsx-no-undef": 2,
@@ -34,9 +37,6 @@
         // We turned this off too as we didn't see an explicit benefit
         "react/sort-prop-types": 0,
     },
-    "extends": [
-        "prettier/react"
-    ],
     "plugins": [
         "react"
     ]

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Linters process files or lists of files for correctness."""
 
 import itertools
@@ -490,42 +489,7 @@ class Eslint(Linter):
                         lintline, bad_line, re.compile(r' +'), '',
                         search_backwards=search_backwards)
 
-        if errcode == 'Eprettier/prettier':
-            ascii_lintline = self._ascii_prettier_string(lintline)
-
-            insert = re.search(r'Insert `(.*?)`?$', msg)
-            if insert:
-                to_add = self._clean_prettier_string(insert.group(1))
-                has_no_endline = '\n' not in to_add
-                return lint_util.add_arc_fix_str(
-                    ascii_lintline, bad_line, '',
-                    to_add, limit_to_80=has_no_endline)
-
-            remove = re.search(r'Delete `(.*?)`?$', msg)
-            if remove:
-                return lint_util.add_arc_fix_str(
-                    ascii_lintline, bad_line,
-                    self._clean_prettier_string(remove.group(1)), '')
-
-            replace = re.search(r'Replace `(.*?)` with `(.*?)`?$', msg)
-            if replace:
-                to_add = self._clean_prettier_string(replace.group(2))
-                has_no_endline = '\n' not in to_add
-                return lint_util.add_arc_fix_str(
-                    ascii_lintline, bad_line,
-                    self._clean_prettier_string(replace.group(1)),
-                    to_add,
-                    limit_to_80=has_no_endline)
-
         return lintline
-
-    def _ascii_prettier_string(self, prettier_string):
-        return prettier_string.replace(u'·', ' ').replace(
-            u'↹', '\\t').replace(u'⏎', '\\n')
-
-    def _clean_prettier_string(self, prettier_string):
-        return prettier_string.replace(u'·', ' ').replace(
-            u'↹', '\t').replace(u'⏎', '\n')
 
     def _process_one_line(self, filename, output_line, contents_lines):
         """If line is an 'error', print it and return 1.  Else return 0.
@@ -561,11 +525,6 @@ class Eslint(Linter):
         # I don't know why it prints this.  Shrug.
         if 'File ignored because of your .eslintignore file' in output_line:
             return 0
-
-        (file_line_col, errcode, msg) = output_line.split(' ', 2)
-
-        output_line += " (Mute with // eslint-disable-line %s)" % (
-            errcode[1:])
 
         six.print_(self._maybe_add_arc_fix(output_line, bad_line))
         return 1
