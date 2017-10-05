@@ -13,8 +13,6 @@
     "rules": {
         // ---------------------------------------
         // ES6 rules.
-        "arrow-spacing": 2,
-        "computed-property-spacing": 2,
         "constructor-super": 2,
         "no-const-assign": 2,
         "no-this-before-super": 2,
