@@ -26,13 +26,15 @@ def lint_with_todo_target(files, todo_target):
         if file.endswith('.py')]
     for file in files_to_lint:
         try:
-            # This is very slow!
+            # This is slow!
             # But we don't have to run this often, and this is more
             # straightforward that patching and restoring stdout in this
             # process.
             # TODO(colin): use tools.io_util.send_output_to instead.
             lint = subprocess.check_output(
-                [os.path.join(os.path.dirname(__file__), 'runlint.py'), file],
+                [os.path.join(os.path.dirname(__file__), 'runlint.py'),
+                 '--extra-linter=',
+                 file],
                 stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             lint = e.output
