@@ -32,7 +32,7 @@ def lint_with_todo_target(files, todo_target):
             # process.
             # TODO(colin): use tools.io_util.send_output_to instead.
             lint = subprocess.check_output(
-                [os.path.join('.', 'runlint.py'), file],
+                [os.path.join(os.path.dirname(__file__), 'runlint.py'), file],
                 stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             lint = e.output
