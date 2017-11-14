@@ -496,10 +496,9 @@ class Eslint(Linter):
             insert = re.search(r'Insert `(.*?)`?$', msg)
             if insert:
                 to_add = self._clean_prettier_string(insert.group(1))
-                has_no_endline = '\n' not in to_add
                 return lint_util.add_arc_fix_str(
                     ascii_lintline, bad_line, '',
-                    to_add, limit_to_80=has_no_endline)
+                    to_add, limit_to_80=False)
 
             remove = re.search(r'Delete `(.*?)`?$', msg)
             if remove:
@@ -510,12 +509,11 @@ class Eslint(Linter):
             replace = re.search(r'Replace `(.*?)` with `(.*?)`?$', msg)
             if replace:
                 to_add = self._clean_prettier_string(replace.group(2))
-                has_no_endline = '\n' not in to_add
                 return lint_util.add_arc_fix_str(
                     ascii_lintline, bad_line,
                     self._clean_prettier_string(replace.group(1)),
                     to_add,
-                    limit_to_80=has_no_endline)
+                    limit_to_80=False)
 
         return lintline
 
@@ -564,8 +562,10 @@ class Eslint(Linter):
 
         (file_line_col, errcode, msg) = output_line.split(' ', 2)
 
-        output_line += " (Mute with // eslint-disable-line %s)" % (
-            errcode[1:])
+        err_type = errcode[1:]
+        if err_type != "prettier/prettier":
+            output_line += " (Mute with // eslint-disable-line %s)" % (
+                err_type)
 
         six.print_(self._maybe_add_arc_fix(output_line, bad_line))
         return 1
