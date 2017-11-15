@@ -46,7 +46,7 @@ import six
 from six.moves import xrange
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
-_DEFAULT_EXTRA_LINTER = '<ancestor_within_repo>/tools/runlint.py'
+_DEFAULT_EXTRA_LINTER = '<ancestor_within_repo>/tools/runlint.sh'
 _CWD = lint_util.get_real_cwd()
 
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
