@@ -17,6 +17,7 @@
     "eslint-plugin-prettier": "2.3.1",
     "eslint-plugin-react": "6.7.1",
     "khan-lesshint": "0.1.0",
-    "prettier": "1.7.4"
+    "prettier": "1.7.4",
+    "utf8": "3.0.0"
   }
 }

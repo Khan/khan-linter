@@ -31,6 +31,15 @@ def add_arc_fix_str(lintline, bad_line, to_remove, to_add,
     If limit_to_80 is True, then we do not suggest a change that
     would increase the linelength beyond 80 chars.
     """
+    # Ensure that both `bad_line` and `to_remove` are both encoded byte
+    # strings. This ensures that they can interoperate, and ensures that we use
+    # byte indexes instead of Unicode character indexes (because the
+    # autopatcher expects the former).
+    if isinstance(bad_line, unicode):
+        bad_line = bad_line.encode('utf-8')
+    if isinstance(to_remove, unicode):
+        to_remove = to_remove.encode('utf-8')
+
     (location, errcode, msg) = lintline.split(' ', 2)
     location_info = location.split(':')
     if len(location_info) < 4:       # No column info
