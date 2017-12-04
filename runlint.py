@@ -683,7 +683,7 @@ def main(files_and_directories,
                 six.print_(
                     '%d errors (%.2f seconds)' % (num_new_errors, elapsed))
         except Exception as why:
-            six.print_("ERROR linting %r: %s" % (files, why))
+            six.print_(u"ERROR linting %r: %s" % (files, why))
             num_framework_errors += 1
             continue
 
