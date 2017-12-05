@@ -356,6 +356,9 @@ def find_files_to_lint(files_and_directories,
         if _file_in_blacklist(f, blacklist_for_f):
             if verbose:
                 six.print_('... skipping (in blacklist)')
+        elif os.path.islink(f):
+            if verbose:
+                six.print_('... skipping (is a symlink)')
         elif os.path.isdir(f):
             if verbose:
                 six.print_(
