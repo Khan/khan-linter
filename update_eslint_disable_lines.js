@@ -89,8 +89,11 @@ filePaths.forEach((filePath, index) => {
     let usesFlow = false;
 
     // Remove existing lint message.
+    let inHeader = true;
     const filteredLines = originalLines.filter((line) => {
-        if (line.startsWith('/* eslint-disable ')) {
+        if (!inHeader) {
+            return true;
+        } else if (line.startsWith('/* eslint-disable ')) {
             return false;
         } else if (line === TODO_TEXT) {
             return false;
@@ -100,6 +103,7 @@ filePaths.forEach((filePath, index) => {
             usesFlow = true;
             return false;
         } else {
+            inHeader = false;
             return true;
         }
     });
