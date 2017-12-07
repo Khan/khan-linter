@@ -23,32 +23,55 @@ const fs = require('fs');
 const path = require('path');
 const process = require('process');
 
-const getFilePaths = (dir, filelist) => {
-    filelist = filelist || [];
+/**
+ * Recursively walk the given path, and add any relevant .js or .jsx files to
+ * the given `filelist` array. `filelist` is updated in-place.
+ */
+const getFilePaths = (dirOrFile, filelist) => {
+    if (fs.statSync(dirOrFile).isDirectory()) {
+        // It's a directory!
+        const dir = dirOrFile;
 
-    const files = fs.readdirSync(dir);
-    files.forEach((file) => {
-        const filePath = path.join(dir, file);
-        if (fs.statSync(filePath).isDirectory() && file !== 'node_modules') {
-            filelist = getFilePaths(filePath, filelist);
-        } else {
-            if (!fs.lstatSync(filePath).isSymbolicLink() &&
-                    /\.jsx?$/.test(filePath)) {
-                filelist.push(filePath);
-            }
+        // Skip node_modules.
+        if (dir === 'node_modules') {
+            return;
         }
-    });
-    return filelist;
+
+        // Recurse into the directory's contents.
+        const childFileNames = fs.readdirSync(dir);
+        for (const childFileName of childFileNames) {
+            const childFilePath = path.join(dir, childFileName);
+            getFilePaths(childFilePath, filelist);
+        }
+    } else {
+        // It's a file!
+        const file = dirOrFile;
+
+        // Skip symbolic links.
+        if (fs.lstatSync(file).isSymbolicLink()) {
+            return;
+        }
+
+        // Skip non-JS and non-JSX files.
+        if (!/\.jsx?$/.test(file)) {
+            return;
+        }
+
+        // Add the file to the list of files to update.
+        filelist.push(file);
+    }
 };
 
 
-if (process.argv.length !== 3) {
-    console.warn('usage: update_lint_message.js directory_to_lint');
+if (process.argv.length < 3) {
+    console.warn('usage: update_lint_message.js file_or_dir_1 [file_or_dir_2] [...]');
     process.exit(1);
 }
 
-const cwd = process.cwd();
-const filePaths = getFilePaths(path.join(cwd, process.argv[2]));
+const filePaths = [];
+for (let i = 2; i < process.argv.length; i++) {
+    getFilePaths(process.argv[i], filePaths);
+}
 
 const FIX_TEXT = '/* To fix, remove an entry above, run ka-lint, and fix errors. */';
 const TODO_TEXT = '/* TODO(csilvers): fix these lint errors (http://eslint.org/docs/rules): */';
