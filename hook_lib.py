@@ -61,25 +61,21 @@ def lint_commit_message(commit_message):
     return num_errors
 
 
-def report_errors_and_exit(num_errors, commit_message, save_filename,
-                           recommendation=None):
+def report_errors_and_exit(num_errors, commit_message, save_filename):
     """If num_errors > 0, print a summary message and exit 1.
 
     In that case, we save the commit message to save_filename.
-
-    If recommendation is set (a string) we print it after the error
-    message to tell people how to fix it.
     """
     if num_errors:
         # save the commit message so we don't need to retype it
         with open(save_filename, 'w') as f:
             f.write(commit_message)
-        six.print_('\n--- %s lint errors ---\n'
+        six.print_('\n--- %s commit message errors ---\n'
                    'Commit message saved to %s'
                    % (num_errors, save_filename),
                    file=sys.stderr)
-        if recommendation:
-            six.print_(recommendation, file=sys.stderr)
+        six.print_('Use "git commit -a --template .git/commit.save" to commit'
+                   ' with a fixed message.', file=sys.stderr)
         sys.exit(1)
     six.print_('khan-linter: all lint checks passed', file=sys.stderr)
     sys.exit(0)
