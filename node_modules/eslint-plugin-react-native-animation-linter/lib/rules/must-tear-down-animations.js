@@ -71,9 +71,12 @@ const create = context => {
    */
   function checkSetState(node) {
     const newState = _getStateUpdate(node);
-    if (newState) {
+    if (newState && newState.properties) {
       newState.properties.forEach(p => {
-        const stateProperty = p.key.name;
+        const stateProperty = p.key && p.key.name;
+        if (!stateProperty) {
+          return;
+        }
         const value = p.value;
         // If setting state to an animation directly, record the animation
         const isAnimation = astHelpers.isAnimationDeclaration(value.callee);
@@ -143,7 +146,7 @@ const create = context => {
    * Checks for different ways of initializing state.
    */
   function _getStateInitialization(node) {
-    if (node.parent.type === "ObjectExpression") {
+    if (node.parent && node.parent.type === "ObjectExpression") {
       // Handle ES6 class property declaration
       const objectExpression = node.parent;
       const maybeState = objectExpression.parent;
@@ -157,6 +160,7 @@ const create = context => {
       if (objectExpression.parent.type === "AssignmentExpression") {
         const left = objectExpression.parent.left;
         if (
+          left.object &&
           left.object.type === "ThisExpression" &&
           left.property.name === "state"
         ) {
@@ -168,6 +172,7 @@ const create = context => {
       while (currNode) {
         if (
           currNode.type === "FunctionExpression" &&
+          currNode.parent &&
           currNode.parent.key.name === "getInitialState"
         ) {
           return node.key.name;
@@ -224,7 +229,7 @@ const create = context => {
   // Can take the form of either const {color} = this.state;
   // or const hue = this.state.color;
   function _getStateExtraction(statement, stateVariables) {
-    if (statement.type === "VariableDeclaration") {
+    if (statement && statement.type === "VariableDeclaration") {
       statement.declarations.forEach(declaration => {
         // Handle `const {color} = this.state;` case
         if (declaration.id.type === "ObjectPattern") {
@@ -232,7 +237,10 @@ const create = context => {
             stateVariables[prop.key.name] = prop.key.name;
           });
           // Handle `const hue = this.state.color;` case
-        } else if (declaration.id.type === "Identifier") {
+        } else if (
+          declaration.id.type === "Identifier" &&
+          declaration.init.property
+        ) {
           const propertyName = declaration.init.property.name;
           stateVariables[declaration.id.name] = propertyName;
         }
@@ -285,7 +293,7 @@ const create = context => {
     const left = node.id;
     const right = node.init;
     if (left.type === "ObjectPattern") {
-      const propertyNames = left.properties.map(p => p.key.name);
+      const propertyNames = left.properties.map(p => p.key && p.key.name);
       if (propertyNames.indexOf("Animated") === -1) {
         return;
       }
@@ -293,7 +301,8 @@ const create = context => {
     if (left.type === "Identifier" && left.name !== "Animated") {
       return;
     }
-    const requireImport = right.callee.name === "require";
+    const requireImport =
+      right && right.callee && right.callee.name === "require";
     const required = requireImport && right.arguments[0].value;
     if (requireImport && required === "react-native") {
       return;
@@ -304,8 +313,13 @@ const create = context => {
   // Detect if Animated is imported from an unusual source (not
   // react-native) via standard import syntax
   function isReactNativeAnimationImport(node) {
+    if (node.specifiers.length == 0) {
+      return;
+    }
+    const specifier = node.specifiers[0];
     if (
-      node.specifiers[0].local.name === "Animated" &&
+      specifier &&
+      specifier.local.name === "Animated" &&
       node.source.value !== "react-native"
     ) {
       unexpectedImport = true;
