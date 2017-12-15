@@ -16,7 +16,7 @@
     "eslint-plugin-graphql": "1.4.1",
     "eslint-plugin-prettier": "2.3.1",
     "eslint-plugin-react": "6.7.1",
-    "eslint-plugin-react-native-animation-linter": "^0.0.4"
+    "eslint-plugin-react-native-animation-linter": "0.0.4",
     "khan-lesshint": "0.1.0",
     "prettier": "1.7.4",
     "utf8": "3.0.0"
