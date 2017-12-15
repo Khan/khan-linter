@@ -248,7 +248,8 @@ def _resolve_ancestor(ancestor_pattern, file_to_lint):
         return ancestor_filename
 
 
-def _file_in_blacklist_helper(fname, blacklist_pattern):
+def _file_in_blacklist(fname, blacklist_pattern):
+    """True if fname, an absolute path, matches any entry in blacklist."""
     # The blacklist entries are taken to be relative to
     # blacklist_filename-root, so we need to relative-ize basename here.
     # TODO(csilvers): use os.path.relpath().
@@ -278,18 +279,6 @@ def _file_in_blacklist_helper(fname, blacklist_pattern):
     return False
 
 
-def _file_in_blacklist(fname, blacklist_pattern):
-    """True if fname, an absolute path, matches any entry in blacklist."""
-    if _file_in_blacklist_helper(fname, blacklist_pattern):
-        return True
-    # If fname is a symlink, resolve the symlink and check again.
-    if os.path.islink(fname):
-        if _file_in_blacklist_helper(os.path.realpath(fname),
-                                     blacklist_pattern):
-            return True
-    return False
-
-
 def _files_under_directory(rootdir, blacklist_pattern, verbose):
     """Return a set of files under rootdir not in the blacklist."""
     retval = set()
@@ -300,7 +289,12 @@ def _files_under_directory(rootdir, blacklist_pattern, verbose):
         # traversal into that dir.)
         for i in xrange(len(dirs) - 1, -1, -1):
             absdir = os.path.join(root, dirs[i])
-            if _file_in_blacklist(absdir, blacklist_pattern):
+            if os.path.islink(absdir):
+                if verbose:
+                    six.print_(
+                        '... skipping directory %s: is a symlink' % absdir)
+                del dirs[i]
+            elif _file_in_blacklist(absdir, blacklist_pattern):
                 if verbose:
                     six.print_(
                         '... skipping directory %s: in blacklist' % absdir)
@@ -313,7 +307,13 @@ def _files_under_directory(rootdir, blacklist_pattern, verbose):
                     six.print_(
                         '... skipping file %s: in blacklist' % abspath)
                 continue
-            retval.add(os.path.join(root, f))
+            elif os.path.islink(abspath):
+                if verbose:
+                    six.print_(
+                        '... skipping file %s: is a symlink' % abspath)
+                continue
+            retval.add(abspath)
+
     return retval
 
 
