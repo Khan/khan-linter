@@ -797,7 +797,7 @@ class KtLint(Linter):
             stderr=subprocess.PIPE)
         # Apparently java version info is printed to stderr...
         _, version_info = version_info_pipe.communicate()
-        version_re = r'java version "(\d\.\d)'
+        version_re = r'\w+ version "(\d\.\d)'
         matchobj = re.search(version_re, version_info)
         assert matchobj is not None, (
             "Unable to determine version of java for running ktlint.")
