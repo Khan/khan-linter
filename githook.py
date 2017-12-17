@@ -26,12 +26,6 @@ The user can choose to skip this hook, by running `git push --no-verify` (in
 which case, git won't call this script at all), or specifying FORCE_COMMIT=1
 in the environment (in which case, this script will be a no-op).
 
-TODO(mdr): In addition to linting the commit message, the commit-msg hook
-    currently lints the commit's changed files, and rejects the commit if lint
-    fails - but this use case is now effectively covered by the pre-push hook.
-    Stop linting file changes on commit, and remove the corresponding dead
-    code in hook_lib.py. (JSBUILD-160)
-
 NOTE(mdr): If you're here to remove a hook, be aware that existing ka-clone'd
     repositories on developers' machines might still attempt to call the hook.
     Instead of deleting the hook outright and triggering a crash, consider
@@ -57,7 +51,6 @@ def _normalized_commit_message(text):
 
 def commit_msg_hook(commit_message_file):
     """Run a git pre-commit lint-check."""
-    # If we're a merge, don't try to do a lint-check.
     git_root = subprocess.check_output(
         ['git', 'rev-parse', '--git-dir']).decode('utf-8')
     # read the commit message contents from the file specified
@@ -80,70 +73,22 @@ def commit_msg_hook(commit_message_file):
             six.print_("Aborting commit, commit message unchanged")
             return 1
 
+    # If we're a merge, don't try to do a lint-check.
     is_merge_commit = os.path.exists(os.path.join(
         git_root.strip(), 'MERGE_HEAD'))
-
-    # Go through all modified or added files.  We handle the case
-    # separately if we're a merge or a 'normal' commit.  If we're a
-    # merge, the pre-commit hook will only trigger if the merge had
-    # conflicts; in this case we only care about linting the files
-    # that were edited to resolve the conflict.  For a normal commit,
-    # we of course care about linting *all* the changes files.
-    if is_merge_commit:
-        # I used to run
-        #    git diff-tree -r --cc --name-only --diff-filter=AMR -z HEAD
-        # but this wouldn't catch changes made to resolve conflicts, so
-        # I try this other approach instead.  It doesn't properly ignore
-        # files that have changed in both branches but the system was
-        # able to do an automatic merge though, sadly.
-        a_files = subprocess.check_output(
-            ['git', 'diff', '--cached', '--name-only', '--diff-filter=AMR',
-             '-z', 'ORIG_HEAD']).decode('utf-8')
-        b_files = subprocess.check_output(
-            ['git', 'diff', '--cached', '--name-only', '--diff-filter=AMR',
-             '-z', 'MERGE_HEAD']).decode('utf-8')
-        a_files = frozenset(a_files.strip('\0').split('\0'))
-        b_files = frozenset(b_files.strip('\0').split('\0'))
-        files_to_lint = list(a_files & b_files)
-    else:
-        # Look at Added, Modified, and Renamed files.
-        # When no commit is specified, it defaults to HEAD which is
-        # what we want.
-        files = subprocess.check_output(
-            ['git', 'diff', '--cached', '--name-only', '--diff-filter=AMR',
-             '-z']).decode('utf-8')
-        files_to_lint = files.strip('\0').split('\0')  # that's what -z is for
-
-    if not files_to_lint or files_to_lint == ['']:
-        return 0
-
-    lint_errors = hook_lib.lint_files(files_to_lint)
 
     # Lint the commit message itself!
     # For the phabricator workflow, some people always have the git
     # commit message be 'WIP', and put in the actual message at 'arc
     # diff' time.  We don't require a 'real' commit message in that
     # case.
-    msg_errors = 0
+    num_errors = 0
     if not is_merge_commit and not commit_message.lower().startswith('wip'):
-        msg_errors += hook_lib.lint_commit_message(commit_message)
-
-    num_errors = lint_errors + msg_errors
-
-    if lint_errors:
-        recommendation = ('Running `arc lint` may help to autofix the errors.'
-                          '\nUse "git recommit -a" when the errors'
-                          ' are fixed, to re-use this commit message.')
-    elif msg_errors:
-        recommendation = ('Use "git commit -a --template .git/commit.save"'
-                          ' to commit with a fixed message.')
-    else:
-        recommendation = None
+        num_errors += hook_lib.lint_commit_message(commit_message)
 
     # Report what we found, and exit with the proper status code.
     hook_lib.report_errors_and_exit(num_errors, commit_message,
-                                    os.path.join('.git', 'commit.save'),
-                                    recommendation=recommendation)
+                                    os.path.join('.git', 'commit.save'))
 
 
 def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
