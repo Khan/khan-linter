@@ -160,6 +160,8 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
         # Lint the files, if any. If there are any errors, print a helpful
         # message, and return a nonzero status code to abort the push.
         if files_to_lint:
+            print ("khan-linter: linting {} files with unpushed "
+                   "changes...".format(len(files_to_lint)))
             num_errors = hook_lib.lint_files(files_to_lint)
             if num_errors > 0:
                 six.print_(

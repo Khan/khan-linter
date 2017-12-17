@@ -77,5 +77,5 @@ def report_errors_and_exit(num_errors, commit_message, save_filename):
         six.print_('Use "git commit -a --template .git/commit.save" to commit'
                    ' with a fixed message.', file=sys.stderr)
         sys.exit(1)
-    six.print_('khan-linter: all lint checks passed', file=sys.stderr)
+    six.print_('khan-linter: commit message passed', file=sys.stderr)
     sys.exit(0)
