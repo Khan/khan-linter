@@ -98,6 +98,11 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
     making significant changes to this function, consider running the test!
     """
     for line in sys.stdin:
+        # Skip blank lines - though we only expect this to happen in the case
+        # of STDIN being empty, and the only input being a single blank line.
+        if not line.strip():
+            continue
+
         # For each branch we're trying to push, the git hook will tell us the
         # local branch name, local sha, remote branch name, and remote sha.
         # For our purposes, we only care about the local sha.
