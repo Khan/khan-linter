@@ -102,6 +102,10 @@ filePaths.forEach((filePath, index) => {
         } else if (line.startsWith('// @flow')) {
             usesFlow = true;
             return false;
+        } else if (line.match(/^\s*$/)) {
+            // Empty lines immediately below the header count as part of the
+            // header, and are removed.
+            return false;
         } else {
             inHeader = false;
             return true;
