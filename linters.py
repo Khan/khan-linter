@@ -28,6 +28,9 @@ import static_content_refs
 import pep8
 from pyflakes.scripts import pyflakes
 
+# Convenience abbreviation
+print_ = lint_util.print_
+
 
 class Linter(object):
     """Superclass for all linters.
@@ -43,7 +46,7 @@ class Linter(object):
             try:
                 contents = open(f, 'U').read()
             except (IOError, OSError) as why:
-                six.print_("SKIPPING lint of %s: %s" % (f, why.args[1]))
+                print_("SKIPPING lint of %s: %s" % (f, why.args[1]))
                 num_errors += 1
                 continue
             num_errors += self.process(f, contents)
@@ -189,7 +192,7 @@ class Pep8(Linter):
                     return 0
 
         # OK, looks like it's a legitimate error.
-        six.print_(self._maybe_add_arc_fix(lintline, bad_line))
+        print_(self._maybe_add_arc_fix(lintline, bad_line))
         return 1
 
     def _get_file_level_nolint_rules(self, contents_lines):
@@ -315,7 +318,7 @@ class Pyflakes(Linter):
             return 0
 
         # OK, looks like it's a legitimate error.
-        six.print_(self._maybe_add_arc_fix(lintline, bad_line))
+        print_(self._maybe_add_arc_fix(lintline, bad_line))
         return 1
 
     def process(self, f, contents_of_f):
@@ -358,9 +361,9 @@ class CustomPythonLinter(Linter):
 
             if self._bad_super(line):
                 # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-                six.print_('%s:%s: E999 first argument to super() must be '
-                           'an explicit classname, not type(self)'
-                           % (f, linenum_minus_1 + 1))
+                print_('%s:%s: E999 first argument to super() must be '
+                       'an explicit classname, not type(self)'
+                       % (f, linenum_minus_1 + 1))
                 num_errors += 1
 
         return num_errors
@@ -390,8 +393,8 @@ class Git(Linter):
         num_errors = 0
         for m in self._MARKERS_RE.finditer(contents_of_f):
             linenum = contents_of_f.count('\n', 0, m.start()) + 1
-            six.print_('%s:%s:1: E1 git conflict marker "%s" found'
-                       % (f, linenum, m.group(1)))
+            print_('%s:%s:1: E1 git conflict marker "%s" found'
+                   % (f, linenum, m.group(1)))
             num_errors += 1
         return num_errors
 
@@ -568,7 +571,7 @@ class Eslint(Linter):
             output_line += " (Mute with // eslint-disable-line %s)" % (
                 err_type)
 
-        six.print_(self._maybe_add_arc_fix(output_line, bad_line))
+        print_(self._maybe_add_arc_fix(output_line, bad_line))
         return 1
 
     def process(self, f, contents_of_f, eslint_lines):
@@ -653,8 +656,7 @@ class Eslint(Linter):
                 try:
                     contents = open(filename, 'U').read()
                 except (IOError, OSError) as why:
-                    six.print_(
-                        "SKIPPING lint of %s: %s" % (filename, why.args[1]))
+                    print_("SKIPPING lint of %s: %s" % (filename, why.args[1]))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
@@ -673,7 +675,7 @@ class LessHint(Linter):
         if '@Nolint' in bad_line:
             return 0
 
-        six.print_(output_line)
+        print_(output_line)
         return 1
 
     def process(self, f, contents_of_f, lesshint_lines):
@@ -729,8 +731,7 @@ class LessHint(Linter):
                 try:
                     contents = open(filename, 'U').read()
                 except (IOError, OSError) as why:
-                    six.print_(
-                        "SKIPPING lint of %s: %s" % (filename, why.args[1]))
+                    print_("SKIPPING lint of %s: %s" % (filename, why.args[1]))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
@@ -750,8 +751,8 @@ class HtmlLinter(Linter):
             errors = static_content_refs.lint_one_file(f, contents_of_f)
             for (fname, linenum, colnum, unused_endcol, msg) in errors:
                 # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-                six.print_('%s:%s:%s: E=static_url= %s'
-                           % (fname, linenum, colnum, msg))
+                print_('%s:%s:%s: E=static_url= %s'
+                       % (fname, linenum, colnum, msg))
             return len(errors)
         else:
             return 0
@@ -844,7 +845,7 @@ class KtLint(Linter):
         for file, lint in lint_by_file.items():
             for _, lint_err in itertools.compress(
                     lint, self._is_not_skipped(file, lint)):
-                six.print_(lint_err)
+                print_(lint_err)
                 num_errors += 1
 
         return num_errors
