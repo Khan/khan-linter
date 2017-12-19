@@ -2,6 +2,27 @@
 
 import os
 import re
+import sys
+
+import six
+
+
+if six.PY2:
+    def print_(text, end=None):
+        """Always emit text as utf-8.  Useful when piping output elsewhere."""
+        if isinstance(text, unicode):
+            text = text.encode('utf-8')
+        six.print_(text, end=end)
+else:
+    def print_(text, end=None):
+        """Always emit text as utf-8.  Useful when piping output elsewhere."""
+        if end is None:
+            end = os.linesep
+        if isinstance(text, str):
+            text = (text + end).encode('utf-8')
+        else:    # already bytes
+            text += end.encode('utf-8')
+        sys.stdout.buffer.write(text)
 
 
 def get_real_cwd():
