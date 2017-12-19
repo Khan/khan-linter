@@ -504,7 +504,8 @@ class Eslint(Linter):
             if remove:
                 return lint_util.add_arc_fix_str(
                     ascii_lintline, bad_line,
-                    self._clean_prettier_string(remove.group(1)), '')
+                    self._clean_prettier_string(remove.group(1)), '',
+                    limit_to_80=False)
 
             replace = re.search(r'Replace `(.*?)` with `(.*?)`?$', msg)
             if replace:
