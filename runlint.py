@@ -430,7 +430,8 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
                        % (linter_filename, files))
         p = subprocess.Popen([linter_filename, '-'], stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (stdout, stderr) = p.communicate(input='\n'.join(files))
+        (stdout, stderr) = p.communicate(
+            input='\n'.join(files).encode('utf-8'))
         # If the subprocess returned 1, it's possible this was due to a
         # raised exception rather than a lint error.  We try to detect
         # this by checking if stdout is empty: if so, it means that there
