@@ -626,6 +626,14 @@ class Eslint(Linter):
         if stderr:
             raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
 
+        # Check for the "Lint results:" message outputted as the first line of
+        # eslint_reporter.js. This helps us distinguish between two "failure"
+        # cases: ESLint successfully linting but yielding errors, and ESLint
+        # crashing.
+        stdout_lines = stdout.splitlines()
+        if stdout_lines[0].strip() != 'Lint results:':
+            raise RuntimeError("Unexpected stdout from linter:\n%s" % stdout)
+
         output = {}
 
         # eslint_reporter specifies that errors are reported on
@@ -633,7 +641,7 @@ class Eslint(Linter):
         # converts all filenames to an absolute path; we convert them
         # back to relpaths here.
         lint_lines = []
-        for line in stdout.splitlines():
+        for line in stdout_lines[1:]:
             parts = line.split(':', 1)
             if len(parts) != 2:
                 raise RuntimeError("Unexpected stdout from linter:\n%s" %

@@ -12,6 +12,11 @@ function convertCharOffsetToByteOffset(str, charOffset) {
 }
 
 module.exports = function(results) {
+    // Output a "Lint results:" message as the first line. This message helps
+    // us our logic in linters.py distinguish between two "failure" cases:
+    // ESLint successfully linting but yielding errors, and ESLint crashing.
+    process.stdout.write("Lint results:\n");
+
     results.forEach(function(result) {
         const source = result.source || result.output;
         if (!source) {
