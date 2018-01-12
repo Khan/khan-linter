@@ -16,8 +16,8 @@ set -e
 #     infra right now, though, since this probably won't be a high-traffic area
 #     of the KA codebase. But, if that changes, let's upgrade this script!
 
-remote_repo_path=$(mktemp -d -t lint-hook-test-remote)
-local_repo_path=$(mktemp -d -t lint-hook-test-local)
+remote_repo_path=$(mktemp -d -t lint-hook-test-remote.XXXXXX)
+local_repo_path=$(mktemp -d -t lint-hook-test-local.XXXXXX)
 function finish {
   rm -rf $remote_repo_path
   rm -rf $local_repo_path
@@ -158,5 +158,9 @@ echo '>> Push. (Changes: Add F to feature branch, merge G from master.)'
 echo '>> Confirm: F and G are linted, push succeeds.'
 git push origin feature-branch
 echo ''
+
+echo '>> Delete the branch.'
+echo '>> Confirm: no lint runs, push succeeds.'
+git push origin --delete feature-branch
 
 echo 'Test passed!'
