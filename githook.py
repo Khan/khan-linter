@@ -108,6 +108,9 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
         # For our purposes, we only care about the local sha.
         (_, local_sha, _, _) = line.split()
 
+        if local_sha == '0000000000000000000000000000000000000000':
+            continue    # means we're deleting this branch
+
         # To find files that have been changed locally, we'll use `git log` to
         # find commits that are present in the branch state we intend to push,
         # but aren't present on any remote-tracking branch. We'll then format
@@ -177,10 +180,10 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
                     file=sys.stderr)
                 return 1
 
-        # Yay, everything went okay! Return a zero status code, in order to
-        # allow the push.
-        six.print_('khan-linter: all lint checks passed', file=sys.stderr)
-        return 0
+    # Yay, everything went okay! Return a zero status code, in order to
+    # allow the push.
+    six.print_('khan-linter: all lint checks passed', file=sys.stderr)
+    return 0
 
 
 if __name__ == '__main__':
