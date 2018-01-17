@@ -266,11 +266,9 @@ class Pyflakes(Linter):
         """If line is an 'error', print it and return 1.  Else return 0.
 
         pyflakes prints all errors to stdout.  But we want to ignore
-        some 'errors' that are ok for us: code like
-          try:
-             import unittest2 as unittest
-          except ImportError:
-             import unittest
+        some 'errors' that are ok for us:
+           def foo():
+              _ = bar()      # we are ok not using "_".
         To do this, we intercept stdin and remove these lines.
 
         Arguments:
@@ -281,10 +279,6 @@ class Pyflakes(Linter):
         Returns:
            1 (indicating one error) if we print the error line, 0 else.
         """
-        # The 'try/except ImportError' example described above.
-        if 'redefinition of unused' in output_line:
-            return 0
-
         # We follow python convention of allowing an unused variable
         # if it's named '_' or starts with 'unused_'.
         if ('assigned to but never used' in output_line and
