@@ -172,7 +172,7 @@ const create = context => {
       while (currNode) {
         if (
           currNode.type === "FunctionExpression" &&
-          currNode.parent &&
+          currNode.parent && currNode.parent.key &&
           currNode.parent.key.name === "getInitialState"
         ) {
           return node.key.name;
