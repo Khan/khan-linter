@@ -150,6 +150,10 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
             # the name of each added/modified/removed file, separated by NUL.
             '--pretty=format:', '--name-only', '--diff-filter=AMR', '-z',
 
+            # Ignore submodules, because they're likely to have lint rules that
+            # are different than the repository we're currently linting.
+            '--ignore-submodules',
+
             # Include commits that are reachable from the local state we intend
             # to push.
             local_sha,
