@@ -119,6 +119,49 @@ class Pep8(Linter):
 
         return lintline
 
+    def _is_in_docstring(self, contents_lines, linenum):
+        """Return true if contents_lines[linenum] is inside a docstring.
+
+        A docstring is a string that starts with and ends with
+        triple-quotes, and starts a function or class.
+
+        We do a simple syntax-check that we're in a docstring: first
+        we go up until we see a line with a triple-quote.  If it's a
+        one-line docstring, (starts and ends with a triple-quote),
+        then we're not in a docstring.  Otherwise, see if the line
+        above it starts with 'def' or 'class' (we also do some simple
+        checking for multi-line def's).  If so, we were in a
+        docstring!
+
+        This can be fooled, but should work well enough.
+        """
+        docstring_start = 0           # in case the xrange() below is empty
+        for docstring_start in xrange(linenum - 1, 0, -1):
+            if contents_lines[docstring_start].lstrip().startswith(
+                    ('"""', "'''")):
+                break
+
+        # If this """-line is a one-line docstring, then our string is
+        # not in a docstring, so we should complain.
+        if contents_lines[docstring_start].rstrip().endswith(('"""', "'''")):
+            return False
+
+        # Now check that the line before the """ is a def or class.
+        # Since def's (and classes) can be multiple lines long, we
+        # may have to check backwards a few lines.  We basically look
+        # at previous lines until we reach a line that starts with
+        # def or class (good), a line with a """ (bad, it means the
+        # """ above was ending a docstring, not starting one) or a
+        # blank line (bad, it means the """ is in some random place).
+        for prev_linenum in xrange(docstring_start - 1, -1, -1):
+            prev = contents_lines[prev_linenum].strip()
+            if not prev or prev.startswith(('"""', "'''")):
+                break
+            if prev.startswith(('def ', 'class ')):
+                return True
+
+        return False
+
     def _process_one_line(self, output_line, contents_lines, ignored_rules):
         """If line is an 'error', print it and return 1.  Else return 0.
 
@@ -163,33 +206,13 @@ class Pep8(Linter):
         # and ends with a ".  (The end-check is kosher because only
         # strings can be really long in our use-case.)  If that check
         # passes, we do a simple syntax-check that we're in a
-        # docstring: going up until we see a line with a """, the line
-        # above it starts with 'def' or 'class' (we do some simple
-        # checking for multi-line def's).  This can be fooled, but
-        # should work well enough.
+        # docstring.  This can be fooled, but should work well enough.
         if ('E501 line too long' in lintline and
                 bad_line.lstrip().startswith('"') and
                 bad_line.rstrip(',\n').endswith('"') and
                 bad_linenum):
-            linenum = 0           # in case the xrange() below is empty
-            for linenum in xrange(bad_linenum - 1, 0, -1):
-                if (contents_lines[linenum].lstrip().startswith('"""') or
-                        contents_lines[linenum].lstrip().startswith("'''")):
-                    break
-            # Now check that the line before the """ is a def or class.
-            # Since def's (and classes) can be multiple lines long, we
-            # may have to check backwards a few lines.  We basically look
-            # at previous lines until we reach a line that starts with
-            # def or class (good), a line with a """ (bad, it means the
-            # """ above was ending a docstring, not starting one) or a
-            # blank line (bad, it means the """ is in some random place).
-            for prev_linenum in xrange(linenum - 1, -1, -1):
-                prev = contents_lines[prev_linenum].strip()
-                if (not prev or
-                        prev.startswith('"""') or prev.startswith("'''")):
-                    break
-                if prev.startswith('def ') or prev.startswith('class '):
-                    return 0
+            if self._is_in_docstring(contents_lines, bad_linenum):
+                return 0
 
         # OK, looks like it's a legitimate error.
         print_(self._maybe_add_arc_fix(lintline, bad_line))
@@ -212,7 +235,7 @@ class Pep8(Linter):
             if match:
                 return [
                     rule for rule in match.group(1).split(',')
-                    if rule.startswith('E') or rule.startswith('W')]
+                    if rule.startswith(('E', 'W'))]
 
         return []
 
