@@ -44,6 +44,9 @@
         // use jsdoc anywhere it seems silly to require it yet.
         "valid-jsdoc": 0,
         "require-jsdoc": 0
+        // TODO(scottgrant): Enable this next rule once D42223 is deployed.
+        // "jsx-a11y/alt-text": 1
+        // TODO(scottgrant): Add additional a11y rules as we support them.
     },
     "globals": {
         // These are copied from
@@ -134,6 +137,7 @@
         "UserVoice": true
     },
     "plugins": [
+        "jsx-a11y",
         "prettier"
     ],
     "extends": [
