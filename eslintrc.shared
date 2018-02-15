@@ -43,8 +43,8 @@
         // Might be nice to turn this on one day, but since we don't
         // use jsdoc anywhere it seems silly to require it yet.
         "valid-jsdoc": 0,
-        "require-jsdoc": 0
-        // "jsx-a11y/alt-text": 1
+        "require-jsdoc": 0,
+        "jsx-a11y/alt-text": 1
         // TODO(scottgrant): Add additional a11y rules as we support them.
     },
     "globals": {
@@ -136,7 +136,7 @@
         "UserVoice": true
     },
     "plugins": [
-        // "jsx-a11y",
+        "jsx-a11y",
         "prettier"
     ],
     "extends": [
