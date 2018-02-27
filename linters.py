@@ -32,6 +32,14 @@ from pyflakes.scripts import pyflakes
 print_ = lint_util.print_
 
 
+def _has_nolint(line):
+    """We can turn off linting for a line via `@Nolint` or `NoQA`.
+
+    Unlike flake8, we care about case for NoQA.
+    """
+    return "@Nolint" in line or "NoQA" in line
+
+
 class Linter(object):
     """Superclass for all linters.
 
@@ -186,7 +194,7 @@ class Pep8(Linter):
         bad_linenum = int(lintline.split(':', 2)[1])   # first line is '1'
         bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
 
-        if '@Nolint' in bad_line:
+        if _has_nolint(bad_line):
             return 0
 
         if any(rule in lintline
@@ -326,7 +334,7 @@ class Pyflakes(Linter):
         bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
 
         # If the line has a nolint directive, ignore it.
-        if '@Nolint' in bad_line:
+        if _has_nolint(bad_line):
             return 0
 
         # An old nolint directive that's specific to imports
@@ -373,7 +381,7 @@ class CustomPythonLinter(Linter):
     def process(self, f, contents_of_f):
         num_errors = 0
         for (linenum_minus_1, line) in enumerate(contents_of_f.splitlines()):
-            if '@Nolint' in line:
+            if _has_nolint(line):
                 continue
 
             if self._bad_super(line):
@@ -569,7 +577,7 @@ class Eslint(Linter):
         bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
 
         # If the line has a nolint directive, ignore it.
-        if '@Nolint' in bad_line:
+        if _has_nolint(bad_line):
             return 0
 
         # Allow long lines in fixture files, which just hold test data.
@@ -697,7 +705,7 @@ class LessHint(Linter):
         bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
 
         # If the line has a nolint directive, ignore it.
-        if '@Nolint' in bad_line:
+        if _has_nolint(bad_line):
             return 0
 
         print_(output_line)
@@ -800,7 +808,7 @@ class KtLint(Linter):
         """
         with open(file) as f:
             lines = f.readlines()
-            return ['@Nolint' not in lines[lint_err[0]]
+            return [not _has_nolint(lines[lint_err[0]])
                     for lint_err in lint_err_lines]
 
     def process_files(self, files):
