@@ -96,7 +96,7 @@ def lint_one_file(filename, file_contents=None):
 
     retval = []
     for (linenum_minus_one, line) in enumerate(file_contents.splitlines()):
-        if '@Nolint' in line or 'NoQA' in line:
+        if '@Nolint' in line or '# NoQA' in line:
             continue
         for m in _CANDIDATE_STATIC_RE.finditer(line):
             # _CANDIDATE_STATIC_RE has lots of parens, so m has lots

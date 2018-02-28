@@ -40,7 +40,7 @@ def _has_nolint(line):
     TODO(csilvers): return the list of error-codes that we nolint for,
     and have callers respect that.
     """
-    return "@Nolint" in line or "NoQA" in line
+    return "@Nolint" in line or "# NoQA" in line
 
 
 class Linter(object):
