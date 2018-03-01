@@ -528,9 +528,6 @@ def _maybe_pull(verbose):
     return new_sha != old_sha
 
 
-_DEFAULT_PEP8_ARGS = ['--repeat']
-
-
 def _find_base_eslint_config(file_to_lint, default_location):
     """Return a .eslintrc file in the repo's root directory if it exists.
 
@@ -577,9 +574,7 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
         # A dict that maps from language (output of _lang) to a list of
         # processors.  None means that we skip files of this language.
         processor_dict = {
-            'python': (linters.Pep8([sys.argv[0]] + _DEFAULT_PEP8_ARGS,
-                                    propose_arc_fixes=propose_arc_fixes),
-                       linters.Pyflakes(propose_arc_fixes=propose_arc_fixes),
+            'python': (linters.Flake8(propose_arc_fixes=propose_arc_fixes),
                        linters.CustomPythonLinter(),
                        linters.Git(),
                        ),

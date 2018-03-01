@@ -5,5 +5,5 @@
 #   to the /vendor/* directory in with your change as well.
 
 # Required by python lint checking
-pep8==1.7.0
-pyflakes==1.5.0
+# This is flake8 3.5.0 with one more commit to support `paths` in `.flake8`.
+git+git://github.com/pycqa/flake8.git@dd1e9d1cb7e9a232946c06aca1564d48d4d6f65e

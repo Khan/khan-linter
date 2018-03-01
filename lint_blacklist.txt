@@ -26,6 +26,9 @@ node_modules/
 vendor/
 six.py
 
+# Kinda third-party code
+contrib/
+
 # Other files
 main.py
 api/v1.py

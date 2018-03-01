@@ -11,9 +11,8 @@ import lint_util
 import six
 
 from six.moves import cStringIO as StringIO
-from six.moves import xrange
 
-# Add vendor path so we can find (our packaged versions of) pep8 and pyflakes.
+# Add vendor path so we can find (our packaged versions of) flake8
 _CWD = lint_util.get_real_cwd()
 _parent_dir = os.path.abspath(_CWD)
 if six.PY2:
@@ -25,8 +24,8 @@ _vendor_dir = os.path.join(_parent_dir, 'vendor', _vendor_version)
 sys.path.insert(0, _vendor_dir)
 
 import static_content_refs
-import pep8
-from pyflakes.scripts import pyflakes
+import flake8.api.legacy
+import flake8.formatting.default
 
 # Convenience abbreviation
 print_ = lint_util.print_
@@ -80,38 +79,22 @@ def _capture_stdout_of(fn, *args, **kwargs):
         sys.stdout = orig_stdout
 
 
-class Pep8(Linter):
+class Flake8(Linter):
     """Linter for python.  process() processes one file."""
-    GLOBAL_IGNORES = [
+    GLOBAL_IGNORES = frozenset((
         'E266',  # too many leading '#' for block comment
-        'W291',  # trailing whitespace
-        'W293',  # blank line contains whitespace
-        'W391',  # blank line at end of file
         'E402',  # module level import not at top of file
         'W503',  # line break before binary operator
-        'E712',  # comparison to True must be 'if cond is True:' or 'if cond:'
         'E731',  # do not assign a lambda expression
-    ]
+    ))
 
-    def __init__(self, pep8_args, propose_arc_fixes=False):
-        pep8.process_options(pep8_args + ['dummy'])
+    def __init__(self, propose_arc_fixes=False):
         self._propose_arc_fixes = propose_arc_fixes
-
-        # Our version of pep8 thinks that python3-style type annotaions are
-        # multiple statements on one line.  We therefore ignore this rule for
-        # python3.  (E701 is "multiple statements on one line".)
-        # TODO(colin): it would be nice to use this lint rule.  Change pep8 to
-        # pycodestyle (its successor; pep8 has had its final release), which
-        # correctly recognizes these annotations, and then remove this ignore.
-        if six.PY3:
-            Pep8.GLOBAL_IGNORES.append('E701')
-
-    def _munge_output_line(self, line):
-        """Modify the line to have the canonical form for lint lines."""
-        # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-        # Pep8 already has that form, so we're good.  We only need to
-        # strip the trailing newline.
-        return line.rstrip()
+        # A map from filename of a file to lint, to the error codes that
+        # we should ignore for this file.  We always ignore error codes
+        # in GLOBAL_IGNORES, but each file can add more codes to ignore
+        # via a `# pep8-disable` line in the file.
+        self._files_to_ignored_errors = {}
 
     def _maybe_add_arc_fix(self, lintline, bad_line):
         """Optionally add a patch for arc lint to use for autofixing."""
@@ -128,52 +111,14 @@ class Pep8(Linter):
         if errcode == 'E261':
             return lint_util.add_arc_fix_str(lintline, bad_line, '', ' ')
 
+        # module imported but not used
+        if errcode == 'F401':
+            return lint_util.add_arc_fix_str(lintline, bad_line,
+                                             bad_line + '\n', '')
+
         return lintline
 
-    def _is_in_docstring(self, contents_lines, linenum):
-        """Return true if contents_lines[linenum] is inside a docstring.
-
-        A docstring is a string that starts with and ends with
-        triple-quotes, and starts a function or class.
-
-        We do a simple syntax-check that we're in a docstring: first
-        we go up until we see a line with a triple-quote.  If it's a
-        one-line docstring, (starts and ends with a triple-quote),
-        then we're not in a docstring.  Otherwise, see if the line
-        above it starts with 'def' or 'class' (we also do some simple
-        checking for multi-line def's).  If so, we were in a
-        docstring!
-
-        This can be fooled, but should work well enough.
-        """
-        docstring_start = 0           # in case the xrange() below is empty
-        for docstring_start in xrange(linenum - 1, 0, -1):
-            if contents_lines[docstring_start].lstrip().startswith(
-                    ('"""', "'''")):
-                break
-
-        # If this """-line is a one-line docstring, then our string is
-        # not in a docstring, so we should complain.
-        if contents_lines[docstring_start].rstrip().endswith(('"""', "'''")):
-            return False
-
-        # Now check that the line before the """ is a def or class.
-        # Since def's (and classes) can be multiple lines long, we
-        # may have to check backwards a few lines.  We basically look
-        # at previous lines until we reach a line that starts with
-        # def or class (good), a line with a """ (bad, it means the
-        # """ above was ending a docstring, not starting one) or a
-        # blank line (bad, it means the """ is in some random place).
-        for prev_linenum in xrange(docstring_start - 1, -1, -1):
-            prev = contents_lines[prev_linenum].strip()
-            if not prev or prev.startswith(('"""', "'''")):
-                break
-            if prev.startswith(('def ', 'class ')):
-                return True
-
-        return False
-
-    def _process_one_line(self, output_line, contents_lines, ignored_rules):
+    def _process_one_line(self, lintline, bad_line, ignored_rules):
         """If line is an 'error', print it and return 1.  Else return 0.
 
         pep8 prints all errors to stdout.  But we want to ignore some
@@ -182,26 +127,18 @@ class Pep8(Linter):
         intercept stdin and remove these lines.
 
         Arguments:
-           output_line: one line of the pep8 error-output
-           contents_lines: the contents of the file being linted,
-              as a list of lines.
+           lintline: one line of the flake8 error-output
+           bad_line: the line that the lintline is referring to
            ignored_rules: a list of rules (like 'E501') that will be
               ignored
 
         Returns:
            1 (indicating one error) if we print the error line, 0 else.
         """
-        # Get the lint message to a canonical format so we can parse it.
-        lintline = self._munge_output_line(output_line)
-
-        bad_linenum = int(lintline.split(':', 2)[1])   # first line is '1'
-        bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
-
         if _has_nolint(bad_line):
             return 0
 
-        if any(rule in lintline
-               for rule in (self.GLOBAL_IGNORES + ignored_rules)):
+        if any(rule in lintline for rule in ignored_rules):
             return 0
 
         # We allow lines to be arbitrarily long if they are urls,
@@ -210,20 +147,27 @@ class Pep8(Linter):
                 ('http://' in bad_line or 'https://' in bad_line)):
             return 0
 
-        # We sometimes embed json in docstrings (as documentation of
-        # command output), and don't want to have to do weird
-        # line-wraps for that.
-        # We do a cheap check for a plausible json-like line: starts
-        # and ends with a ".  (The end-check is kosher because only
-        # strings can be really long in our use-case.)  If that check
-        # passes, we do a simple syntax-check that we're in a
-        # docstring.  This can be fooled, but should work well enough.
-        if ('E501 line too long' in lintline and
-                bad_line.lstrip().startswith('"') and
-                bad_line.rstrip(',\n').endswith('"') and
-                bad_linenum):
-            if self._is_in_docstring(contents_lines, bad_linenum):
-                return 0
+        # We follow python convention of allowing an unused variable
+        # if it's named '_' or starts with 'unused_'.
+        if ('F841 local variable' in lintline and
+            ("local variable '_'" in lintline or
+             "local variable 'unused_" in lintline)):
+            return 0
+
+        # It's OK to redefine variables that are unused by convention.
+        if ('F812 list comprehension redefines' in lintline and
+            ("redefines '_'" in lintline or
+             "redefines 'unused_" in lintline)):
+            return 0
+
+        # Get rid of some warnings too.
+        if 'unable to detect undefined names' in lintline:
+            return 0
+
+        # An old nolint directive that's specific to imports.
+        if ('@UnusedImport' in bad_line and
+                'imported but unused' in lintline):   # F401
+            return 0
 
         # OK, looks like it's a legitimate error.
         print_(self._maybe_add_arc_fix(lintline, bad_line))
@@ -242,135 +186,62 @@ class Pep8(Linter):
         to ignore in the file.  These must all start with E or W.
         """
         for line in contents_lines[:3]:
-            match = re.search(r'pep8-disable:([^\s]+)', line)
+            match = re.search(r'pep8-disable:([\S]+)', line)
             if match:
-                return [
-                    rule for rule in match.group(1).split(',')
-                    if rule.startswith(('E', 'W'))]
+                return {rule for rule in match.group(1).split(',')}
 
-        return []
+        return set()
 
     def process(self, f, contents_of_f):
-        contents_lines = contents_of_f.splitlines(True)
-        file_level_nolint = self._get_file_level_nolint_rules(contents_lines)
+        """Just collect files and their file-level nolint rules.
 
-        (num_candidate_errors, pep8_stdout) = _capture_stdout_of(
-            pep8.Checker(f, lines=contents_lines).check_all)
-
-        # Go through the output and remove the 'actually ok' lines.
-        if num_candidate_errors == 0:
-            return 0
-
-        num_errors = 0
-        for output_line in pep8_stdout.readlines():
-            num_errors += self._process_one_line(
-                output_line, contents_lines, file_level_nolint)
-        return num_errors
-
-
-class Pyflakes(Linter):
-    """Linter for python.  process() processes one file."""
-    def __init__(self, propose_arc_fixes=False):
-        self._propose_arc_fixes = propose_arc_fixes
-
-    def _munge_output_line(self, line):
-        """Modify the line to have the canonical form for lint lines."""
-        # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-        # pyflakes just needs to add the "E<code>" or "W<code>".  For
-        # now we only use E, since everything we print is an error.
-        # pyflakes doesn't have an error code, so we just use
-        # 'pyflakes'.  We also strip the trailing newline.
-        # We limit the number of splits as error messages can occasionally
-        # contain :.
-        (file, line, error) = line.rstrip().split(':', 2)
-        return '%s:%s:1: E=pyflakes=%s' % (file, line, error)
-
-    def _maybe_add_arc_fix(self, lintline, bad_line):
-        """Optionally add a patch for arc lint to use for autofixing."""
-        if not self._propose_arc_fixes:
-            return lintline
-
-        if 'imported but unused' in lintline:
-            return lint_util.add_arc_fix_str(lintline, bad_line,
-                                             bad_line + '\n', '')
-
-        return lintline
-
-    def _process_one_line(self, output_line, contents_lines):
-        """If line is an 'error', print it and return 1.  Else return 0.
-
-        pyflakes prints all errors to stdout.  But we want to ignore
-        some 'errors' that are ok for us:
-           def foo():
-              _ = bar()      # we are ok not using "_".
-        To do this, we intercept stdin and remove these lines.
-
-        Arguments:
-           output_line: one line of the pyflakes error-output
-           contents_lines: the contents of the file being linted,
-              as a list of lines.
-
-        Returns:
-           1 (indicating one error) if we print the error line, 0 else.
+        This is called by the default process_files(), but in our case
+        it just does some pre-processing.  The actual error-detection
+        is done in process2(), below.
         """
-        # We follow python convention of allowing an unused variable
-        # if it's named '_' or starts with 'unused_'.
-        if ('assigned to but never used' in output_line and
-            ("local variable '_'" in output_line or
-             "local variable 'unused_" in output_line)):
-            return 0
+        contents_lines = contents_of_f.splitlines(True)
+        self._files_to_ignored_errors[f] = (
+            self.GLOBAL_IGNORES |
+            self._get_file_level_nolint_rules(contents_lines)
+        )
+        return 0    # we cannot create any errors
 
-        # It's OK to redefine variables that are unused by convention.
-        if ("list comprehension redefines '_'" in output_line or
-                "list comprehension redefines 'unused_" in output_line):
-            return 0
+    def process2(self):
+        linter = self     # because we override `self` inside Reporter
+        num_errors = [0]  # in a list so we can mutate it
 
-        # Get rid of some warnings too.
-        if 'unable to detect undefined names' in output_line:
-            return 0
+        class Reporter(flake8.formatting.default.Default):
+            def beginning(self, filename):
+                self.ignored_errors = linter._files_to_ignored_errors[filename]
 
-        # -- The next set of warnings need to look at the error line.
-        # Get the lint message to a canonical format so we can parse it.
-        lintline = self._munge_output_line(output_line)
+            def show_source(self, error):
+                return error.physical_line
 
-        bad_linenum = int(lintline.split(':', 2)[1])   # first line is '1'
-        bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
+            def write(self, line, source):
+                num_errors[0] += linter._process_one_line(
+                    line.strip(), source, self.ignored_errors)
 
-        # If the line has a nolint directive, ignore it.
-        if _has_nolint(bad_line):
-            return 0
+        # We do not pass in any `exclude` parameter here, because we
+        # don't want to override the default excludes for the parent
+        # repo.  Instead, we filter out errors we want to ignore
+        # in `_process_one_line`, above.
+        style_guide = flake8.api.legacy.get_style_guide()
+        style_guide.init_report(Reporter)
+        style_guide.check_files(self._files_to_ignored_errors.keys())
 
-        # An old nolint directive that's specific to imports
-        if ('@UnusedImport' in bad_line and
-                'imported but unused' in lintline):
-            return 0
+        return num_errors[0]
 
-        # OK, looks like it's a legitimate error.
-        print_(self._maybe_add_arc_fix(lintline, bad_line))
-        return 1
-
-    def process(self, f, contents_of_f):
-        # pyflakes's ast-parser fails if the file doesn't end in a newline,
-        # so make sure it does.
-        if not contents_of_f.endswith('\n'):
-            contents_of_f += '\n'
-        (num_candidate_errors, pyflakes_stdout) = _capture_stdout_of(
-            pyflakes.check, contents_of_f, f)
-
-        # Now go through the output and remove the 'actually ok' lines.
-        if num_candidate_errors == 0:
-            return 0
-
-        num_errors = 0
-        contents_lines = contents_of_f.splitlines()  # need these for filtering
-        for output_line in pyflakes_stdout.readlines():
-            num_errors += self._process_one_line(output_line,
-                                                 contents_lines)
+    def process_files(self, files):
+        """Print lint errors for a list of filenames and return error count."""
+        # The first line calls process() to set things up, the second
+        # calls process2() to actually do the processing.
+        num_errors = super(Flake8, self).process_files(files)
+        num_errors += self.process2()
         return num_errors
 
 
 class CustomPythonLinter(Linter):
-    """A linter for generic python errors that are not caught by pep8/pyflakes.
+    """A linter for generic python errors that are not caught by flake8.
 
     This is a linter for general (as opposed to application-specific)
     python errors that are not caught by third-party linters.  We add
