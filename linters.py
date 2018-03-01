@@ -55,7 +55,7 @@ class Linter(object):
         for f in files:
             try:
                 contents = open(f, 'U').read()
-            except (IOError, OSError) as why:
+            except (IOError, OSError, UnicodeDecodeError) as why:
                 print_("SKIPPING lint of %s: %s" % (f, why.args[1]))
                 num_errors += 1
                 continue
@@ -562,7 +562,7 @@ class Eslint(Linter):
                 lintlines = file_to_lint_output[filename]
                 try:
                     contents = open(filename, 'U').read()
-                except (IOError, OSError) as why:
+                except (IOError, OSError, UnicodeDecodeError) as why:
                     print_("SKIPPING lint of %s: %s" % (filename, why.args[1]))
                     num_errors += 1
                     continue
@@ -637,7 +637,7 @@ class LessHint(Linter):
                 lintlines = file_to_lint_output[filename]
                 try:
                     contents = open(filename, 'U').read()
-                except (IOError, OSError) as why:
+                except (IOError, OSError, UnicodeDecodeError) as why:
                     print_("SKIPPING lint of %s: %s" % (filename, why.args[1]))
                     num_errors += 1
                     continue
