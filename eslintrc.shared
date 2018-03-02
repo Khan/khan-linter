@@ -44,7 +44,8 @@
         // use jsdoc anywhere it seems silly to require it yet.
         "valid-jsdoc": 0,
         "require-jsdoc": 0,
-        "jsx-a11y/alt-text": 1
+        "jsx-a11y/alt-text": 1,
+        "jsx-a11y/aria-props": 1
         // TODO(scottgrant): Add additional a11y rules as we support them.
     },
     "globals": {
