@@ -26,6 +26,7 @@ sys.path.insert(0, _vendor_dir)
 import static_content_refs
 import flake8.api.legacy
 import flake8.formatting.default
+import yaml
 
 # Convenience abbreviation
 print_ = lint_util.print_
@@ -663,6 +664,25 @@ class HtmlLinter(Linter):
             return len(errors)
         else:
             return 0
+
+
+class YamlLinter(Linter):
+    """Linter for .yaml files.  process() processes one file.
+
+    We just make sure the file has no syntax errors, and can be successfully
+    loaded.
+    """
+    def process(self, f, contents_of_f):
+        try:
+            yaml.safe_load(contents_of_f)
+            return 0
+        except yaml.parser.ParserError as e:
+            print_('%s:%s:%s: E=yaml= Error parsing yaml: %s %s'
+                   % (f,
+                      e.problem_mark.line + 1,  # yaml.Mark is 0-indexed
+                      1,
+                      e.problem, e.context))
+            return 1
 
 
 class KtLint(Linter):
