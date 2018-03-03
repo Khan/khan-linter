@@ -226,7 +226,11 @@ class Flake8(Linter):
         # don't want to override the default excludes for the parent
         # repo.  Instead, we filter out errors we want to ignore
         # in `_process_one_line`, above.
-        style_guide = flake8.api.legacy.get_style_guide()
+        # We force flake8 to run in serial until process-leaking is
+        # fixed, e.g. when flake8 has merged
+        #    https://gitlab.com/pycqa/flake8/merge_requests/228
+        # TODO(csilvers): remove `jobs=1` after we update vendor/.
+        style_guide = flake8.api.legacy.get_style_guide(jobs='1')
         style_guide.init_report(Reporter)
         style_guide.check_files(self._files_to_ignored_errors.keys())
 
