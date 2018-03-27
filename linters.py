@@ -486,20 +486,8 @@ class Eslint(Linter):
                                                  contents_lines)
         return num_errors
 
-    def lint_files(self, files):
-        """Execute a linter on a list of files and return the stdout for each.
-
-        Arguments:
-            exec_path: A path to the linter's executable
-            files: A list of filenames
-            extra_flags: (optional) A list of commandline flags to include in
-                         the subprocess call
-
-        Returns:
-            dict of {f: stdout_lines} from filename to stdout as an array of
-            stdout lines only containing files that had output; if there are
-            no lint errors, an empty dict.
-        """
+    def _run_eslint(self, files):
+        """Run eslint on the given files and returns stdout, sans header."""
         exec_path = os.path.join(_CWD, 'node_modules', '.bin', 'eslint')
         reporter_path = os.path.join(_CWD, 'eslint_reporter.js')
         assert os.path.isfile(exec_path), (
@@ -537,22 +525,43 @@ class Eslint(Linter):
         stdout_lines = stdout.splitlines()
         if stdout_lines[0].strip() != 'Lint results:':
             raise RuntimeError("Unexpected stdout from linter:\n%s" % stdout)
+        return stdout_lines[1:]
 
-        output = {}
+    def lint_files(self, files):
+        """Execute a linter on a list of files and return the stdout for each.
+
+        Arguments:
+            exec_path: A path to the linter's executable
+            files: A list of filenames
+            extra_flags: (optional) A list of commandline flags to include in
+                         the subprocess call
+
+        Returns:
+            dict of {f: stdout_lines} from filename to stdout as an array of
+            stdout lines only containing files that had output; if there are
+            no lint errors, an empty dict.
+        """
+        stdout_lines = []
+        # We need to keep sum(|files|) less than about 250k for OS X's
+        # commandline limit.  2000 files at a time should do that.
+        for i in xrange(0, len(files), 2000):
+            stdout_lines.extend(self._run_eslint(files[i:i + 2000]))
 
         # eslint_reporter specifies that errors are reported on
         # individual lines starting with "filename:line:col".  It
         # converts all filenames to an absolute path; we convert them
         # back to relpaths here.
         lint_lines = []
-        for line in stdout_lines[1:]:
+        for line in stdout_lines:
             parts = line.split(':', 1)
             if len(parts) != 2:
                 raise RuntimeError("Unexpected stdout from linter:\n%s" %
                                    stdout)
             lint_lines.append('%s:%s' % (os.path.relpath(parts[0]), parts[1]))
+
         get_filename = lambda line: line.split(':', 1)[0]
         lines = sorted(lint_lines, key=get_filename)
+        output = {}
         for filename, flines in itertools.groupby(lines, get_filename):
             output[filename] = list(flines)
 
