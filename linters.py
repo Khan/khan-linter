@@ -9,6 +9,7 @@ import sys
 
 import lint_util
 import six
+import six.moves
 
 from six.moves import cStringIO as StringIO
 
@@ -544,7 +545,7 @@ class Eslint(Linter):
         stdout_lines = []
         # We need to keep sum(|files|) less than about 250k for OS X's
         # commandline limit.  2000 files at a time should do that.
-        for i in xrange(0, len(files), 2000):
+        for i in six.moves.range(0, len(files), 2000):
             stdout_lines.extend(self._run_eslint(files[i:i + 2000]))
 
         # eslint_reporter specifies that errors are reported on
@@ -556,7 +557,7 @@ class Eslint(Linter):
             parts = line.split(':', 1)
             if len(parts) != 2:
                 raise RuntimeError("Unexpected stdout from linter:\n%s" %
-                                   stdout)
+                                   stdout_lines)
             lint_lines.append('%s:%s' % (os.path.relpath(parts[0]), parts[1]))
 
         get_filename = lambda line: line.split(':', 1)[0]
