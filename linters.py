@@ -523,6 +523,8 @@ class Eslint(Linter):
         # eslint_reporter.js. This helps us distinguish between two "failure"
         # cases: ESLint successfully linting but yielding errors, and ESLint
         # crashing.
+        if not stdout.strip():
+            raise RuntimeError("Expected stdout from linter, got none.")
         stdout_lines = stdout.splitlines()
         if stdout_lines[0].strip() != 'Lint results:':
             raise RuntimeError("Unexpected stdout from linter:\n%s" % stdout)
