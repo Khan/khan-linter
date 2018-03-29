@@ -38,6 +38,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 
 import linters
 import lint_util
@@ -677,8 +678,9 @@ def main(files_and_directories,
 
             if verbose:
                 print_('%d errors (%.2f seconds)' % (num_new_errors, elapsed))
-        except Exception as why:
-            print_(u"ERROR linting %r: %s" % (files, why))
+        except Exception:
+            print_(u"ERROR linting %r with %s:\n%s" % (
+                files, type(lint_processor), traceback.format_exc()))
             num_framework_errors += 1
             continue
 
