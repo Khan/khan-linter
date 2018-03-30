@@ -454,7 +454,12 @@ class Eslint(Linter):
         #   <file>:<line>:<col>: W<code> <message>
         # which is just what we need!
         bad_linenum = int(output_line.split(':', 2)[1])   # first line is '1'
-        bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
+        if 1 <= bad_linenum <= len(contents_lines):
+            bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
+        else:
+            # If we can't figure out what line it's on (e.g. it's an error in
+            # an empty file), try our best to report anyway.
+            bad_line = ''
 
         # If the line has a nolint directive, ignore it.
         if _has_nolint(bad_line):
