@@ -5,12 +5,14 @@
 
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 /**
  * Checks if a node name match the JSX tag convention.
  * @param {String} name - Name of the node to check.
  * @returns {boolean} Whether or not the node name match the JSX tag convention.
  */
-var tagConvention = /^[a-z]|\-/;
+const tagConvention = /^[a-z]|\-/;
 function isTagName(name) {
   return tagConvention.test(name);
 }
@@ -24,12 +26,23 @@ module.exports = {
     docs: {
       description: 'Disallow undeclared variables in JSX',
       category: 'Possible Errors',
-      recommended: true
+      recommended: true,
+      url: docsUrl('jsx-no-undef')
     },
-    schema: []
+    schema: [{
+      type: 'object',
+      properties: {
+        allowGlobals: {
+          type: 'boolean'
+        }
+      },
+      additionalProperties: false
+    }]
   },
 
   create: function(context) {
+    const config = context.options[0] || {};
+    const allowGlobals = config.allowGlobals || false;
 
     /**
      * Compare an identifier with the variables declared in the scope
@@ -37,17 +50,24 @@ module.exports = {
      * @returns {void}
      */
     function checkIdentifierInJSX(node) {
-      var scope = context.getScope();
-      var variables = scope.variables;
-      var i;
-      var len;
+      let scope = context.getScope();
+      const sourceCode = context.getSourceCode();
+      const sourceType = sourceCode.ast.sourceType;
+      let variables = scope.variables;
+      let scopeType = 'global';
+      let i;
+      let len;
 
       // Ignore 'this' keyword (also maked as JSXIdentifier when used in JSX)
       if (node.name === 'this') {
         return;
       }
 
-      while (scope.type !== 'global') {
+      if (!allowGlobals && sourceType === 'module') {
+        scopeType = 'module';
+      }
+
+      while (scope.type !== scopeType) {
         scope = scope.upper;
         variables = scope.variables.concat(variables);
       }
@@ -67,7 +87,7 @@ module.exports = {
 
       context.report({
         node: node,
-        message: '\'' + node.name + '\' is not defined.'
+        message: `'${node.name}' is not defined.`
       });
     }
 
@@ -95,6 +115,5 @@ module.exports = {
         checkIdentifierInJSX(node);
       }
     };
-
   }
 };

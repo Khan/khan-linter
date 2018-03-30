@@ -4,6 +4,8 @@
  */
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 // ------------------------------------------------------------------------------
 // Rule Definition
 // ------------------------------------------------------------------------------
@@ -13,7 +15,8 @@ module.exports = {
     docs: {
       description: 'Ensure proper position of the first property in JSX',
       category: 'Stylistic Issues',
-      recommended: false
+      recommended: false,
+      url: docsUrl('jsx-first-prop-new-line')
     },
     fixable: 'code',
 
@@ -23,7 +26,7 @@ module.exports = {
   },
 
   create: function (context) {
-    var configuration = context.options[0];
+    const configuration = context.options[0] || 'multiline-multiprop';
 
     function isMultilineJSX(jsxNode) {
       return jsxNode.loc.start.line < jsxNode.loc.end.line;
@@ -36,26 +39,26 @@ module.exports = {
           (configuration === 'multiline-multiprop' && isMultilineJSX(node) && node.attributes.length > 1) ||
           (configuration === 'always')
         ) {
-          node.attributes.some(function(decl) {
+          node.attributes.some(decl => {
             if (decl.loc.start.line === node.loc.start.line) {
               context.report({
                 node: decl,
                 message: 'Property should be placed on a new line',
                 fix: function(fixer) {
-                  return fixer.replaceTextRange([node.name.end, decl.start], '\n');
+                  return fixer.replaceTextRange([node.name.end, decl.range[0]], '\n');
                 }
               });
             }
             return true;
           });
         } else if (configuration === 'never' && node.attributes.length > 0) {
-          var firstNode = node.attributes[0];
+          const firstNode = node.attributes[0];
           if (node.loc.start.line < firstNode.loc.start.line) {
             context.report({
               node: firstNode,
               message: 'Property should be placed on the same line as the component declaration',
               fix: function(fixer) {
-                return fixer.replaceTextRange([node.name.end, firstNode.start], ' ');
+                return fixer.replaceTextRange([node.name.end, firstNode.range[0]], ' ');
               }
             });
             return;

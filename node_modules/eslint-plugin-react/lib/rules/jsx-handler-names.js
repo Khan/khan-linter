@@ -4,6 +4,8 @@
  */
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 // ------------------------------------------------------------------------------
 // Rule Definition
 // ------------------------------------------------------------------------------
@@ -13,7 +15,8 @@ module.exports = {
     docs: {
       description: 'Enforce event handler naming conventions in JSX',
       category: 'Stylistic Issues',
-      recommended: false
+      recommended: false,
+      url: docsUrl('jsx-handler-names')
     },
 
     schema: [{
@@ -31,15 +34,13 @@ module.exports = {
   },
 
   create: function(context) {
+    const sourceCode = context.getSourceCode();
+    const configuration = context.options[0] || {};
+    const eventHandlerPrefix = configuration.eventHandlerPrefix || 'handle';
+    const eventHandlerPropPrefix = configuration.eventHandlerPropPrefix || 'on';
 
-    var sourceCode = context.getSourceCode();
-    var configuration = context.options[0] || {};
-    var eventHandlerPrefix = configuration.eventHandlerPrefix || 'handle';
-    var eventHandlerPropPrefix = configuration.eventHandlerPropPrefix || 'on';
-
-    var EVENT_HANDLER_REGEX = new RegExp('^((props\\.' + eventHandlerPropPrefix + ')'
-                                        + '|((.*\\.)?' + eventHandlerPrefix + '))[A-Z].*$');
-    var PROP_EVENT_HANDLER_REGEX = new RegExp('^(' + eventHandlerPropPrefix + '[A-Z].*|ref)$');
+    const EVENT_HANDLER_REGEX = new RegExp(`^((props\\.${eventHandlerPropPrefix})|((.*\\.)?${eventHandlerPrefix}))[A-Z].*$`);
+    const PROP_EVENT_HANDLER_REGEX = new RegExp(`^(${eventHandlerPropPrefix}[A-Z].*|ref)$`);
 
     return {
       JSXAttribute: function(node) {
@@ -47,29 +48,28 @@ module.exports = {
           return;
         }
 
-        var propKey = typeof node.name === 'object' ? node.name.name : node.name;
-        var propValue = sourceCode.getText(node.value.expression).replace(/^this\.|.*::/, '');
+        const propKey = typeof node.name === 'object' ? node.name.name : node.name;
+        const propValue = sourceCode.getText(node.value.expression).replace(/^this\.|.*::/, '');
 
         if (propKey === 'ref') {
           return;
         }
 
-        var propIsEventHandler = PROP_EVENT_HANDLER_REGEX.test(propKey);
-        var propFnIsNamedCorrectly = EVENT_HANDLER_REGEX.test(propValue);
+        const propIsEventHandler = PROP_EVENT_HANDLER_REGEX.test(propKey);
+        const propFnIsNamedCorrectly = EVENT_HANDLER_REGEX.test(propValue);
 
         if (propIsEventHandler && !propFnIsNamedCorrectly) {
           context.report({
             node: node,
-            message: 'Handler function for ' + propKey + ' prop key must begin with \'' + eventHandlerPrefix + '\''
+            message: `Handler function for ${propKey} prop key must begin with '${eventHandlerPrefix}'`
           });
         } else if (propFnIsNamedCorrectly && !propIsEventHandler) {
           context.report({
             node: node,
-            message: 'Prop key for ' + propValue + ' must begin with \'' + eventHandlerPropPrefix + '\''
+            message: `Prop key for ${propValue} must begin with '${eventHandlerPropPrefix}'`
           });
         }
       }
     };
-
   }
 };

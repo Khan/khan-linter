@@ -4,7 +4,8 @@
  */
 'use strict';
 
-var versionUtil = require('../util/version');
+const versionUtil = require('../util/version');
+const docsUrl = require('../util/docsUrl');
 
 // ------------------------------------------------------------------------------
 // Rule Definition
@@ -15,13 +16,13 @@ module.exports = {
     docs: {
       description: 'Prevent usage of the return value of React.render',
       category: 'Best Practices',
-      recommended: true
+      recommended: true,
+      url: docsUrl('no-render-return-value')
     },
     schema: []
   },
 
   create: function(context) {
-
     // --------------------------------------------------------------------------
     // Public
     // --------------------------------------------------------------------------
@@ -29,18 +30,18 @@ module.exports = {
     return {
 
       CallExpression: function(node) {
-        var callee = node.callee;
-        var parent = node.parent;
+        const callee = node.callee;
+        const parent = node.parent;
         if (callee.type !== 'MemberExpression') {
           return;
         }
 
-        var calleeObjectName = /^ReactDOM$/;
-        if (versionUtil.test(context, '15.0.0')) {
+        let calleeObjectName = /^ReactDOM$/;
+        if (versionUtil.testReactVersion(context, '15.0.0')) {
           calleeObjectName = /^ReactDOM$/;
-        } else if (versionUtil.test(context, '0.14.0')) {
+        } else if (versionUtil.testReactVersion(context, '0.14.0')) {
           calleeObjectName = /^React(DOM)?$/;
-        } else if (versionUtil.test(context, '0.13.0')) {
+        } else if (versionUtil.testReactVersion(context, '0.13.0')) {
           calleeObjectName = /^React$/;
         }
 
@@ -60,11 +61,10 @@ module.exports = {
         ) {
           context.report({
             node: callee,
-            message: 'Do not depend on the return value from ' + callee.object.name + '.render'
+            message: `Do not depend on the return value from ${callee.object.name}.render`
           });
         }
       }
     };
-
   }
 };

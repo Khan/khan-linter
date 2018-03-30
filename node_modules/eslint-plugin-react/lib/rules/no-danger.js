@@ -4,17 +4,19 @@
  */
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 // ------------------------------------------------------------------------------
 // Constants
 // ------------------------------------------------------------------------------
 
-var DANGEROUS_MESSAGE = 'Dangerous property \'{{name}}\' found';
+const DANGEROUS_MESSAGE = 'Dangerous property \'{{name}}\' found';
 
-var DANGEROUS_PROPERTY_NAMES = [
+const DANGEROUS_PROPERTY_NAMES = [
   'dangerouslySetInnerHTML'
 ];
 
-var DANGEROUS_PROPERTIES = DANGEROUS_PROPERTY_NAMES.reduce(function (props, prop) {
+const DANGEROUS_PROPERTIES = DANGEROUS_PROPERTY_NAMES.reduce((props, prop) => {
   props[prop] = prop;
   return props;
 }, Object.create(null));
@@ -28,7 +30,7 @@ var DANGEROUS_PROPERTIES = DANGEROUS_PROPERTY_NAMES.reduce(function (props, prop
  * @param {String} name - Name of the node to check.
  * @returns {boolean} Whether or not the node name match the JSX tag convention.
  */
-var tagConvention = /^[a-z]|\-/;
+const tagConvention = /^[a-z]|\-/;
 function isTagName(name) {
   return tagConvention.test(name);
 }
@@ -51,13 +53,13 @@ module.exports = {
     docs: {
       description: 'Prevent usage of dangerous JSX props',
       category: 'Best Practices',
-      recommended: false
+      recommended: false,
+      url: docsUrl('no-danger')
     },
     schema: []
   },
 
   create: function(context) {
-
     return {
 
       JSXAttribute: function(node) {
@@ -73,6 +75,5 @@ module.exports = {
       }
 
     };
-
   }
 };

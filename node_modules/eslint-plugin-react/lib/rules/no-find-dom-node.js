@@ -4,6 +4,8 @@
  */
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 // ------------------------------------------------------------------------------
 // Rule Definition
 // ------------------------------------------------------------------------------
@@ -13,13 +15,13 @@ module.exports = {
     docs: {
       description: 'Prevent usage of findDOMNode',
       category: 'Best Practices',
-      recommended: true
+      recommended: true,
+      url: docsUrl('no-find-dom-node')
     },
     schema: []
   },
 
   create: function(context) {
-
     // --------------------------------------------------------------------------
     // Public
     // --------------------------------------------------------------------------
@@ -27,10 +29,10 @@ module.exports = {
     return {
 
       CallExpression: function(node) {
-        var callee = node.callee;
+        const callee = node.callee;
 
-        var isfindDOMNode =
-          (callee.object && callee.object.callee && callee.object.callee.name === 'findDOMNode') ||
+        const isfindDOMNode =
+          (callee.name === 'findDOMNode') ||
           (callee.property && callee.property.name === 'findDOMNode')
         ;
 
@@ -44,6 +46,5 @@ module.exports = {
         });
       }
     };
-
   }
 };

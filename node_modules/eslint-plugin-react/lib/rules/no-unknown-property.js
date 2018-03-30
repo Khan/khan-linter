@@ -4,24 +4,32 @@
  */
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 // ------------------------------------------------------------------------------
 // Constants
 // ------------------------------------------------------------------------------
 
-var DEFAULTS = {
+const DEFAULTS = {
   ignore: []
 };
 
-var UNKNOWN_MESSAGE = 'Unknown property \'{{name}}\' found, use \'{{standardName}}\' instead';
+const UNKNOWN_MESSAGE = 'Unknown property \'{{name}}\' found, use \'{{standardName}}\' instead';
+const WRONG_TAG_MESSAGE = 'Invalid property \'{{name}}\' found on tag \'{{tagName}}\', but it is only allowed on: {{allowedTags}}';
 
-var DOM_ATTRIBUTE_NAMES = {
+const DOM_ATTRIBUTE_NAMES = {
   'accept-charset': 'acceptCharset',
   class: 'className',
   for: 'htmlFor',
-  'http-equiv': 'httpEquiv'
+  'http-equiv': 'httpEquiv',
+  crossorigin: 'crossOrigin'
 };
 
-var SVGDOM_ATTRIBUTE_NAMES = {
+const ATTRIBUTE_TAGS_MAP = {
+  crossOrigin: ['script', 'img', 'video', 'link']
+};
+
+const SVGDOM_ATTRIBUTE_NAMES = {
   'accent-height': 'accentHeight',
   'alignment-baseline': 'alignmentBaseline',
   'arabic-form': 'arabicForm',
@@ -106,11 +114,11 @@ var SVGDOM_ATTRIBUTE_NAMES = {
   'xml:space': 'xmlSpace'
 };
 
-var DOM_PROPERTY_NAMES = [
+const DOM_PROPERTY_NAMES = [
   // Standard
   'acceptCharset', 'accessKey', 'allowFullScreen', 'allowTransparency', 'autoComplete', 'autoFocus', 'autoPlay',
   'cellPadding', 'cellSpacing', 'charSet', 'classID', 'className', 'colSpan', 'contentEditable', 'contextMenu',
-  'crossOrigin', 'dateTime', 'encType', 'formAction', 'formEncType', 'formMethod', 'formNoValidate', 'formTarget',
+  'dateTime', 'encType', 'formAction', 'formEncType', 'formMethod', 'formNoValidate', 'formTarget',
   'frameBorder', 'hrefLang', 'htmlFor', 'httpEquiv', 'inputMode', 'keyParams', 'keyType', 'marginHeight', 'marginWidth',
   'maxLength', 'mediaGroup', 'minLength', 'noValidate', 'onAnimationEnd', 'onAnimationIteration', 'onAnimationStart',
   'onBlur', 'onChange', 'onClick', 'onContextMenu', 'onCopy', 'onCompositionEnd', 'onCompositionStart',
@@ -134,19 +142,29 @@ var DOM_PROPERTY_NAMES = [
  * @param {Object} node - JSX element being tested.
  * @returns {boolean} Whether or not the node name match the JSX tag convention.
  */
-var tagConvention = /^[a-z][^-]*$/;
+const tagConvention = /^[a-z][^-]*$/;
 function isTagName(node) {
   if (tagConvention.test(node.parent.name.name)) {
     // http://www.w3.org/TR/custom-elements/#type-extension-semantics
-    return !node.parent.attributes.some(function(attrNode) {
-      return (
-        attrNode.type === 'JSXAttribute' &&
+    return !node.parent.attributes.some(attrNode => (
+      attrNode.type === 'JSXAttribute' &&
         attrNode.name.type === 'JSXIdentifier' &&
         attrNode.name.name === 'is'
-      );
-    });
+    ));
   }
   return false;
+}
+
+/**
+ * Extracts the tag name for the JSXAttribute
+ * @param {Object} node - JSXAttribute being tested.
+ * @returns {String} tag name
+ */
+function getTagName(node) {
+  if (node && node.parent && node.parent.name && node.parent.name) {
+    return node.parent.name.name;
+  }
+  return null;
 }
 
 /**
@@ -161,8 +179,8 @@ function getStandardName(name) {
   if (SVGDOM_ATTRIBUTE_NAMES[name]) {
     return SVGDOM_ATTRIBUTE_NAMES[name];
   }
-  var i;
-  var found = DOM_PROPERTY_NAMES.some(function(element, index) {
+  let i;
+  const found = DOM_PROPERTY_NAMES.some((element, index) => {
     i = index;
     return element.toLowerCase() === name;
   });
@@ -178,7 +196,8 @@ module.exports = {
     docs: {
       description: 'Prevent usage of unknown DOM property',
       category: 'Possible Errors',
-      recommended: true
+      recommended: true,
+      url: docsUrl('no-unknown-property')
     },
     fixable: 'code',
 
@@ -197,20 +216,37 @@ module.exports = {
   },
 
   create: function(context) {
-
     function getIgnoreConfig() {
       return context.options[0] && context.options[0].ignore || DEFAULTS.ignore;
     }
 
-    var sourceCode = context.getSourceCode();
+    const sourceCode = context.getSourceCode();
 
     return {
 
       JSXAttribute: function(node) {
-        var ignoreNames = getIgnoreConfig();
-        var name = sourceCode.getText(node.name);
-        var standardName = getStandardName(name);
-        if (!isTagName(node) || !standardName || ignoreNames.indexOf(name) >= 0) {
+        const ignoreNames = getIgnoreConfig();
+        const name = sourceCode.getText(node.name);
+        if (ignoreNames.indexOf(name) >= 0) {
+          return;
+        }
+
+        const tagName = getTagName(node);
+        const allowedTags = ATTRIBUTE_TAGS_MAP[name];
+        if (tagName && allowedTags && /[^A-Z]/.test(tagName.charAt(0)) && allowedTags.indexOf(tagName) === -1) {
+          context.report({
+            node: node,
+            message: WRONG_TAG_MESSAGE,
+            data: {
+              name: name,
+              tagName: tagName,
+              allowedTags: allowedTags.join(', ')
+            }
+          });
+        }
+
+        const standardName = getStandardName(name);
+        if (!isTagName(node) || !standardName) {
           return;
         }
         context.report({
@@ -226,6 +262,5 @@ module.exports = {
         });
       }
     };
-
   }
 };

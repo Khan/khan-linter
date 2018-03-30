@@ -5,14 +5,22 @@
  */
 'use strict';
 
-var pragmaUtil = require('../util/pragma');
-var versionUtil = require('../util/version');
+const has = require('has');
+
+const pragmaUtil = require('../util/pragma');
+const versionUtil = require('../util/version');
+const docsUrl = require('../util/docsUrl');
 
 // ------------------------------------------------------------------------------
 // Constants
 // ------------------------------------------------------------------------------
 
-var DEPRECATED_MESSAGE = '{{oldMethod}} is deprecated since React {{version}}{{newMethod}}';
+const MODULES = {
+  react: ['React'],
+  'react-addons-perf': ['ReactPerf', 'Perf']
+};
+
+const DEPRECATED_MESSAGE = '{{oldMethod}} is deprecated since React {{version}}{{newMethod}}';
 
 // ------------------------------------------------------------------------------
 // Rule Definition
@@ -23,59 +31,92 @@ module.exports = {
     docs: {
       description: 'Prevent usage of deprecated methods',
       category: 'Best Practices',
-      recommended: true
+      recommended: true,
+      url: docsUrl('no-deprecated')
     },
     schema: []
   },
 
   create: function(context) {
-
-    var sourceCode = context.getSourceCode();
-    var pragma = pragmaUtil.getFromContext(context);
+    const sourceCode = context.getSourceCode();
+    const pragma = pragmaUtil.getFromContext(context);
 
     function getDeprecated() {
-      var deprecated = {
-        MemberExpression: {}
-      };
+      const deprecated = {};
       // 0.12.0
-      deprecated.MemberExpression[pragma + '.renderComponent'] = ['0.12.0', pragma + '.render'];
-      deprecated.MemberExpression[pragma + '.renderComponentToString'] = ['0.12.0', pragma + '.renderToString'];
-      deprecated.MemberExpression[pragma + '.renderComponentToStaticMarkup'] = [
-        '0.12.0',
-        pragma + '.renderToStaticMarkup'
-      ];
-      deprecated.MemberExpression[pragma + '.isValidComponent'] = ['0.12.0', pragma + '.isValidElement'];
-      deprecated.MemberExpression[pragma + '.PropTypes.component'] = ['0.12.0', pragma + '.PropTypes.element'];
-      deprecated.MemberExpression[pragma + '.PropTypes.renderable'] = ['0.12.0', pragma + '.PropTypes.node'];
-      deprecated.MemberExpression[pragma + '.isValidClass'] = ['0.12.0'];
-      deprecated.MemberExpression['this.transferPropsTo'] = ['0.12.0', 'spread operator ({...})'];
+      deprecated[`${pragma}.renderComponent`] = ['0.12.0', `${pragma}.render`];
+      deprecated[`${pragma}.renderComponentToString`] = ['0.12.0', `${pragma}.renderToString`];
+      deprecated[`${pragma}.renderComponentToStaticMarkup`] = ['0.12.0', `${pragma}.renderToStaticMarkup`];
+      deprecated[`${pragma}.isValidComponent`] = ['0.12.0', `${pragma}.isValidElement`];
+      deprecated[`${pragma}.PropTypes.component`] = ['0.12.0', `${pragma}.PropTypes.element`];
+      deprecated[`${pragma}.PropTypes.renderable`] = ['0.12.0', `${pragma}.PropTypes.node`];
+      deprecated[`${pragma}.isValidClass`] = ['0.12.0'];
+      deprecated['this.transferPropsTo'] = ['0.12.0', 'spread operator ({...})'];
       // 0.13.0
-      deprecated.MemberExpression[pragma + '.addons.classSet'] = ['0.13.0', 'the npm module classnames'];
-      deprecated.MemberExpression[pragma + '.addons.cloneWithProps'] = ['0.13.0', pragma + '.cloneElement'];
+      deprecated[`${pragma}.addons.classSet`] = ['0.13.0', 'the npm module classnames'];
+      deprecated[`${pragma}.addons.cloneWithProps`] = ['0.13.0', `${pragma}.cloneElement`];
       // 0.14.0
-      deprecated.MemberExpression[pragma + '.render'] = ['0.14.0', 'ReactDOM.render'];
-      deprecated.MemberExpression[pragma + '.unmountComponentAtNode'] = ['0.14.0', 'ReactDOM.unmountComponentAtNode'];
-      deprecated.MemberExpression[pragma + '.findDOMNode'] = ['0.14.0', 'ReactDOM.findDOMNode'];
-      deprecated.MemberExpression[pragma + '.renderToString'] = ['0.14.0', 'ReactDOMServer.renderToString'];
-      deprecated.MemberExpression[pragma + '.renderToStaticMarkup'] = ['0.14.0', 'ReactDOMServer.renderToStaticMarkup'];
+      deprecated[`${pragma}.render`] = ['0.14.0', 'ReactDOM.render'];
+      deprecated[`${pragma}.unmountComponentAtNode`] = ['0.14.0', 'ReactDOM.unmountComponentAtNode'];
+      deprecated[`${pragma}.findDOMNode`] = ['0.14.0', 'ReactDOM.findDOMNode'];
+      deprecated[`${pragma}.renderToString`] = ['0.14.0', 'ReactDOMServer.renderToString'];
+      deprecated[`${pragma}.renderToStaticMarkup`] = ['0.14.0', 'ReactDOMServer.renderToStaticMarkup'];
       // 15.0.0
-      deprecated.MemberExpression[pragma + '.addons.LinkedStateMixin'] = ['15.0.0'];
-      deprecated.MemberExpression['ReactPerf.printDOM'] = ['15.0.0', 'ReactPerf.printOperations'];
-      deprecated.MemberExpression['Perf.printDOM'] = ['15.0.0', 'Perf.printOperations'];
-      deprecated.MemberExpression['ReactPerf.getMeasurementsSummaryMap'] = ['15.0.0', 'ReactPerf.getWasted'];
-      deprecated.MemberExpression['Perf.getMeasurementsSummaryMap'] = ['15.0.0', 'Perf.getWasted'];
-
+      deprecated[`${pragma}.addons.LinkedStateMixin`] = ['15.0.0'];
+      deprecated['ReactPerf.printDOM'] = ['15.0.0', 'ReactPerf.printOperations'];
+      deprecated['Perf.printDOM'] = ['15.0.0', 'Perf.printOperations'];
+      deprecated['ReactPerf.getMeasurementsSummaryMap'] = ['15.0.0', 'ReactPerf.getWasted'];
+      deprecated['Perf.getMeasurementsSummaryMap'] = ['15.0.0', 'Perf.getWasted'];
+      // 15.5.0
+      deprecated[`${pragma}.createClass`] = ['15.5.0', 'the npm module create-react-class'];
+      deprecated[`${pragma}.addons.TestUtils`] = ['15.5.0', 'ReactDOM.TestUtils'];
+      deprecated[`${pragma}.PropTypes`] = ['15.5.0', 'the npm module prop-types'];
+      // 15.6.0
+      deprecated[`${pragma}.DOM`] = ['15.6.0', 'the npm module react-dom-factories'];
       return deprecated;
     }
 
-    function isDeprecated(type, method) {
-      var deprecated = getDeprecated();
+    function isDeprecated(method) {
+      const deprecated = getDeprecated();
 
       return (
-        deprecated[type] &&
-        deprecated[type][method] &&
-        versionUtil.test(context, deprecated[type][method][0])
+        deprecated &&
+        deprecated[method] &&
+        versionUtil.testReactVersion(context, deprecated[method][0])
       );
+    }
+
+    function checkDeprecation(node, method) {
+      if (!isDeprecated(method)) {
+        return;
+      }
+      const deprecated = getDeprecated();
+      context.report({
+        node: node,
+        message: DEPRECATED_MESSAGE,
+        data: {
+          oldMethod: method,
+          version: deprecated[method][0],
+          newMethod: deprecated[method][1] ? `, use ${deprecated[method][1]} instead` : ''
+        }
+      });
+    }
+
+    function getReactModuleName(node) {
+      let moduleName = false;
+      if (!node.init) {
+        return moduleName;
+      }
+      for (const module in MODULES) {
+        if (!has(MODULES, module)) {
+          continue;
+        }
+        moduleName = MODULES[module].find(name => name === node.init.name);
+        if (moduleName) {
+          break;
+        }
+      }
+      return moduleName;
     }
 
     // --------------------------------------------------------------------------
@@ -85,27 +126,42 @@ module.exports = {
     return {
 
       MemberExpression: function(node) {
-        var method = sourceCode.getText(node);
-        if (!isDeprecated(node.type, method)) {
+        checkDeprecation(node, sourceCode.getText(node));
+      },
+
+      ImportDeclaration: function(node) {
+        const isReactImport = typeof MODULES[node.source.value] !== 'undefined';
+        if (!isReactImport) {
           return;
         }
-        var deprecated = getDeprecated();
-        context.report({
-          node: node,
-          message: DEPRECATED_MESSAGE,
-          data: {
-            oldMethod: method,
-            version: deprecated[node.type][method][0],
-            newMethod: deprecated[node.type][method][1] ? ', use ' + deprecated[node.type][method][1] + ' instead' : ''
+        node.specifiers.forEach(specifier => {
+          if (!specifier.imported) {
+            return;
           }
+          checkDeprecation(node, `${MODULES[node.source.value][0]}.${specifier.imported.name}`);
         });
       },
 
-      BlockComment: function(node) {
-        pragma = pragmaUtil.getFromNode(node) || pragma;
+      VariableDeclarator: function(node) {
+        const reactModuleName = getReactModuleName(node);
+        const isRequire = node.init && node.init.callee && node.init.callee.name === 'require';
+        const isReactRequire =
+          node.init && node.init.arguments &&
+          node.init.arguments.length && typeof MODULES[node.init.arguments[0].value] !== 'undefined'
+        ;
+        const isDestructuring = node.id && node.id.type === 'ObjectPattern';
+
+        if (
+          !(isDestructuring && reactModuleName) &&
+          !(isDestructuring && isRequire && isReactRequire)
+        ) {
+          return;
+        }
+        node.id.properties.forEach(property => {
+          checkDeprecation(node, `${reactModuleName || pragma}.${property.key.name}`);
+        });
       }
 
     };
-
   }
 };

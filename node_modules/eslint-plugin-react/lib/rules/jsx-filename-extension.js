@@ -4,13 +4,14 @@
  */
 'use strict';
 
-var path = require('path');
+const path = require('path');
+const docsUrl = require('../util/docsUrl');
 
 // ------------------------------------------------------------------------------
 // Constants
 // ------------------------------------------------------------------------------
 
-var DEFAULTS = {
+const DEFAULTS = {
   extensions: ['.jsx']
 };
 
@@ -23,7 +24,8 @@ module.exports = {
     docs: {
       description: 'Restrict file extensions that may contain JSX',
       category: 'Stylistic Issues',
-      recommended: false
+      recommended: false,
+      url: docsUrl('jsx-filename-extension')
     },
 
     schema: [{
@@ -41,14 +43,12 @@ module.exports = {
   },
 
   create: function(context) {
-
-
     function getExtensionsConfig() {
       return context.options[0] && context.options[0].extensions || DEFAULTS.extensions;
     }
 
-    var invalidExtension;
-    var invalidNode;
+    let invalidExtension;
+    let invalidNode;
 
     // --------------------------------------------------------------------------
     // Public
@@ -56,7 +56,7 @@ module.exports = {
 
     return {
       JSXElement: function(node) {
-        var filename = context.getFilename();
+        const filename = context.getFilename();
         if (filename === '<text>') {
           return;
         }
@@ -65,10 +65,8 @@ module.exports = {
           return;
         }
 
-        var allowedExtensions = getExtensionsConfig();
-        var isAllowedExtension = allowedExtensions.some(function (extension) {
-          return filename.slice(-extension.length) === extension;
-        });
+        const allowedExtensions = getExtensionsConfig();
+        const isAllowedExtension = allowedExtensions.some(extension => filename.slice(-extension.length) === extension);
 
         if (isAllowedExtension) {
           return;
@@ -85,10 +83,9 @@ module.exports = {
 
         context.report({
           node: invalidNode,
-          message: 'JSX not allowed in files with extension \'' + invalidExtension + '\''
+          message: `JSX not allowed in files with extension '${invalidExtension}'`
         });
       }
     };
-
   }
 };

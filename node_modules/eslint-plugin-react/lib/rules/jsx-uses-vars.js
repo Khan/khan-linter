@@ -4,6 +4,8 @@
  */
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 // ------------------------------------------------------------------------------
 // Rule Definition
 // ------------------------------------------------------------------------------
@@ -13,16 +15,16 @@ module.exports = {
     docs: {
       description: 'Prevent variables used in JSX to be marked as unused',
       category: 'Best Practices',
-      recommended: true
+      recommended: true,
+      url: docsUrl('jsx-uses-vars')
     },
     schema: []
   },
 
   create: function(context) {
-
     return {
       JSXOpeningElement: function(node) {
-        var name;
+        let name;
         if (node.name.namespace && node.name.namespace.name) {
           // <Foo:Bar>
           name = node.name.namespace.name;
@@ -31,7 +33,7 @@ module.exports = {
           name = node.name.name;
         } else if (node.name.object) {
           // <Foo...Bar>
-          var parent = node.name.object;
+          let parent = node.name.object;
           while (parent.object) {
             parent = parent.object;
           }
@@ -44,6 +46,5 @@ module.exports = {
       }
 
     };
-
   }
 };

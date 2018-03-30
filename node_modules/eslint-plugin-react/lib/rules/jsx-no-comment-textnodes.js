@@ -4,6 +4,8 @@
  */
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 // ------------------------------------------------------------------------------
 // Rule Definition
 // ------------------------------------------------------------------------------
@@ -13,7 +15,8 @@ module.exports = {
     docs: {
       description: 'Comments inside children section of tag should be placed inside braces',
       category: 'Possible Errors',
-      recommended: false
+      recommended: true,
+      url: docsUrl('jsx-no-comment-textnodes')
     },
 
     schema: [{
@@ -34,7 +37,10 @@ module.exports = {
 
     return {
       Literal: function(node) {
-        if (/^\s*\/(\/|\*)/m.test(node.value)) {
+        const sourceCode = context.getSourceCode();
+        // since babel-eslint has the wrong node.raw, we'll get the source text
+        const rawValue = sourceCode.getText(node);
+        if (/^\s*\/(\/|\*)/m.test(rawValue)) {
           // inside component, e.g. <div>literal</div>
           if (node.parent.type !== 'JSXAttribute' &&
               node.parent.type !== 'JSXExpressionContainer' &&

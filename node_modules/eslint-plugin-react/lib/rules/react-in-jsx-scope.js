@@ -4,8 +4,9 @@
  */
 'use strict';
 
-var variableUtil = require('../util/variable');
-var pragmaUtil = require('../util/pragma');
+const variableUtil = require('../util/variable');
+const pragmaUtil = require('../util/pragma');
+const docsUrl = require('../util/docsUrl');
 
 // -----------------------------------------------------------------------------
 // Rule Definition
@@ -16,20 +17,20 @@ module.exports = {
     docs: {
       description: 'Prevent missing React when using JSX',
       category: 'Possible Errors',
-      recommended: true
+      recommended: true,
+      url: docsUrl('react-in-jsx-scope')
     },
     schema: []
   },
 
   create: function(context) {
-
-    var pragma = pragmaUtil.getFromContext(context);
-    var NOT_DEFINED_MESSAGE = '\'{{name}}\' must be in scope when using JSX';
+    const pragma = pragmaUtil.getFromContext(context);
+    const NOT_DEFINED_MESSAGE = '\'{{name}}\' must be in scope when using JSX';
 
     return {
 
       JSXOpeningElement: function(node) {
-        var variables = variableUtil.variablesInScope(context);
+        const variables = variableUtil.variablesInScope(context);
         if (variableUtil.findVariable(variables, pragma)) {
           return;
         }
@@ -40,13 +41,8 @@ module.exports = {
             name: pragma
           }
         });
-      },
-
-      BlockComment: function(node) {
-        pragma = pragmaUtil.getFromNode(node) || pragma;
       }
 
     };
-
   }
 };

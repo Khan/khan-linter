@@ -4,6 +4,8 @@
  */
 'use strict';
 
+const docsUrl = require('../util/docsUrl');
+
 // ------------------------------------------------------------------------------
 // Rule Definition
 // ------------------------------------------------------------------------------
@@ -13,7 +15,8 @@ module.exports = {
     docs: {
       description: 'Disallow or enforce spaces around equal signs in JSX attributes',
       category: 'Stylistic Issues',
-      recommended: false
+      recommended: false,
+      url: docsUrl('jsx-equals-spacing')
     },
     fixable: 'code',
 
@@ -23,8 +26,8 @@ module.exports = {
   },
 
   create: function(context) {
-    var config = context.options[0];
-    var sourceCode = context.getSourceCode();
+    const config = context.options[0];
+    const sourceCode = context.getSourceCode();
 
     /**
      * Determines a given attribute node has an equal sign.
@@ -41,14 +44,14 @@ module.exports = {
 
     return {
       JSXOpeningElement: function(node) {
-        node.attributes.forEach(function(attrNode) {
+        node.attributes.forEach(attrNode => {
           if (!hasEqual(attrNode)) {
             return;
           }
 
-          var equalToken = sourceCode.getTokenAfter(attrNode.name);
-          var spacedBefore = sourceCode.isSpaceBetweenTokens(attrNode.name, equalToken);
-          var spacedAfter = sourceCode.isSpaceBetweenTokens(equalToken, attrNode.value);
+          const equalToken = sourceCode.getTokenAfter(attrNode.name);
+          const spacedBefore = sourceCode.isSpaceBetweenTokens(attrNode.name, equalToken);
+          const spacedAfter = sourceCode.isSpaceBetweenTokens(equalToken, attrNode.value);
 
           switch (config) {
             default:
@@ -59,7 +62,7 @@ module.exports = {
                   loc: equalToken.loc.start,
                   message: 'There should be no space before \'=\'',
                   fix: function(fixer) {
-                    return fixer.removeRange([attrNode.name.range[1], equalToken.start]);
+                    return fixer.removeRange([attrNode.name.range[1], equalToken.range[0]]);
                   }
                 });
               }
@@ -69,7 +72,7 @@ module.exports = {
                   loc: equalToken.loc.start,
                   message: 'There should be no space after \'=\'',
                   fix: function(fixer) {
-                    return fixer.removeRange([equalToken.end, attrNode.value.range[0]]);
+                    return fixer.removeRange([equalToken.range[1], attrNode.value.range[0]]);
                   }
                 });
               }

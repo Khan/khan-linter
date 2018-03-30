@@ -4,7 +4,8 @@
  */
 'use strict';
 
-var pragmaUtil = require('../util/pragma');
+const pragmaUtil = require('../util/pragma');
+const docsUrl = require('../util/docsUrl');
 
 // ------------------------------------------------------------------------------
 // Rule Definition
@@ -15,14 +16,14 @@ module.exports = {
     docs: {
       description: 'Prevent React to be marked as unused',
       category: 'Best Practices',
-      recommended: true
+      recommended: true,
+      url: docsUrl('jsx-uses-react')
     },
     schema: []
   },
 
   create: function(context) {
-
-    var pragma = pragmaUtil.getFromContext(context);
+    const pragma = pragmaUtil.getFromContext(context);
 
     // --------------------------------------------------------------------------
     // Public
@@ -32,13 +33,8 @@ module.exports = {
 
       JSXOpeningElement: function() {
         context.markVariableAsUsed(pragma);
-      },
-
-      BlockComment: function(node) {
-        pragma = pragmaUtil.getFromNode(node) || pragma;
       }
 
     };
-
   }
 };

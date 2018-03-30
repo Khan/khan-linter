@@ -4,8 +4,8 @@
  */
 'use strict';
 
-// var Components = require('../util/Components');
-var hasProp = require('jsx-ast-utils/hasProp');
+const hasProp = require('jsx-ast-utils/hasProp');
+const docsUrl = require('../util/docsUrl');
 
 
 // ------------------------------------------------------------------------------
@@ -17,13 +17,13 @@ module.exports = {
     docs: {
       description: 'Report missing `key` props in iterators/collection literals',
       category: 'Possible Errors',
-      recommended: false
+      recommended: true,
+      url: docsUrl('jsx-key')
     },
     schema: []
   },
 
   create: function(context) {
-
     function checkIteratorElement(node) {
       if (node.type === 'JSXElement' && !hasProp(node.openingElement.attributes, 'key')) {
         context.report({
@@ -34,9 +34,7 @@ module.exports = {
     }
 
     function getReturnStatement(body) {
-      return body.filter(function(item) {
-        return item.type === 'ReturnStatement';
-      })[0];
+      return body.filter(item => item.type === 'ReturnStatement')[0];
     }
 
     return {
@@ -63,9 +61,9 @@ module.exports = {
           return;
         }
 
-        var fn = node.arguments[0];
-        var isFn = fn && fn.type === 'FunctionExpression';
-        var isArrFn = fn && fn.type === 'ArrowFunctionExpression';
+        const fn = node.arguments[0];
+        const isFn = fn && fn.type === 'FunctionExpression';
+        const isArrFn = fn && fn.type === 'ArrowFunctionExpression';
 
         if (isArrFn && fn.body.type === 'JSXElement') {
           checkIteratorElement(fn.body);
@@ -73,7 +71,7 @@ module.exports = {
 
         if (isFn || isArrFn) {
           if (fn.body.type === 'BlockStatement') {
-            var returnStatement = getReturnStatement(fn.body.body);
+            const returnStatement = getReturnStatement(fn.body.body);
             if (returnStatement && returnStatement.argument) {
               checkIteratorElement(returnStatement.argument);
             }

@@ -4,7 +4,8 @@
  */
 'use strict';
 
-var Components = require('../util/Components');
+const Components = require('../util/Components');
+const docsUrl = require('../util/docsUrl');
 
 // ------------------------------------------------------------------------------
 // Rule Definition
@@ -15,7 +16,8 @@ module.exports = {
     docs: {
       description: 'Enforce ES5 or ES6 class for React Components',
       category: 'Stylistic Issues',
-      recommended: false
+      recommended: false,
+      url: docsUrl('prefer-es6-class')
     },
 
     schema: [{
@@ -23,8 +25,8 @@ module.exports = {
     }]
   },
 
-  create: Components.detect(function(context, components, utils) {
-    var configuration = context.options[0] || 'always';
+  create: Components.detect((context, components, utils) => {
+    const configuration = context.options[0] || 'always';
 
     return {
       ObjectExpression: function(node) {

@@ -4,7 +4,8 @@
  */
 'use strict';
 
-var Components = require('../util/Components');
+const Components = require('../util/Components');
+const docsUrl = require('../util/docsUrl');
 
 // ------------------------------------------------------------------------------
 // Rule Definition
@@ -15,12 +16,13 @@ module.exports = {
     docs: {
       description: 'Prevent string definitions for references and prevent referencing this.refs',
       category: 'Best Practices',
-      recommended: false
+      recommended: true,
+      url: docsUrl('no-string-refs')
     },
     schema: []
   },
 
-  create: Components.detect(function(context, components, utils) {
+  create: Components.detect((context, components, utils) => {
     /**
      * Checks if we are using refs
      * @param {ASTNode} node The AST node being checked.

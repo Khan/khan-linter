@@ -5,15 +5,16 @@
 
 'use strict';
 
-var elementType = require('jsx-ast-utils/elementType');
+const elementType = require('jsx-ast-utils/elementType');
+const docsUrl = require('../util/docsUrl');
 
 // ------------------------------------------------------------------------------
 // Constants
 // ------------------------------------------------------------------------------
 
-var PASCAL_CASE_REGEX = /^([A-Z0-9]|[A-Z0-9]+[a-z0-9]+(?:[A-Z0-9]+[a-z0-9]*)*)$/;
-var COMPAT_TAG_REGEX = /^[a-z]|\-/;
-var ALL_CAPS_TAG_REGEX = /^[A-Z0-9]+$/;
+const PASCAL_CASE_REGEX = /^([A-Z0-9]|[A-Z0-9]+[a-z0-9]+(?:[A-Z0-9]+[a-z0-9]*)*)$/;
+const COMPAT_TAG_REGEX = /^[a-z]|\-/;
+const ALL_CAPS_TAG_REGEX = /^[A-Z0-9]+$/;
 
 // ------------------------------------------------------------------------------
 // Rule Definition
@@ -24,7 +25,8 @@ module.exports = {
     docs: {
       description: 'Enforce PascalCase for user-defined JSX components',
       category: 'Stylistic Issues',
-      recommended: false
+      recommended: false,
+      url: docsUrl('jsx-pascal-case')
     },
 
     schema: [{
@@ -42,14 +44,13 @@ module.exports = {
   },
 
   create: function(context) {
-
-    var configuration = context.options[0] || {};
-    var allowAllCaps = configuration.allowAllCaps || false;
-    var ignore = configuration.ignore || [];
+    const configuration = context.options[0] || {};
+    const allowAllCaps = configuration.allowAllCaps || false;
+    const ignore = configuration.ignore || [];
 
     return {
       JSXOpeningElement: function(node) {
-        var name = elementType(node);
+        let name = elementType(node);
 
         // Get namespace if the type is JSXNamespacedName or JSXMemberExpression
         if (name.indexOf(':') > -1) {
@@ -58,19 +59,18 @@ module.exports = {
           name = name.substring(0, name.indexOf('.'));
         }
 
-        var isPascalCase = PASCAL_CASE_REGEX.test(name);
-        var isCompatTag = COMPAT_TAG_REGEX.test(name);
-        var isAllowedAllCaps = allowAllCaps && ALL_CAPS_TAG_REGEX.test(name);
-        var isIgnored = ignore.indexOf(name) !== -1;
+        const isPascalCase = PASCAL_CASE_REGEX.test(name);
+        const isCompatTag = COMPAT_TAG_REGEX.test(name);
+        const isAllowedAllCaps = allowAllCaps && ALL_CAPS_TAG_REGEX.test(name);
+        const isIgnored = ignore.indexOf(name) !== -1;
 
         if (!isPascalCase && !isCompatTag && !isAllowedAllCaps && !isIgnored) {
           context.report({
             node: node,
-            message: 'Imported JSX component ' + name + ' must be in PascalCase'
+            message: `Imported JSX component ${name} must be in PascalCase`
           });
         }
       }
     };
-
   }
 };
