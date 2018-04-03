@@ -513,26 +513,30 @@ class Eslint(Linter):
         else:
             env['NODE_PATH'] = os.path.dirname(self._config_path)
 
-        pipe = subprocess.Popen(
+        process = subprocess.Popen(
             subprocess_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env)
-        stdout, stderr = pipe.communicate()
+        stdout, stderr = process.communicate()
         stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
 
         if stderr:
-            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+            raise RuntimeError(
+                "Unexpected stderr from linter (exited %s):\n%s\nstdout:\n%s"
+                % (process.returncode, stderr, stdout))
 
         # Check for the "Lint results:" message outputted as the first line of
         # eslint_reporter.js. This helps us distinguish between two "failure"
         # cases: ESLint successfully linting but yielding errors, and ESLint
         # crashing.
         if not stdout.strip():
-            raise RuntimeError("Expected stdout from linter, got none.")
+            raise RuntimeError("Expected stdout from linter (exited %s), "
+                               "got none." % process.returncode)
         stdout_lines = stdout.splitlines()
         if stdout_lines[0].strip() != 'Lint results:':
-            raise RuntimeError("Unexpected stdout from linter:\n%s" % stdout)
+            raise RuntimeError("Unexpected stdout from linter (exited %s):\n%s"
+                               % (process.returncode, stdout))
         return stdout_lines[1:]
 
     def lint_files(self, files):
