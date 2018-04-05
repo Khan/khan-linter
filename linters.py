@@ -4,6 +4,7 @@
 import itertools
 import os
 import re
+import signal
 import subprocess
 import sys
 
@@ -513,12 +514,22 @@ class Eslint(Linter):
         else:
             env['NODE_PATH'] = os.path.dirname(self._config_path)
 
-        process = subprocess.Popen(
-            subprocess_args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env)
-        stdout, stderr = process.communicate()
+        for _ in xrange(3):
+            process = subprocess.Popen(
+                subprocess_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env)
+            stdout, stderr = process.communicate()
+            # eslint (or rather, the node process running it) is segfaulting
+            # some small percentage of the time, for reasons we don't
+            # understand.  (See INFRA-1000.)  Until we figure out how to fix
+            # this, if we see a segfault, just retry a couple of times.
+            # TODO(benkraft): If the segfault ever gets fixed, remove this
+            # retry logic.
+            if process.returncode != -signal.SIGSEGV:
+                break
+
         stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
 
         if stderr:
