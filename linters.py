@@ -514,7 +514,7 @@ class Eslint(Linter):
         else:
             env['NODE_PATH'] = os.path.dirname(self._config_path)
 
-        for _ in xrange(3):
+        for _ in range(3):
             process = subprocess.Popen(
                 subprocess_args,
                 stdout=subprocess.PIPE,
