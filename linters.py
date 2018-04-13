@@ -763,7 +763,7 @@ class KtLint(Linter):
         # Apparently java version info is printed to stderr...
         _, version_info = version_info_pipe.communicate()
         version_re = r'\w+ version "(\d\.\d)'
-        matchobj = re.search(version_re, version_info)
+        matchobj = re.search(version_re, version_info.decode('utf-8'))
         assert matchobj is not None, (
             "Unable to determine version of java for running ktlint.")
         version = matchobj.group(1)
