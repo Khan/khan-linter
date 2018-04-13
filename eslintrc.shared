@@ -30,6 +30,7 @@
         "no-undef": 2,
         "no-unexpected-multiline": 2,
         "no-unreachable": 2,
+        "no-unused-expressions": [2, {"allowShortCircuit": true, "allowTernary": true}],
         "no-unused-vars": [2, {"args": "none", "varsIgnorePattern": "^_*$"}],
         "no-useless-call": 2,
         "no-with": 2,
@@ -44,8 +45,9 @@
         // use jsdoc anywhere it seems silly to require it yet.
         "valid-jsdoc": 0,
         "require-jsdoc": 0,
-        "jsx-a11y/alt-text": 1,
-        "jsx-a11y/aria-props": 1
+        "jsx-a11y/alt-text": 2,
+        "jsx-a11y/aria-props": 2,
+        "jsx-a11y/anchor-is-valid": 2
         // TODO(scottgrant): Add additional a11y rules as we support them.
     },
     "globals": {
