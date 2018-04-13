@@ -30,10 +30,15 @@
         "no-undef": 2,
         "no-unexpected-multiline": 2,
         "no-unreachable": 2,
+        "no-unused-expressions": [2, {"allowShortCircuit": true, "allowTernary": true}],
         "no-unused-vars": [2, {"args": "none", "varsIgnorePattern": "^_*$"}],
         "no-useless-call": 2,
         "no-with": 2,
         "one-var": [2, "never"],
+        "jsx-a11y/alt-text": 2,
+        "jsx-a11y/aria-props": 2,
+        "jsx-a11y/anchor-is-valid": 2,
+        // TODO(scottgrant): Add additional a11y rules as we support them.
         // ---------------------------------------
         // Stuff that's disabled for now, but maybe shouldn't be.
         // TODO(jeresig): It's an anti-pattern but it appears to be used
@@ -43,10 +48,7 @@
         // Might be nice to turn this on one day, but since we don't
         // use jsdoc anywhere it seems silly to require it yet.
         "valid-jsdoc": 0,
-        "require-jsdoc": 0,
-        "jsx-a11y/alt-text": 1,
-        "jsx-a11y/aria-props": 1
-        // TODO(scottgrant): Add additional a11y rules as we support them.
+        "require-jsdoc": 0
     },
     "globals": {
         // These are copied from
