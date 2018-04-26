@@ -521,13 +521,15 @@ class Eslint(Linter):
                 stderr=subprocess.PIPE,
                 env=env)
             stdout, stderr = process.communicate()
-            # eslint (or rather, the node process running it) is segfaulting
+            # eslint (or rather, the node process running it) is crashing
             # some small percentage of the time, for reasons we don't
-            # understand.  (See INFRA-1000.)  Until we figure out how to fix
+            # understand.  Normally this is a segfault but sometimes it's a
+            # SIGILL; I'm guessing it's jumping to some bad location.
+            # (See INFRA-1000.)  Until we figure out how to fix
             # this, if we see a segfault, just retry a couple of times.
             # TODO(benkraft): If the segfault ever gets fixed, remove this
             # retry logic.
-            if process.returncode != -signal.SIGSEGV:
+            if -process.returncode not in (signal.SIGSEGV, signal.SIGILL):
                 break
 
         stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
