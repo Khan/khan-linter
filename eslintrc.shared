@@ -37,6 +37,7 @@
         "one-var": [2, "never"],
         "jsx-a11y/alt-text": 2,
         "jsx-a11y/aria-props": 2,
+	"jsx-a11y/aria-role": [2, {"ignoreNonDOM": true}],
         "jsx-a11y/anchor-is-valid": 2,
         // TODO(scottgrant): Add additional a11y rules as we support them.
         // ---------------------------------------
