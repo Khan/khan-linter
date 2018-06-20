@@ -11,6 +11,9 @@ import sys
 import lint_util
 import six
 import six.moves
+import threading
+import time
+import math
 
 from six.moves import cStringIO as StringIO
 
@@ -493,8 +496,33 @@ class Eslint(Linter):
                                                  contents_lines)
         return num_errors
 
-    def _run_eslint(self, files):
+    def _add_lint_lines_to_output(self, stdout_lines, output):
+        """Format and sort lint lines, then add to output dict."""
+        # eslint_reporter specifies that errors are reported on
+        # individual lines starting with "filename:line:col".  It
+        # converts all filenames to an absolute path; we convert them
+        # back to relpaths here.
+        lint_lines = []
+        for line in stdout_lines:
+            parts = line.split(':', 1)
+            if len(parts) != 2:
+                raise RuntimeError("Unexpected stdout from linter:\n%s" %
+                                   stdout_lines)
+            lint_lines.append('%s:%s' % (os.path.relpath(parts[0]), parts[1]))
+
+        get_filename = lambda line: line.split(':', 1)[0]
+        lines = sorted(lint_lines, key=get_filename)
+        for filename, flines in itertools.groupby(lines, get_filename):
+            output[filename] = list(flines)
+
+    def _run_eslint(self, files, output):
         """Run eslint on the given files and returns stdout, sans header."""
+        # If we're linting on less files than the number of threads, we could
+        # be calling _run_eslint with files = [], in which case, do nothing.
+        if not files:
+            return
+        start_time = time.time()
+        print_("Starting thread on %s files" % len(files))
         exec_path = os.path.join(_CWD, 'node_modules', '.bin', 'eslint')
         reporter_path = os.path.join(_CWD, 'eslint_reporter.js')
         assert os.path.isfile(exec_path), (
@@ -550,7 +578,11 @@ class Eslint(Linter):
         if stdout_lines[0].strip() != 'Lint results:':
             raise RuntimeError("Unexpected stdout from linter (exited %s):\n%s"
                                % (process.returncode, stdout))
-        return stdout_lines[1:]
+
+        lines = self._add_lint_lines_to_output(stdout_lines, output)
+
+        total_time = time.time() - start_time
+        print_("This thread took %s" % total_time)
 
     def lint_files(self, files):
         """Execute a linter on a list of files and return the stdout for each.
@@ -566,29 +598,35 @@ class Eslint(Linter):
             stdout lines only containing files that had output; if there are
             no lint errors, an empty dict.
         """
-        stdout_lines = []
-        # We need to keep sum(|files|) less than about 250k for OS X's
-        # commandline limit.  2000 files at a time should do that.
-        for i in six.moves.range(0, len(files), 2000):
-            stdout_lines.extend(self._run_eslint(files[i:i + 2000]))
+        # stdout_lines = []
 
-        # eslint_reporter specifies that errors are reported on
-        # individual lines starting with "filename:line:col".  It
-        # converts all filenames to an absolute path; we convert them
-        # back to relpaths here.
-        lint_lines = []
-        for line in stdout_lines:
-            parts = line.split(':', 1)
-            if len(parts) != 2:
-                raise RuntimeError("Unexpected stdout from linter:\n%s" %
-                                   stdout_lines)
-            lint_lines.append('%s:%s' % (os.path.relpath(parts[0]), parts[1]))
-
-        get_filename = lambda line: line.split(':', 1)[0]
-        lines = sorted(lint_lines, key=get_filename)
         output = {}
-        for filename, flines in itertools.groupby(lines, get_filename):
-            output[filename] = list(flines)
+
+        # We divvy up file linting into 3 threads to reduce the overall Eslint
+        # timing in the case that we're linting lots of files.
+        # TODO(jacqueline): this may need tweak the number of threads after
+        # we see how the timing of this works in practice
+        threads = []
+
+        # We need to keep sum(|files|) less than about 250k for OS X's
+        # commandline limit. So 2000 per thread is our max.
+        if len(files) < 6000:
+            num_threads = 3
+        else:
+            num_threads = (len(files) / 2000) + 1
+
+        # we round up to keep the file split as even as possible, so the last
+        # thread doesn't get stuck with too many extra
+        chunk = int(math.ceil(len(files) / float(num_threads)))
+        for thread in six.moves.range(num_threads):
+            file_input = files[(chunk * thread):(chunk * (thread+1))]
+            t = threading.Thread(target=self._run_eslint,
+                                 args=(file_input, output))
+            t.start()
+            threads.append(t)
+
+        for thread in threads:
+            thread.join()
 
         return output
 
