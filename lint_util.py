@@ -7,12 +7,27 @@ import sys
 import six
 
 
+def get_real_cwd():
+    """Return the CWD of script in a symlink aware fashion."""
+    return os.path.dirname(os.path.realpath(__file__))
+
+
+def append_to_logfile(text):
+    cwd = get_real_cwd()
+    _parent_dir = os.path.abspath(cwd)
+    _lint_logfile = os.path.join(_parent_dir, 'lint_logfile.log')
+    with open(_lint_logfile, 'a') as f:
+        f.write(text + '\n')
+    f.close()
+
+
 if six.PY2:
     def print_(text, end=None):
         """Always emit text as utf-8.  Useful when piping output elsewhere."""
         if isinstance(text, unicode):
             text = text.encode('utf-8')
         six.print_(text, end=end)
+        append_to_logfile(text)
 else:
     def print_(text, end=None):
         """Always emit text as utf-8.  Useful when piping output elsewhere."""
@@ -23,11 +38,7 @@ else:
         else:    # already bytes
             text += end.encode('utf-8')
         sys.stdout.buffer.write(text)
-
-
-def get_real_cwd():
-    """Return the CWD of script in a symlink aware fashion."""
-    return os.path.dirname(os.path.realpath(__file__))
+        append_to_logfile(text)
 
 
 def add_arc_fix_str(lintline, bad_line, to_remove, to_add,

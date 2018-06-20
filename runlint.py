@@ -642,6 +642,10 @@ def main(files_and_directories,
       (0, 0) means lint-cleanliness.  If the second value is non-zero, it
       means there was a problem in the lint framework itself somewhere.
     """
+    overall_start_time = time.time()
+    print_("[%s] Starting lint on %s file(s)...\n\t%s"
+           % (overall_start_time, len(files_and_directories),
+              '\n\t'.join([f for f in files_and_directories])))
     files_to_lint = find_files_to_lint(files_and_directories,
                                        blacklist, blacklist_pattern, verbose)
 
@@ -667,17 +671,18 @@ def main(files_and_directories,
 
     for lint_processor in files_by_linter:
         files = files_by_linter[lint_processor]
+
         try:
-            if verbose:
-                print_('--- Running %s:' % lint_processor.__class__.__name__)
+            linter_name = lint_processor.__class__.__name__
+            print_('--- Running %s:' % linter_name)
 
             start_time = time.time()
             num_new_errors = lint_processor.process_files(files)
             num_lint_errors += num_new_errors
             elapsed = time.time() - start_time
 
-            if verbose:
-                print_('%d errors (%.2f seconds)' % (num_new_errors, elapsed))
+            print_('%d errors %s (%.2f seconds)'
+                   % (num_new_errors, linter_name, elapsed))
         except Exception:
             print_(u"ERROR linting %r with %s:\n%s" % (
                 files, type(lint_processor), traceback.format_exc()))
@@ -686,11 +691,19 @@ def main(files_and_directories,
 
     # If they asked for an extra linter to run over these files, do that.
     if extra_linter_filename:
+        print_('--- Running %s:' % extra_linter_filename)
+        start_time = time.time()
         (extra_lint_errors, extra_framework_errors) = (
             _run_extra_linter(extra_linter_filename, files_to_lint, verbose))
         num_lint_errors += extra_lint_errors
         num_framework_errors += extra_framework_errors
+        elapsed = time.time() - start_time
+        print_('%d errors %s (%.2f seconds)'
+               % (extra_lint_errors, extra_linter_filename, elapsed))
 
+    print_("Completed linting on %s (total time: %.2f seconds)"
+           % ('\n\t'.join([f for f in files_and_directories]),
+              time.time() - overall_start_time))
     return (num_lint_errors, num_framework_errors)
 
 
