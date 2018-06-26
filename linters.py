@@ -2,6 +2,7 @@
 """Linters process files or lists of files for correctness."""
 
 import itertools
+import logging
 import os
 import re
 import signal
@@ -34,6 +35,12 @@ import yaml
 print_ = lint_util.print_
 
 
+def _is_verbose(logger):
+    for handler in getattr(logger, 'handlers', []):
+        if getattr(handler, '__class__', None) == logging.StreamHandler:
+            return handler.level == 10
+
+
 def _has_nolint(line):
     """We can turn off linting for a line via `@Nolint` or `NoQA`.
 
@@ -52,6 +59,10 @@ class Linter(object):
     though if you override process_files then it doesn't matter what
     process does).
     """
+    def __init__(self, logger):
+        self.logger = logger
+        self.verbose = _is_verbose(logger)
+
     def process_files(self, files):
         """Print lint errors for a list of filenames and return error count."""
         num_errors = 0
@@ -59,7 +70,7 @@ class Linter(object):
             try:
                 contents = open(f, 'U').read()
             except (IOError, OSError, UnicodeDecodeError) as why:
-                print_("SKIPPING lint of %s: %s" % (f, why.args[1]))
+                self.logger.debug("SKIPPING lint of %s: %s" % (f, why.args[1]))
                 num_errors += 1
                 continue
             num_errors += self.process(f, contents)
@@ -68,6 +79,12 @@ class Linter(object):
     def process(self, file, contents):
         """Lint one file given its path and contents, returning error count."""
         raise NotImplementedError("Subclasses must override process()")
+
+    def report(self, lint):
+        """Report the output to both stdout/stderr and logfile."""
+        self.logger.debug(lint)
+        if not self.verbose:
+            print_(lint)
 
 
 def _capture_stdout_of(fn, *args, **kwargs):
@@ -91,7 +108,8 @@ class Flake8(Linter):
         'E731',  # do not assign a lambda expression
     ))
 
-    def __init__(self, propose_arc_fixes=False):
+    def __init__(self, propose_arc_fixes=False, logger=None):
+        super(Flake8, self).__init__(logger=logger)
         self._propose_arc_fixes = propose_arc_fixes
         # A map from filename of a file to lint, to the error codes that
         # we should ignore for this file.  We always ignore error codes
@@ -173,7 +191,9 @@ class Flake8(Linter):
             return 0
 
         # OK, looks like it's a legitimate error.
-        print_(self._maybe_add_arc_fix(lintline, bad_line))
+        lint = self._maybe_add_arc_fix(lintline, bad_line)
+        self.report(lint)
+
         return 1
 
     def _get_file_level_nolint_rules(self, contents_lines):
@@ -267,9 +287,10 @@ class CustomPythonLinter(Linter):
 
             if self._bad_super(line):
                 # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-                print_('%s:%s: E999 first argument to super() must be '
-                       'an explicit classname, not type(self)'
-                       % (f, linenum_minus_1 + 1))
+                lint = ('%s:%s: E999 first argument to super() must be '
+                        'an explicit classname, not type(self)'
+                        % (f, linenum_minus_1 + 1))
+                self.report(lint)
                 num_errors += 1
 
         return num_errors
@@ -299,8 +320,9 @@ class Git(Linter):
         num_errors = 0
         for m in self._MARKERS_RE.finditer(contents_of_f):
             linenum = contents_of_f.count('\n', 0, m.start()) + 1
-            print_('%s:%s:1: E1 git conflict marker "%s" found'
-                   % (f, linenum, m.group(1)))
+            lint = ('%s:%s:1: E1 git conflict marker "%s" found'
+                    % (f, linenum, m.group(1)))
+            self.report(lint)
             num_errors += 1
         return num_errors
 
@@ -311,7 +333,8 @@ class Eslint(Linter):
     Arguments:
         config_path: the path of the eslintrc file
     """
-    def __init__(self, config_path, propose_arc_fixes=False):
+    def __init__(self, config_path, propose_arc_fixes=False, logger=None):
+        super(Eslint, self).__init__(logger=logger)
         self._config_path = config_path
         self._propose_arc_fixes = propose_arc_fixes
 
@@ -482,7 +505,9 @@ class Eslint(Linter):
             output_line += " (Mute with // eslint-disable-line %s)" % (
                 err_type)
 
-        print_(self._maybe_add_arc_fix(output_line, bad_line))
+        lint = self._maybe_add_arc_fix(output_line, bad_line)
+        self.report(lint)
+
         return 1
 
     def process(self, f, contents_of_f, eslint_lines):
@@ -602,7 +627,8 @@ class Eslint(Linter):
                 try:
                     contents = open(filename, 'U').read()
                 except (IOError, OSError, UnicodeDecodeError) as why:
-                    print_("SKIPPING lint of %s: %s" % (filename, why.args[1]))
+                    self.logger.debug("SKIPPING lint of %s: %s"
+                                      % (filename, why.args[1]))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
@@ -621,7 +647,7 @@ class LessHint(Linter):
         if _has_nolint(bad_line):
             return 0
 
-        print_(output_line)
+        self.report(output_line)
         return 1
 
     def process(self, f, contents_of_f, lesshint_lines):
@@ -677,7 +703,8 @@ class LessHint(Linter):
                 try:
                     contents = open(filename, 'U').read()
                 except (IOError, OSError, UnicodeDecodeError) as why:
-                    print_("SKIPPING lint of %s: %s" % (filename, why.args[1]))
+                    self.logger.debug("SKIPPING lint of %s: %s"
+                                      % (filename, why.args[1]))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
@@ -697,8 +724,9 @@ class HtmlLinter(Linter):
             errors = static_content_refs.lint_one_file(f, contents_of_f)
             for (fname, linenum, colnum, unused_endcol, msg) in errors:
                 # Canonical form: <file>:<line>[:<col>]: <E|W><code> <msg>
-                print_('%s:%s:%s: E=static_url= %s'
-                       % (fname, linenum, colnum, msg))
+                lint = ('%s:%s:%s: E=static_url= %s'
+                        % (fname, linenum, colnum, msg))
+                self.report(lint)
             return len(errors)
         else:
             return 0
@@ -715,11 +743,12 @@ class YamlLinter(Linter):
             yaml.safe_load(contents_of_f)
             return 0
         except yaml.parser.ParserError as e:
-            print_('%s:%s:%s: E=yaml= Error parsing yaml: %s %s'
-                   % (f,
-                      e.problem_mark.line + 1,  # yaml.Mark is 0-indexed
-                      1,
-                      e.problem, e.context))
+            lint = ('%s:%s:%s: E=yaml= Error parsing yaml: %s %s'
+                    % (f,
+                       e.problem_mark.line + 1,  # yaml.Mark is 0-indexed
+                       1,
+                       e.problem, e.context))
+            self.report(lint)
             return 1
 
 
@@ -810,7 +839,7 @@ class KtLint(Linter):
         for file, lint in lint_by_file.items():
             for _, lint_err in itertools.compress(
                     lint, self._is_not_skipped(file, lint)):
-                print_(lint_err)
+                self.report(lint_err)
                 num_errors += 1
 
         return num_errors
