@@ -1,5 +1,6 @@
 """Common utility functions used across the application."""
 
+import logging
 import os
 import re
 import sys
@@ -28,6 +29,25 @@ else:
 def get_real_cwd():
     """Return the CWD of script in a symlink aware fashion."""
     return os.path.dirname(os.path.realpath(__file__))
+
+
+def setup_logger():
+    """Configure logging to go to both stdout/stderr and a separate logfile.
+
+    This logfile captures all logs from DEBUG level and up, which
+    includes lint performance and timing stats which we need for profiling."""
+    logger = logging.getLogger("lint-logger")
+    logger.setLevel(logging.DEBUG)
+    sh = logging.StreamHandler()
+    sh.setLevel(logging.INFO)
+
+    parent_dir = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
+    fh = logging.FileHandler(parent_dir + "/lint_logfile.log")
+    fh.setLevel(logging.DEBUG)
+    logger.addHandler(sh)
+    logger.addHandler(fh)
+
+    return logger
 
 
 def add_arc_fix_str(lintline, bad_line, to_remove, to_add,

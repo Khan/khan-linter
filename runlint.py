@@ -31,6 +31,7 @@ Files with unknown or unsupported extensions will be skipped.
 """
 
 import fcntl
+import logging
 import optparse
 import os
 import re
@@ -46,13 +47,11 @@ import six
 
 from six.moves import xrange
 
-# Convenience abbreviation
-print_ = lint_util.print_
-
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
 _DEFAULT_EXTRA_LINTER = '<ancestor_within_repo>/tools/runlint.sh'
 _CWD = lint_util.get_real_cwd()
+_LOGGER = linters._LOGGER
 
 _BLACKLIST_CACHE = {}    # map from filename to its parsed contents (a set)
 
@@ -264,9 +263,9 @@ def _file_in_blacklist(fname, blacklist_pattern):
     blacklist_dir = os.path.abspath(os.path.dirname(blacklist_filename))
     fname = os.path.abspath(fname)
     if not fname.startswith(blacklist_dir):
-        print_('WARNING: %s is not under the directory containing the '
-               'blacklist (%s), so we are ignoring the blacklist'
-               % (fname, blacklist_dir))
+        _LOGGER.warning('WARNING: %s is not under the directory containing '
+                        'the blacklist (%s), so we are ignoring the blacklist'
+                        % (fname, blacklist_dir))
     fname = fname[len(blacklist_dir) + 1:]   # +1 for the trailing '/'
 
     blacklist = _parse_blacklist(blacklist_filename)
@@ -294,23 +293,23 @@ def _files_under_directory(rootdir, blacklist_pattern, verbose):
         for i in xrange(len(dirs) - 1, -1, -1):
             absdir = os.path.join(root, dirs[i])
             if os.path.islink(absdir):
-                if verbose:
-                    print_('... skipping directory %s: is a symlink' % absdir)
+                _LOGGER.debug('... skipping directory %s: is a symlink'
+                              % absdir)
                 del dirs[i]
             elif _file_in_blacklist(absdir, blacklist_pattern):
-                if verbose:
-                    print_('... skipping directory %s: in blacklist' % absdir)
+                _LOGGER.debug('... skipping directory %s: in blacklist'
+                              % absdir)
                 del dirs[i]
         # Prune the files that are in the blacklist.
         for f in files:
             abspath = os.path.join(root, f)
             if _file_in_blacklist(abspath, blacklist_pattern):
-                if verbose:
-                    print_('... skipping file %s: in blacklist' % abspath)
+                _LOGGER.debug('... skipping file %s: in blacklist'
+                              % abspath)
                 continue
             elif os.path.islink(abspath):
-                if verbose:
-                    print_('... skipping file %s: is a symlink' % abspath)
+                _LOGGER.debug('... skipping file %s: is a symlink'
+                              % abspath)
                 continue
             retval.add(abspath)
 
@@ -324,14 +323,13 @@ def find_files_to_lint(files_and_directories,
     if blacklist == 'yes':
         file_blacklist = blacklist_pattern
         dir_blacklist = blacklist_pattern
-        if verbose:
-            print_('Using blacklist %s for all files' % blacklist_pattern)
+        _LOGGER.debug('Using blacklist %s for all files'
+                      % blacklist_pattern)
     elif blacklist == 'auto':
         file_blacklist = None
         dir_blacklist = blacklist_pattern
-        if verbose:
-            print_('Using blacklist %s for files under directories'
-                   % blacklist_pattern)
+        _LOGGER.debug('Using blacklist %s for files under directories'
+                      % blacklist_pattern)
     else:
         file_blacklist = None
         dir_blacklist = None
@@ -346,24 +344,19 @@ def find_files_to_lint(files_and_directories,
         else:
             blacklist_for_f = file_blacklist
         blacklist_filename = _resolve_ancestor(blacklist_for_f, f)
-        if verbose:
-            print_('Considering %s: blacklist %s' % (f, blacklist_filename),
-                   end='')
+        _LOGGER.debug('Considering %s: blacklist %s'
+                      % (f, blacklist_filename))
 
         if _file_in_blacklist(f, blacklist_for_f):
-            if verbose:
-                print_('... skipping (in blacklist)')
+            _LOGGER.debug('... skipping (in blacklist)')
         elif os.path.islink(f):
-            if verbose:
-                print_('... skipping (is a symlink)')
+            _LOGGER.debug('... skipping (is a symlink)')
         elif os.path.isdir(f):
-            if verbose:
-                print_('... LINTING %s files under this directory'
-                       % ('non-blacklisted' if dir_blacklist else 'all'))
+            _LOGGER.debug('... LINTING %s files under this directory' % (
+                          'non-blacklisted' if dir_blacklist else 'all'))
             directories_to_lint.append(f)
         else:
-            if verbose:
-                print_('... LINTING')
+            _LOGGER.debug('... LINTING')
             files_to_lint.append(f)
 
     # TODO(csilvers): log if we skip a file in a directory because
@@ -422,9 +415,8 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
         if not os.access(linter_filename, os.R_OK | os.X_OK):
             continue
         files = sorted(files)
-        if verbose:
-            print_('--- running extra linter %s on these files: %s'
-                   % (linter_filename, files))
+        _LOGGER.debug('--- running extra linter %s on these files: %s'
+                      % (linter_filename, files))
         p = subprocess.Popen([linter_filename, '-'], stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (stdout, stderr) = p.communicate(
@@ -434,11 +426,11 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
         # this by checking if stdout is empty: if so, it means that there
         # was no actual lint error found, so this must be an exception.
         if p.returncode > 0 and not stdout:
-            print_('ERROR running the extra linter %s on these files: %s: %s'
-                   % (linter_filename, files, stderr))
+            _LOGGER.error('ERROR running the extra linter %s on these '
+                          'files: %s: %s' % (linter_filename, files, stderr))
             num_framework_errors += 1
         else:
-            print_(stdout + stderr)   # print the lint errors seen
+            _LOGGER.info(stdout + stderr)   # print the lint errors seen
             num_lint_errors += p.returncode
 
     return (num_lint_errors, num_framework_errors)
@@ -502,8 +494,8 @@ def _maybe_pull(verbose):
             if rc != 0:
                 raise RuntimeError('git ls-remote returned %s' % rc)
         except RuntimeError as why:
-            print_('Non-fatal error: not updating the khan-linter repo: %s'
-                   % why)
+            _LOGGER.warning('Non-fatal error: not updating the khan-linter '
+                            'repo: %s' % why)
             return False
 
     # Update the last-pull time, and create an fd for the lockf call.
@@ -514,8 +506,7 @@ def _maybe_pull(verbose):
         # the safest way to make sure neither linter runs before the
         # update is complete.)
         fcntl.lockf(f, fcntl.LOCK_EX)
-        if verbose:
-            print_('Updating the khan-linter repo')
+        _LOGGER.debug('Updating the khan-linter repo')
 
         old_sha = subprocess.check_output(
             ['git', 'rev-parse', 'HEAD'],
@@ -654,8 +645,7 @@ def main(files_and_directories,
         lint_processors = _get_linters_for_file(f, lang, propose_arc_fixes)
 
         if lint_processors is None:
-            if verbose:
-                print_('--- skipping %s (language unknown)' % f)
+            _LOGGER.debug('--- skipping %s (language unknown)' % f)
             continue
 
         for lint_processor in lint_processors:
@@ -668,28 +658,33 @@ def main(files_and_directories,
     for lint_processor in files_by_linter:
         files = files_by_linter[lint_processor]
         try:
-            if verbose:
-                print_('--- Running %s:' % lint_processor.__class__.__name__)
+            _LOGGER.debug('--- Running %s:'
+                          % lint_processor.__class__.__name__)
 
             start_time = time.time()
             num_new_errors = lint_processor.process_files(files)
             num_lint_errors += num_new_errors
             elapsed = time.time() - start_time
 
-            if verbose:
-                print_('%d errors (%.2f seconds)' % (num_new_errors, elapsed))
+            _LOGGER.debug('%d errors (%.2f seconds)'
+                          % (num_new_errors, elapsed))
         except Exception:
-            print_(u"ERROR linting %r with %s:\n%s" % (
-                files, type(lint_processor), traceback.format_exc()))
+            _LOGGER.error(u"ERROR linting %r with %s:\n%s" % (
+                          files, type(lint_processor), traceback.format_exc()))
             num_framework_errors += 1
             continue
 
     # If they asked for an extra linter to run over these files, do that.
     if extra_linter_filename:
+        start_time = time.time()
         (extra_lint_errors, extra_framework_errors) = (
             _run_extra_linter(extra_linter_filename, files_to_lint, verbose))
         num_lint_errors += extra_lint_errors
         num_framework_errors += extra_framework_errors
+
+        elapsed = time.time() - start_time
+        _LOGGER.debug('%d errors (%.2f seconds)'
+                      % (extra_lint_errors, elapsed))
 
     return (num_lint_errors, num_framework_errors)
 
@@ -742,11 +737,20 @@ if __name__ == '__main__':
     if not args:
         args = ['.']
 
+    if options.verbose:
+        sh = logging.StreamHandler()
+        sh.setLevel(logging.DEBUG)
+        _LOGGER.addHandler(sh)
+
     # Once a day, we do a 'git pull' in our repo to make sure we are
     # the most up-to-date khan-linter we can be.
     if not options.no_auto_pull and _maybe_pull(options.verbose):
         # We have to re-exec ourselves since we may have changed.
         os.execv(sys.argv[0], sys.argv)
+        # We should also clear the lint logfile here so it doesn't get
+        # too long. TODO(jacqueline): Upload the logfile to GCS before
+        # clearing to send data for our profiler.
+        open(_CWD + '/lint_logfile.log', 'w').close()
 
     # normal operation
     (num_lint_errors, num_framework_errors) = main(
