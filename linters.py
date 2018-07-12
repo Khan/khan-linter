@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Linters process files or lists of files for correctness."""
 
+import io
 import itertools
 import logging
 import os
@@ -67,7 +68,7 @@ class Linter(object):
         num_errors = 0
         for f in files:
             try:
-                contents = open(f, 'U').read()
+                contents = io.open(f, 'U', encoding='utf-8').read()
             except (IOError, OSError, UnicodeDecodeError) as why:
                 self.logger.warning("SKIPPING lint of %s: %s"
                                     % (f, why.args[1]))
