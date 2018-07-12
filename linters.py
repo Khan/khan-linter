@@ -68,9 +68,13 @@ class Linter(object):
         for f in files:
             try:
                 contents = open(f, 'U').read()
-            except (IOError, OSError, UnicodeDecodeError) as why:
+            except (IOError, OSError) as why:
                 self.logger.warning("SKIPPING lint of %s: %s"
-                                    % (f, why.args[1]))
+                                    % (f, why.args[1]))  # get the errno-string
+                num_errors += 1
+                continue
+            except UnicodeDecodeError as why:
+                self.logger.warning("SKIPPING lint of %s: %s" % (f, why))
                 num_errors += 1
                 continue
             num_errors += self.process(f, contents)
