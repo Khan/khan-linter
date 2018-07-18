@@ -786,6 +786,11 @@ if __name__ == '__main__':
     options, args = parser.parse_args()
     if not args:
         args = ['.']
+    # If we're only passed one string as an arg, check if it can be
+    # split on spaces, that is how the arcanist linter will pass a batch
+    # of filepaths to ka-lint.
+    elif len(args) == 1:
+        args = args[0].split(' ')
 
     _LOGGER = _setup_custom_logger(options.verbose)
 
