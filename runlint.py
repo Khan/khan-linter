@@ -782,10 +782,16 @@ if __name__ == '__main__':
                             'errors. Only useful when used with phabricator.'))
     parser.add_option('--verbose', '-v', action='store_true', default=False,
                       help='Print information about what is happening.')
+    parser.add_option('--batched', action='store_true', default=False,
+                      help='Handle comma-separated filenames passed as a '
+                           'batch (i.e. "filepath1,filepath2").')
 
     options, args = parser.parse_args()
     if not args:
         args = ['.']
+
+    if options.batched:
+        args = args[0].split(',')
 
     _LOGGER = _setup_custom_logger(options.verbose)
 
