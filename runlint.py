@@ -60,6 +60,10 @@ _LINTERS_BY_LANG = {}    # a cache of linters by language
 _LOGGER = None
 
 
+# Used to distinguish error output from normal output from the extra-linters.
+_LINTLINE_RE = re.compile(r'^[^:]*:\d+:', re.MULTILINE)
+
+
 def _setup_custom_logger(verbose=False):
     """Configure logging to go to both stdout/stderr and a separate logfile.
 
@@ -463,9 +467,9 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
             input='\n'.join(files).encode('utf-8'))
         # If the subprocess returned 1, it's possible this was due to a
         # raised exception rather than a lint error.  We try to detect
-        # this by checking if stdout is empty: if so, it means that there
-        # was no actual lint error found, so this must be an exception.
-        if p.returncode > 0 and not stdout:
+        # this by checking if stdout has anything looking like a lint
+        # log-line; if not, the output must be an exception.
+        if p.returncode > 0 and not _LINTLINE_RE.search(stdout):
             _get_logger().error('ERROR running the extra linter %s on these '
                                 'files: %s: %s' % (linter_filename, files,
                                                    stderr))
