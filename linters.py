@@ -766,7 +766,9 @@ class KtLint(Linter):
         """
         with open(file) as f:
             lines = f.readlines()
-            return [not _has_nolint(lines[lint_err[0]])
+            line_count = len(lines) - 1
+            # Cap the indexing at the max number of lines in the file
+            return [not _has_nolint(lines[min(lint_err[0], line_count)])
                     for lint_err in lint_err_lines]
 
     def process_files(self, files):
@@ -829,19 +831,10 @@ class KtLint(Linter):
             if len(parts) != 4:
                 raise RuntimeError("Unexpected stdout from linter:\n%s" %
                                    stdout)
-            file, line_number, _, msg = parts
-            # KtLint indexing is 1-up; Python readlines is 0-up
-            line_number = int(line_number) - 1
-            # KtLint reports a nonexistent line number if there is one
-            # extra blank line at the end of the file. We account for that
-            # by subtracting one extra from the line number if this error is
-            # reported. It will be off by one if there are multiple blank
-            # lines, but that's more acceptable than the linter crashing.
-            if "Needless blank line(s)" in msg:
-                line_number -= 1
+            file, line_number, _, _ = parts
 
             lint_by_file.setdefault(file, [])
-            lint_by_file[file].append((line_number, line))
+            lint_by_file[file].append((int(line_number) - 1, line))
 
         for file, lint in lint_by_file.items():
             for _, lint_err in itertools.compress(
