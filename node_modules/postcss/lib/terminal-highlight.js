@@ -37,8 +37,8 @@ var HIGHLIGHT_THEME = {
 };
 
 function getTokenType(_ref, index, tokens) {
-    var type = _ref[0];
-    var value = _ref[1];
+    var type = _ref[0],
+        value = _ref[1];
 
     if (type === 'word') {
         if (value[0] === '.') {

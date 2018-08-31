@@ -6,8 +6,8 @@
 // reasons.
 //
 // If you want to adjust/add a rule that is not ES6-, flow-, or jsx-specific,
-// modify eslintrc.shared instead.  In particular, when adjusting the
-// list of built-in globals (useful for both javascript files and
+// modify the appropriate eslintrc.* files instead.  In particular, when
+// adjusting the list of built-in globals (useful for both javascript files and
 // <script> contents inside html), do that in eslintrc.shared.
 {
     "rules": {
@@ -29,19 +29,15 @@
         // TODO(csilvers): enable these if/when community agrees on it.
         "prefer-arrow-callback": 0
     },
-    "ecmaFeatures": {
-        "arrowFunctions": true,
-        "blockBindings": true,
-        "classes": true,
-        "destructuring": true,
-        "experimentalObjectRestSpread": true,
-        "forOf": true,
-        "jsx": true,
-        "restParams": true,
-        "spread": true,
-        "templateStrings": true
-    },
     "parser": "babel-eslint",
+    "parserOptions": {
+        // 2018 is where rest/spread operators are first supported
+        // https://eslint.org/docs/user-guide/migrating-to-5.0.0#experimental-object-rest-spread
+        "ecmaVersion": 2018,
+        "ecmaFeatures": {
+            "jsx": true,
+        }
+    },
     "env": {
         // TODO(csilvers): once we properly use eslintrc.node for node
         // files, get rid of this next line.

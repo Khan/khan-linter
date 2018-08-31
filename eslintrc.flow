@@ -3,7 +3,6 @@
 // https://flowtype.org/
 {
     "rules": {
-        "flowtype/boolean-style": [2, "boolean"],
         "flowtype/define-flow-type": 1, // suppress no-undef on flow types
         "flowtype/no-dupe-keys": 2,
         "flowtype/no-weak-types": 0,    // allow 'any' for now

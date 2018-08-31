@@ -172,7 +172,8 @@ const create = context => {
       while (currNode) {
         if (
           currNode.type === "FunctionExpression" &&
-          currNode.parent && currNode.parent.key &&
+          currNode.parent &&
+          currNode.parent.key &&
           currNode.parent.key.name === "getInitialState"
         ) {
           return node.key.name;
@@ -313,7 +314,7 @@ const create = context => {
   // Detect if Animated is imported from an unusual source (not
   // react-native) via standard import syntax
   function isReactNativeAnimationImport(node) {
-    if (node.specifiers.length == 0) {
+    if (node.specifiers.length === 0) {
       return;
     }
     const specifier = node.specifiers[0];

@@ -6,18 +6,18 @@
     "url": "https://github.com/Khan/khan-linter.git"
   },
   "scripts": {
-    "eslint-check": "eslint --print-config eslintrc | eslint-config-prettier-check"
+    "eslint-check": "eslint --no-eslintrc -c eslintrc --print-config . | eslint-config-prettier-check"
   },
   "dependencies": {
-    "babel-eslint": "7.2.3",
-    "eslint": "3.14.1",
-    "eslint-config-prettier": "2.6.0",
-    "eslint-plugin-flowtype": "2.25.0",
-    "eslint-plugin-graphql": "1.4.1",
-    "eslint-plugin-jsx-a11y": "^6.0.3",
-    "eslint-plugin-prettier": "2.3.1",
-    "eslint-plugin-react": "7.7.0",
-    "eslint-plugin-react-native-animation-linter": "0.1.1",
+    "babel-eslint": "9.0.0",
+    "eslint": "5.4.0",
+    "eslint-config-prettier": "3.0.1",
+    "eslint-plugin-flowtype": "2.50.0",
+    "eslint-plugin-graphql": "2.1.1",
+    "eslint-plugin-jsx-a11y": "^6.1.1",
+    "eslint-plugin-prettier": "2.6.2",
+    "eslint-plugin-react": "7.11.1",
+    "eslint-plugin-react-native-animation-linter": "0.1.2",
     "khan-lesshint": "0.1.0",
     "prettier": "1.7.4",
     "utf8": "3.0.0"
