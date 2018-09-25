@@ -33,9 +33,16 @@ import yaml
 
 
 def _is_verbose(logger):
+    """Does this logger log to stdout/stderr at the DEBUG level?"""
+    # First we check if the logger itself processes anything at the
+    # debug level.  If not, then the handlers won't even see it.
+    if not logger.isEnabledFor(logging.DEBUG):
+        return False
+
     for handler in getattr(logger, 'handlers', []):
         if (getattr(handler, '__class__', None) == logging.StreamHandler and
-                handler.level <= logging.DEBUG):
+                handler.level <= logging.DEBUG and
+                handler.stream in (sys.stdout, sys.stderr)):
             return True
     return False
 
