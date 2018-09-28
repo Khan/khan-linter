@@ -467,7 +467,6 @@ _JS_NO_TEST_WHITELIST = [
     "javascript/bloodhound-package/bloodhound.js",
     "javascript/calculator-package/init-calculator.js",
     "javascript/checklist-package/get-checklist.js",
-    "javascript/ckeditor-package/ckeditor-path-fix.js",
     "javascript/ckeditor-package/ckeditor-utils.js",
     "javascript/class-creator-package/types.js",
     "javascript/class-creator-package/styles.js",
