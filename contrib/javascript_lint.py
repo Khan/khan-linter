@@ -588,7 +588,6 @@ _JS_NO_TEST_WHITELIST = [
     "javascript/missions-package/user-mission.js",
     "javascript/mobile-shared-package/exercise-progress-constants.js",
     "javascript/mobile-shared-package/exercise-progress-utils.js",
-    "javascript/mobile-shared-package/main.js",
     "javascript/nav-package/khan-nav.js",
     "javascript/notifications-package/accept-terms-of-service-notification-view.js",  # @Nolint(long line)
     "javascript/notifications-package/banner-notification-view.js",
