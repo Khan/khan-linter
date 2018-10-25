@@ -723,7 +723,6 @@ _JS_NO_TEST_WHITELIST = [
     "javascript/shared-package/parse-query-string.js",
     "javascript/shared-package/site-infra.js",
     "javascript/shared-package/social.js",
-    "javascript/shared-package/supports.js",
     "javascript/shared-package/update-document-title.js",
     "javascript/shared-package/urgent-notification.js",
     "javascript/shared-styles-package/a11y.js",
