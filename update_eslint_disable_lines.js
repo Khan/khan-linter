@@ -11,8 +11,8 @@
 //   /* TODO(csilvers): fix these lint errors ... */
 //   /* To fix, remove an entry above, run ka-lint, and fix the errors. */
 //
-// If the file include the '// @flow' on any lines, we add it back in below
-// the updated message.
+// If the file include a flow pragma on any lines, we add it back in the
+// header.
 //
 // TODO(kevinb): add --todo_target option to control the name in the TODO
 // We want to avoid changing the name in messages where the list of rules
@@ -91,16 +91,18 @@ filePaths.forEach((filePath, index) => {
     // Remove existing lint message.
     let inHeader = true;
     const filteredLines = originalLines.filter((line) => {
-        if (!inHeader) {
+        if (line.startsWith('// @flow')) {
+            // Don't filter this -- flow rules rely on this being set for
+            // linting.
+            usesFlow = true;
+            return true;
+        } else if (!inHeader) {
             return true;
         } else if (line.startsWith('/* eslint-disable ')) {
             return false;
         } else if (line === TODO_TEXT) {
             return false;
         } else if (line.startsWith('/* To fix, remove an entry above')) {
-            return false;
-        } else if (line.startsWith('// @flow')) {
-            usesFlow = true;
             return false;
         } else if (line.match(/^\s*$/)) {
             // Empty lines immediately below the header count as part of the
@@ -118,10 +120,22 @@ filePaths.forEach((filePath, index) => {
     const rules = {};
     result.messages.forEach((message) => {
         // TODO(kevinb): check that the ruleIds match for @Nolint(ruleId)
-        // The source line for a max-lines violation is the first line of the
-        // file, but the violation itself applies to the whole file so ignore
-        // @Nolint in that situation.
-        if (/\@Nolint/.test(message.source) && message.ruleId !== 'max-lines') {
+        // There are two times where we don't want to suppress @Nolint:
+        //  - The source line for a max-lines violation is the first line of the
+        //    file, but the violation itself applies to the whole file so ignore
+        //    @Nolint in that situation.
+        //  - react/no-unsafe includes the entire component, so is likely to
+        //    include unrelated @Nolints
+        let anyTargetLineHasNolint = false;
+        for (let i = message.line; i <= message.endLine; ++i) {
+            // Lines are 1-indexed.
+            if (/@Nolint/.test(filteredLines[i - 1])) {
+                anyTargetLineHasNolint = true;
+            }
+        }
+
+        if (anyTargetLineHasNolint && ["max-lines", "react/no-unsafe"
+                ].indexOf(message.ruleId) === -1) {
             return;
         } else if (message.ruleId === 'max-len' &&
             /require\(['"][^'"]+['"]\)| from ['"]/.test(message.source)) {
@@ -145,7 +159,11 @@ filePaths.forEach((filePath, index) => {
         headerLines.push('// @flow');
     }
 
-    const updatedLines = headerLines.concat(filteredLines);
+    const updatedLines = headerLines.concat(
+        // We needed to keep flow pragmas in what we linted, but we're writing
+        // flow pragmas into the header, so get rid of them in the body.
+        filteredLines.filter(line => !line.startsWith('// @flow'))
+    );
     const updatedSource = updatedLines.join('\n');
 
     if (originalSource !== updatedSource) {

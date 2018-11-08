@@ -24,6 +24,8 @@
                 "render"
             ]
         }],
+        "react/no-unsafe": 1,
+        "react/no-deprecated": 1,
         // TODO(riley): Introduce this rule once we upgrade to >= 2.0.0.
         // "template-curly-spacing": 2,
         // ---------------------------------------
@@ -39,5 +41,10 @@
     ],
     "plugins": [
         "react"
-    ]
+    ],
+    "settings": {
+        "react": {
+            "version": "16.3"
+        }
+    }
 }
