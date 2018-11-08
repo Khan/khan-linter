@@ -167,7 +167,8 @@ exports.iterateeAry = {
 
 /** Used to map method names to iteratee rearg configs. */
 exports.iterateeRearg = {
-  'mapKeys': [1]
+  'mapKeys': [1],
+  'reduceRight': [1, 0]
 };
 
 /** Used to map method names to rearg configs. */
@@ -258,16 +259,6 @@ exports.mutate = {
     'update': true,
     'updateWith': true
   }
-};
-
-/** Used to track methods with placeholder support */
-exports.placeholder = {
-  'bind': true,
-  'bindKey': true,
-  'curry': true,
-  'curryRight': true,
-  'partial': true,
-  'partialRight': true
 };
 
 /** Used to map real names to their aliases. */
