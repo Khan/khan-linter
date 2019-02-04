@@ -72,6 +72,10 @@ def _setup_custom_logger(verbose=False):
     """
     logger = logging.getLogger("khan-linter")
     logger.setLevel(logging.DEBUG)
+    # Make sure that if a root-logger is set up, we don't send our messages
+    # out via that root-logger as well.  I'm not sure why this happens, but
+    # I think it can if one of our custom linters (say) calls logging.foo().
+    logger.propagate = False
     formatter = logging.Formatter('%(message)s')
 
     sh = logging.StreamHandler()
