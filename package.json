@@ -22,5 +22,8 @@
     "khan-lesshint": "0.1.0",
     "prettier": "1.15.1",
     "utf8": "3.0.0"
+  },
+  "devDependencies": {
+    "eslint-plugin-jest": "^22.5.1"
   }
 }
