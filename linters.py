@@ -810,6 +810,9 @@ class KtLint(Linter):
         if version == '1.8':
             ktlint_command = [exec_path] + files
         elif version.startswith('9'):
+            self.logger.warning("Your Java version is 9. Please install "
+                                "JDK 1.8, Otherwise some kotlin lint would "
+                                "not work correctly")
             ktlint_command = [
                 'java',
                 '--add-opens', 'java.base/java.lang=ALL-UNNAMED',
