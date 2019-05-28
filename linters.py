@@ -783,16 +783,6 @@ class KtLint(Linter):
         assert os.path.isfile(exec_path), (
             "Vendoring error: ktlint is missing from '%s'" % exec_path)
 
-        # Java9 adds some new protections against using reflection to access
-        # internal java APIs. Unfortunately, these are used by our linter and
-        # the resulting errors are interpreted (incorrectly) as unparsable lint
-        # errors.
-        # If we're on java 9, we need to add some extra command line flags to
-        # the linter command to allow access to these internal APIs.
-        # Unfortunately, java 8 doesn't understand these flags, so we have to
-        # add them conditionally.
-        # TODO(colin): once this issue is fixed upstream in the kotlin stdlib
-        # or in ktlint, go back to just calling `ktlint` on java 9.
         version_info_pipe = subprocess.Popen(
             ['java', '-version'],
             stdout=subprocess.PIPE,
