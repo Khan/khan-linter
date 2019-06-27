@@ -817,7 +817,8 @@ class KtLint(Linter):
         lint_by_file = {}
         for line in stdout.splitlines():
             # Lint line format is file:line:col:message
-            parts = line.split(':')
+            # Message could contain ':' so only split up to 3 times
+            parts = line.split(':', 3)
             if len(parts) != 4:
                 raise RuntimeError("Unexpected stdout from linter:\n%s" %
                                    stdout)
