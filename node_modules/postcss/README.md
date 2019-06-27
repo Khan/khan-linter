@@ -24,7 +24,7 @@ VK.com page:          [postcss](https://vk.com/postcss).
 Support / Discussion: [Gitter](https://gitter.im/postcss/postcss).
 
 For PostCSS commercial support (consulting, improving the front-end culture
-of your company, PostCSS plugins), contact Evil Martians
+of your company, PostCSS plugins), contact [Evil Martians](https://evilmartians.com/?utm_source=postcss)
 at <surrender@evilmartians.com>.
 
 [Autoprefixer]: https://github.com/postcss/autoprefixer
@@ -64,6 +64,7 @@ If you have any new ideas, [PostCSS plugin development] is really easy.
 * [`autoprefixer`] adds vendor prefixes, using data from Can I Use.
 * [`postcss-cssnext`] allows you to use future CSS features today
   (includes `autoprefixer`).
+* [`postcss-image-set-polyfill`] emulates [`image-set`] function logic for all browsers
 
 ### Better CSS Readability
 
@@ -91,8 +92,9 @@ If you have any new ideas, [PostCSS plugin development] is really easy.
 
 ### Other
 
-* [`lost`] is a feature-rich `calc()` grid system.
+* [`postcss-rtl`] combines both-directional (left-to-right and right-to-left) styles in one CSS file.
 * [`cssnano`] is a modular CSS minifier.
+* [`lost`] is a feature-rich `calc()` grid system.
 * [`rtlcss`] mirrors styles for right-to-left locales.
 
 [PostCSS plugin development]: https://github.com/postcss/postcss/blob/master/docs/writing-a-plugin.md
@@ -106,10 +108,12 @@ If you have any new ideas, [PostCSS plugin development] is really easy.
 [`postcss-modules`]:          https://github.com/outpunk/postcss-modules
 [`postcss-sorting`]:          https://github.com/hudochenkov/postcss-sorting
 [`postcss-cssnext`]:          http://cssnext.io
+[`postcss-image-set-polyfill`]: https://github.com/SuperOl3g/postcss-image-set-polyfill
 [`postcss-assets`]:           https://github.com/assetsjs/postcss-assets
 [`font-magician`]:            https://github.com/jonathantneal/postcss-font-magician
 [`autoprefixer`]:             https://github.com/postcss/autoprefixer
 [`cq-prolyfill`]:             https://github.com/ausi/cq-prolyfill
+[`postcss-rtl`]:              https://github.com/vkalinichev/postcss-rtl
 [`postcss-use`]:              https://github.com/postcss/postcss-use
 [`css-modules`]:              https://github.com/css-modules/css-modules
 [`colorguard`]:               https://github.com/SlexAxton/css-colorguard
@@ -121,6 +125,7 @@ If you have any new ideas, [PostCSS plugin development] is really easy.
 [`rtlcss`]:                   https://github.com/MohammadYounes/rtlcss
 [`short`]:                    https://github.com/jonathantneal/postcss-short
 [`lost`]:                     https://github.com/peterramsing/lost
+[`image-set`]:                https://drafts.csswg.org/css-images-3/#image-set-notation
 
 ## Syntaxes
 
@@ -131,6 +136,8 @@ you can write a parser and/or stringifier to extend PostCSS.
 * [`sugarss`] is a indent-based syntax like Sass or Stylus.
 * [`postcss-scss`] allows you to work with SCSS
   *(but does not compile SCSS to CSS)*.
+* [`postcss-sass`] allows you to work with Sass
+    *(but does not compile Sass to CSS)*.
 * [`postcss-less`] allows you to work with Less
   *(but does not compile LESS to CSS)*.
 * [`postcss-less-engine`] allows you to work with Less
@@ -140,12 +147,13 @@ you can write a parser and/or stringifier to extend PostCSS.
 * [`postcss-safe-parser`] finds and fixes CSS syntax errors.
 * [`midas`] converts a CSS string to highlighted HTML.
 
-[`postcss-safe-parser`]: https://github.com/postcss/postcss-safe-parser
+[`sugarss`]:             https://github.com/postcss/sugarss
+[`postcss-scss`]:        https://github.com/postcss/postcss-scss
+[`postcss-sass`]:        https://github.com/AleshaOleg/postcss-sass
 [`postcss-less`]:        https://github.com/webschik/postcss-less
 [`postcss-less-engine`]: https://github.com/Crunch/postcss-less
-[`postcss-scss`]:        https://github.com/postcss/postcss-scss
 [`postcss-js`]:          https://github.com/postcss/postcss-js
-[`sugarss`]:             https://github.com/postcss/sugarss
+[`postcss-safe-parser`]: https://github.com/postcss/postcss-safe-parser
 [`midas`]:               https://github.com/ben-eb/midas
 
 ## Articles
@@ -153,9 +161,12 @@ you can write a parser and/or stringifier to extend PostCSS.
 * [Some things you may think about PostCSS… and you might be wrong](http://julian.io/some-things-you-may-think-about-postcss-and-you-might-be-wrong)
 * [What PostCSS Really Is; What It Really Does](http://davidtheclark.com/its-time-for-everyone-to-learn-about-postcss)
 * [PostCSS Guides](http://webdesign.tutsplus.com/series/postcss-deep-dive--cms-889)
-* [Mastering PostCSS for Web Design](https://www.packtpub.com/web-development/mastering-postcss-web-design)
 
 More articles and videos you can find on [awesome-postcss](https://github.com/jjaderg/awesome-postcss) list.
+
+## Books
+
+* [Mastering PostCSS for Web Design](https://www.packtpub.com/web-development/mastering-postcss-web-design) by Alex Libby, Packt. (June 2016)
 
 ## Usage
 
@@ -165,6 +176,54 @@ You can start using PostCSS in just two steps:
 2. [Select plugins] and add them to your PostCSS process.
 
 [Select plugins]: http://postcss.parts
+
+### Webpack
+
+Use [`postcss-loader`] in `webpack.config.js`:
+
+```js
+module.exports = {
+    module: {
+        loaders: [
+            {
+                test: /\.css$/,
+                exclude: /node_modules/,
+                use: [
+                    {
+                        loader: 'style-loader',
+                    },
+                    {
+                        loader: 'css-loader',
+                        options: {
+                            sourceMap: true,
+                            importLoaders: 1,
+                        }
+                    },
+                    {
+                        loader: 'postcss-loader',
+                        options: {
+                            sourceMap: 'inline',
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
+```
+
+Then create `postcss.config.js`:
+
+```js
+module.exports = {
+    plugins: [
+        require('precss'),
+        require('autoprefixer')
+    ]
+}
+```
+
+[`postcss-loader`]: https://github.com/postcss/postcss-loader
 
 ### Gulp
 
@@ -177,7 +236,7 @@ gulp.task('css', function () {
 
     return gulp.src('src/**/*.css')
         .pipe( sourcemaps.init() )
-        .pipe( postcss([ require('autoprefixer'), require('precss') ]) )
+        .pipe( postcss([ require('precss'), require('autoprefixer') ]) )
         .pipe( sourcemaps.write('.') )
         .pipe( gulp.dest('build/') );
 });
@@ -185,28 +244,6 @@ gulp.task('css', function () {
 
 [`gulp-sourcemaps`]: https://github.com/floridoo/gulp-sourcemaps
 [`gulp-postcss`]:    https://github.com/postcss/gulp-postcss
-
-### Webpack
-
-Use [`postcss-loader`]:
-
-```js
-module.exports = {
-    module: {
-        loaders: [
-            {
-                test:   /\.css$/,
-                loader: "style-loader!css-loader!postcss-loader"
-            }
-        ]
-    },
-    postcss: function () {
-        return [require('autoprefixer'), require('precss')];
-    }
-}
-```
-
-[`postcss-loader`]: https://github.com/postcss/postcss-loader
 
 ### npm run / CLI
 
@@ -219,10 +256,14 @@ postcss --use autoprefixer -c options.json -o main.css css/*.css
 
 [`postcss-cli`]: https://github.com/postcss/postcss-cli
 
-### CSS-in-JS
+### Browser
+
+If you want to compile CSS string in browser (for instance, in live edit
+tools like CodePen), just use [Browserify] or [webpack]. They will pack
+PostCSS and plugins files into a single file.
 
 To apply PostCSS plugins to React Inline Styles, JSS, Radium
-and other CSS-in-JS, you can use [`postcss-js`] and transforms style objects.
+and other [CSS-in-JS], you can use [`postcss-js`] and transforms style objects.
 
 ```js
 var postcss  = require('postcss-js');
@@ -232,6 +273,9 @@ prefixer({ display: 'flex' }); //=> { display: ['-webkit-box', '-webkit-flex', '
 ```
 
 [`postcss-js`]: https://github.com/postcss/postcss-js
+[Browserify]:   http://browserify.org/
+[webpack]:      https://webpack.github.io/
+[CSS-in-JS]:    https://github.com/MicheleBertoli/css-in-js
 
 ### Runners
 
@@ -252,13 +296,19 @@ prefixer({ display: 'flex' }); //=> { display: ['-webkit-box', '-webkit-flex', '
 For other environments, you can use the JS API:
 
 ```js
-var postcss = require('postcss');
-postcss([ require('autoprefixer'), require('cssnano') ])
-    .process(css, { from: 'src/app.css', to: 'app.css' })
-    .then(function (result) {
-        fs.writeFileSync('app.css', result.css);
-        if ( result.map ) fs.writeFileSync('app.css.map', result.map);
-    });
+const fs = require('fs');
+const postcss = require('postcss');
+const precss = require('precss');
+const autoprefixer = require('autoprefixer');
+
+fs.readFile('src/app.css', (err, css) => {
+    postcss([precss, autoprefixer])
+        .process(css, { from: 'src/app.css', to: 'dest/app.css' })
+        .then(result => {
+            fs.writeFile('dest/app.css', result.css);
+            if ( result.map ) fs.writeFile('dest/app.css.map', result.map);
+        });
+});
 ```
 
 Read the [PostCSS API documentation] for more details about the JS API.
@@ -299,7 +349,7 @@ var postcss = require('postcss');
 
 [Promise polyfill]: https://github.com/jakearchibald/es6-promise
 
-## IDE Integration
+## Editors & IDE Integration
 
 ### Atom
 
@@ -315,6 +365,12 @@ var postcss = require('postcss');
 [`Syntax-highlighting-for-PostCSS`]: https://github.com/hudochenkov/Syntax-highlighting-for-PostCSS
 [`source-preview-postcss`]:          https://atom.io/packages/source-preview-postcss
 [`language-postcss`]:                https://atom.io/packages/language-postcss
+
+### Vim
+
+* [`postcss.vim`] adds PostCSS highlight.
+
+[`postcss.vim`]: https://github.com/stephenway/postcss.vim
 
 ### WebStorm
 
