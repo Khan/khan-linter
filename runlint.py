@@ -420,6 +420,7 @@ _EXTENSION_DICT = {'.py': 'python',
                    '.less': 'less',
                    '.yaml': 'yaml',
                    '.kt': 'kotlin',
+                   '.go': 'golang',
                    }
 
 
@@ -634,6 +635,9 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
                      linters.Git(logger=_get_logger()),
                      ),
             'kotlin': (linters.KtLint(logger=_get_logger()),
+                       linters.Git(logger=_get_logger()),
+                       ),
+            'golang': (linters.GoLint(logger=_get_logger()),
                        linters.Git(logger=_get_logger()),
                        ),
             'yaml': (linters.YamlLinter(logger=_get_logger()),
