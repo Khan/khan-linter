@@ -834,3 +834,65 @@ class KtLint(Linter):
                 num_errors += 1
 
         return num_errors
+
+
+class GoLint(Linter):
+    """Linter for Go, using the golint module.
+
+    TODO(Kai): may consider to use 'golangci-lint' to replace 'golint'
+    """
+
+    def _is_not_skipped(self, file, lint_err_lines):
+        """For each lint error in the given file check if it's nolinted.
+
+        Args:
+            lint_err_lines: a list of (line (0-indexed), message) tuples
+        Returns:
+            a list of booleans, one per input, True if that lint error has
+            not been skipped via `@Nolint`.
+        """
+        with open(file) as f:
+            lines = f.readlines()
+            line_count = len(lines) - 1
+            # Cap the indexing at the max number of lines in the file
+            return [not _has_nolint(lines[min(lint_err[0], line_count)])
+                    for lint_err in lint_err_lines]
+
+    def process_files(self, files):
+        exec_path = os.path.abspath(os.path.join(_CWD, 'vendor', 'golint'))
+        assert os.path.isfile(exec_path), (
+            "Vendoring error: golint is missing from '%s'" % exec_path)
+
+        golint_command = [exec_path] + files
+
+        pipe = subprocess.Popen(
+            golint_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+        stdout, stderr = pipe.communicate()
+        stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
+
+        if stderr:
+            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+
+        num_errors = 0
+        lint_by_file = {}
+        for line in stdout.splitlines():
+            # Lint line format is file:line:col:message, but need to ignore ``
+            parts = re.split(''':(?=(?:[^`]|`[^`]*`)*$)''', line)
+            if len(parts) != 4:
+                raise RuntimeError("Unexpected stdout from linter:\n%s" %
+                                   stdout)
+            file, line_number, _, _ = parts
+
+            lint_by_file.setdefault(file, [])
+            lint_by_file[file].append((int(line_number) - 1, line))
+
+        for file, lint in lint_by_file.items():
+            for _, lint_err in itertools.compress(
+                    lint, self._is_not_skipped(file, lint)):
+                self.report(lint_err)
+                num_errors += 1
+
+        return num_errors
