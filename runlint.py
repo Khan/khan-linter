@@ -8,7 +8,7 @@ USAGE = """%prog [options] [files] ...
 Run linters over the given files, or the current directory tree.
 
 By default -- if no commandline arguments are given -- this runs the
-linters on all non-blacklisted python file under the current
+linters on all non-blacklisted source files under the current
 directory.  By default, the blacklist is in a file called
 lint_blacklist.txt, in some directory in or above the files being
 linted.
