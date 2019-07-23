@@ -758,9 +758,11 @@ class YamlLinter(Linter):
 
 class KtLint(Linter):
     """Linter for kotlin, using the vendored copy of `ktlint`.
-
-    TODO(colin): add autofixing using `ktlint -F`
     """
+
+    def __init__(self, logger, propose_arc_fixes=False):
+        super(KtLint, self).__init__(logger=logger)
+        self._propose_arc_fixes = propose_arc_fixes
 
     def _is_not_skipped(self, file, lint_err_lines):
         """For each lint error in the given file check if it's nolinted.
@@ -801,6 +803,9 @@ class KtLint(Linter):
             ktlint_command = [exec_path] + files
         else:
             raise AssertionError('Unsupported version of java, %s' % version)
+
+        if self._propose_arc_fixes:
+            ktlint_command = ktlint_command + ["-F"]
 
         pipe = subprocess.Popen(
             ktlint_command,
