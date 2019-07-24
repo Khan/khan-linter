@@ -38,3 +38,5 @@ own, and use the `--blacklist_file` flag to `runlint.py` (you'll have to modify
 
 To suppress the lint check, set the environment variable `FORCE_COMMIT=1` prior
 to calling `git commit`.
+
+Testing opening a diff.
