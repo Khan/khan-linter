@@ -6,6 +6,11 @@
         "flowtype/boolean-style": [2, "boolean"],
         "flowtype/define-flow-type": 1, // suppress no-undef on flow types
         "flowtype/no-dupe-keys": 2,
+
+        // Use Flow's version of no-unused-expressions
+        "flowtype/no-unused-expressions": [2, {"allowShortCircuit": true, "allowTernary": true}],
+        "no-unused-expressions": 0, // Disable this rule as flowtype/no-unused-expression supersedes it
+
         "flowtype/no-weak-types": 0,    // allow 'any' for now
         // flow may still require parameter types in certain situations
         "flowtype/require-parameter-type": 0,
