@@ -834,3 +834,43 @@ class KtLint(Linter):
                 num_errors += 1
 
         return num_errors
+
+
+class GoLint(Linter):
+    """Linter for Go.
+
+    This assumes that `gofmt` is installed, which is the default for go.
+    """
+    def process_files(self, files):
+        pipe = subprocess.Popen(
+            ['gofmt', '-d'] + files,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+        stdout, stderr = pipe.communicate()
+        stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
+
+        if stderr:
+            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+
+        # gofmt gives errors in `diff` format, so we just do one file at
+        # a time.
+        if not stdout:
+            return 0
+
+        file_start = re.compile(r'^\+\+\+ (%s)\s.*\n'
+                                % '|'.join(re.escape(f) for f in files),
+                                re.MULTILINE)
+        per_file_diffs = file_start.split(stdout)
+        # The format of per_file_diffs is
+        # [preamble, fname1, diff, fname2, diff, fname3, diff, ...]
+        for i in xrange(1, len(per_file_diffs), 2):
+            (fname, diff) = (per_file_diffs[i], per_file_diffs[i + 1])
+            # TODO(csilvers): break into individual lines somehow
+            # Then provide autofix support.
+            self.report(
+                "%s:1: F1 FORMAT ERROR(S): run `ka-lint %s` for details\n"
+                "%s" % (fname, fname, diff))
+
+        num_errors = len(per_file_diffs) / 2
+        return num_errors
