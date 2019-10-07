@@ -837,9 +837,12 @@ class KtLint(Linter):
 
 
 class GoLint(Linter):
-    """Linter for Go, using the golint module.
+    """Linter for Go, using the golangci-lint
 
-    TODO(Kai): may consider to use 'golangci-lint' to replace 'golint'
+    golangci-lint can enable multiple go linters, for instance `gofmt`,
+    `golint` with their individual options.
+    we use .golangci.yml, the config file, in each go git repo to
+    config golangci.
     """
 
     def _is_not_skipped(self, file, lint_err_lines):
@@ -859,11 +862,12 @@ class GoLint(Linter):
                     for lint_err in lint_err_lines]
 
     def process_files(self, files):
-        exec_path = os.path.abspath(os.path.join(_CWD, 'vendor', 'golint'))
+        gobin = subprocess.check_output('go env GOBIN', shell=True)
+        exec_path = os.path.abspath(os.path.join(gobin.rstrip(), 'golangci-lint'))
         assert os.path.isfile(exec_path), (
-            "Vendoring error: golint is missing from '%s'" % exec_path)
+            "Vendoring error: golangci-lint is missing from '%s'" % exec_path)
 
-        golint_command = [exec_path] + files
+        golint_command = [exec_path] + ['run'] + files
 
         pipe = subprocess.Popen(
             golint_command,
