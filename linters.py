@@ -862,12 +862,14 @@ class GoLint(Linter):
                     for lint_err in lint_err_lines]
 
     def process_files(self, files):
-        gobin = subprocess.check_output('go env GOBIN', shell=True).rstrip()
-        exec_path = os.path.abspath(os.path.join(gobin, 'golangci-lint'))
+        exec_path = os.path.abspath(os.path.join(_CWD, 'vendor',
+                                                       'golangci-lint', 'cmd',
+                                                       'golangci-lint',
+                                                       'main.go'))
         assert os.path.isfile(exec_path), (
             "Vendoring error: golangci-lint is missing from '%s'" % exec_path)
 
-        golint_command = [exec_path] + ['run'] + files
+        golint_command = ['go'] + ['run'] + [exec_path] + ['run'] + files
 
         pipe = subprocess.Popen(
             golint_command,

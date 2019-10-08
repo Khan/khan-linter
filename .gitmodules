@@ -1,0 +1,3 @@
+[submodule "vendor/golangci-lint"]
+	path = vendor/golangci-lint
+	url = git@github.com:golangci/golangci-lint.git
