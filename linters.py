@@ -869,7 +869,7 @@ class GoLint(Linter):
         assert os.path.isfile(exec_path), (
             "Vendoring error: golangci-lint is missing from '%s'" % exec_path)
 
-        golint_command = ['go'] + ['run'] + [exec_path] + ['run'] + files
+        golint_command = ['go', 'run', exec_path, 'run'] + files
 
         pipe = subprocess.Popen(
             golint_command,
@@ -879,17 +879,30 @@ class GoLint(Linter):
         stdout, stderr = pipe.communicate()
         stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
 
-        if stderr:
-            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+        # Below is one go linter error message format. The first line includes
+        # "file:line:col:message", the second line is the code, and third
+        # line is the pointer.
+        # "
+        # query_test.go:191:2: var `reqJson` should be `reqJSON` (golint)
+        #  	reqJson := []byte(
+        #   ^
+        # "
 
         num_errors = 0
         lint_by_file = {}
         for line in stdout.splitlines():
-            # Lint line format is file:line:col:message, but need to ignore ``
-            parts = re.split(''':(?=(?:[^`]|`[^`]*`)*$)''', line)
-            if len(parts) != 4:
-                raise RuntimeError("Unexpected stdout from linter:\n%s" %
-                                   stdout)
+            result = re.match(r'(.*?).go:\d{1,}:\d{1,}:(.*?)', line)
+            # check the first line of error message
+            if result:
+                # go linter uses `` to hightlight keyword, ignore it.
+                parts = re.split(''':(?=(?:[^`]|`[^`]*`)*$)''', line)
+                if len(parts) != 4:
+                    raise RuntimeError("Unexpected stdout from linter:\n%s" %
+                                       stdout)
+            else:
+                lint_by_file[file].append((int(line_number) - 1, line))
+                continue
+
             file, line_number, _, _ = parts
 
             lint_by_file.setdefault(file, [])

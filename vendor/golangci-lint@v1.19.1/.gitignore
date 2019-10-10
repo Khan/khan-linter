@@ -1,0 +1,11 @@
+/*.txt
+/*.pdf
+/*.pprof
+/dist/
+/.idea/
+/test/path
+/golangci-lint
+/tools/Dracula.itermcolors
+/tools/node_modules
+/tools/svg-term
+/.vscode/
