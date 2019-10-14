@@ -869,14 +869,15 @@ class GoLint(Linter):
         assert os.path.isfile(exec_path), (
             "Vendoring error: golangci-lint is missing from '%s'" % exec_path)
 
-        golint_command = ['go', 'run', exec_path, 'run'] + files
+        golint_command = ['xargs', '-0', 'go', 'run', exec_path, 'run']
 
         pipe = subprocess.Popen(
             golint_command,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        stdout, stderr = pipe.communicate()
+        stdout, stderr = pipe.communicate(input='\0'.join(files))
         stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
 
         # Below is one go linter error message format. The first line includes
