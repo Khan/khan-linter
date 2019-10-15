@@ -1,4 +1,0 @@
-linters-settings:
-  misspell:
-    ignore-words:
-      - langauge

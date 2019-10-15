@@ -1,3 +1,0 @@
-package minimalpkg
-
-func SomeTestFunc() {}

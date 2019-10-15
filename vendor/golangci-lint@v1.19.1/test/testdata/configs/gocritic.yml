@@ -1,8 +1,0 @@
-linters-settings:
-  gocritic:
-    enabled-checks:
-      - rangeValCopy
-      - flagDeref
-    settings:
-      rangevalcopy:
-        sizethreshold: 2
