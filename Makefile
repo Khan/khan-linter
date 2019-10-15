@@ -12,8 +12,6 @@ deps vendor_deps: go_deps check_setup
 	npm prune
 	echo "DONE.  Consider running:  git add -A vendor node_modules"
 
-# bump the version for upgrade
-version = v1.19.1
 # `go mod vendor` will reset vendor directory first time
 # so need to restore python and kolinter from vendor directory later
 go_deps go_vendor_deps: check_setup
