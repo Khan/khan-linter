@@ -1,7 +1,7 @@
 # A bug(?) in the configparser install means it does not set up backports/
 # the way we need to, according to https://pypi.python.org/pypi/backports.
 # We fix that manually.
-py_deps py_vendor_deps: check_setup
+deps vendor_deps: go_deps check_setup
 	rm -r vendor/py2/* || true
 	rm -r vendor/py3/* || true
 	pip2 install --target=vendor/py2 -r requirements.txt
@@ -31,5 +31,3 @@ check_setup:
 	@command -v npm > /dev/null || echo "missing dependencies: need to install npm"
 	@command -v pip2 > /dev/null || echo "missing dependencies: need to install pip2"
 	@command -v pip3 > /dev/null || echo "missing dependencies: need to install pip3"
-	@if [ ! -e vendor/ktlint ]; then echo "missing dependencies: need to install ktlint"; fi
-	@if [ ! -e vendor/github.com/golangci/golangci-lint/ ]; then echo "missing dependencies: need to go mod vendor it"; fi
