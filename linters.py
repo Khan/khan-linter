@@ -892,6 +892,9 @@ class GoLint(Linter):
 
         num_errors = 0
         lint_by_file = {}
+        line_number = 0
+        file = ""
+
         for line in stdout.splitlines():
             result = re.match(r'(.*?).go:\d{1,}:\d{1,}:(.*?)', line)
             # check the first line of error message
