@@ -889,29 +889,23 @@ class GoLint(Linter):
         #  	reqJson := []byte(
         #   ^
         # "
-
         num_errors = 0
         lint_by_file = {}
-        line_number = 0
-        file = ""
 
         for line in stdout.splitlines():
             result = re.match(r'(.*?).go:\d{1,}:\d{1,}:(.*?)', line)
-            # check the first line of error message
+            # check the first line of error message only, no need to have
+            # the second line and third line (the error and pointer).
             if result:
-                # go linter uses `` to hightlight keyword, ignore it.
-                parts = re.split(''':(?=(?:[^`]|`[^`]*`)*$)''', line)
+                parts = line.split(':', 3)
                 if len(parts) != 4:
                     raise RuntimeError("Unexpected stdout from linter:\n%s" %
                                        stdout)
-            else:
+
+                file, line_number, _, _ = parts
+
+                lint_by_file.setdefault(file, [])
                 lint_by_file[file].append((int(line_number) - 1, line))
-                continue
-
-            file, line_number, _, _ = parts
-
-            lint_by_file.setdefault(file, [])
-            lint_by_file[file].append((int(line_number) - 1, line))
 
         for file, lint in lint_by_file.items():
             for _, lint_err in itertools.compress(
