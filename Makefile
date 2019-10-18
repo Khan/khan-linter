@@ -12,16 +12,15 @@ deps vendor_deps: go_deps check_setup
 	npm prune
 	echo "DONE.  Consider running:  git add -A vendor node_modules"
 
-# `go mod vendor` will reset vendor directory first time
-# so need to restore python and kolinter from vendor directory later
+# vendor in the deps for golangci-lint.
 go_deps go_vendor_deps: check_setup
-	@if [ ! -e ./go.mod ]; then go mod init khan_linter; fi
-	@if [ ! -e vendor/github.com/golangci/golangci-lint ]; then \
-		export GO111MODULE=on; \
-		go mod tidy; \
-		go mod vendor; \
-		git checkout vendor; \
-	fi
+	if [ ! -e ./go.mod ]; then go mod init khan_linter; fi
+	GO111MODULE=on go mod tidy
+	GO111MODULE=on go mod vendor
+	@# Go really wants to control the entire vendor directory, but we want to
+	@# put other stuff there.  Revert that other stuff.
+	@# TODO(benkraft): There's got to be a better way!
+	git checkout vendor/ktlint* vendor/py*
 	echo "DONE.  Consider running:  git add -A vendor"
 
 
