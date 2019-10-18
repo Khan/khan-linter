@@ -1,7 +1,7 @@
 # A bug(?) in the configparser install means it does not set up backports/
 # the way we need to, according to https://pypi.python.org/pypi/backports.
 # We fix that manually.
-deps vendor_deps: check_setup
+deps vendor_deps: go_deps check_setup
 	rm -r vendor/py2/* || true
 	rm -r vendor/py3/* || true
 	pip2 install --target=vendor/py2 -r requirements.txt
@@ -12,6 +12,17 @@ deps vendor_deps: check_setup
 	npm prune
 	echo "DONE.  Consider running:  git add -A vendor node_modules"
 
+# `go mod vendor` will reset vendor directory first time
+# so need to restore python and kolinter from vendor directory later
+go_deps go_vendor_deps: check_setup
+	@if [ ! -e ./go.mod ]; then go mod init khan_linter; fi
+	@if [ ! -e vendor/github.com/golangci/golangci-lint ]; then \
+		export GO111MODULE=on; \
+		go mod tidy; \
+		go mod vendor; \
+		git checkout vendor; \
+	fi
+	echo "DONE.  Consider running:  git add -A vendor"
 
 
 check_setup:

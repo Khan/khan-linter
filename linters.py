@@ -834,3 +834,83 @@ class KtLint(Linter):
                 num_errors += 1
 
         return num_errors
+
+
+class GoLint(Linter):
+    """Linter for Go, using the golangci-lint
+
+    golangci-lint can enable multiple go linters, for instance `gofmt`,
+    `golint` with their individual options.
+    we use .golangci.yml, the config file, in each go git repo to
+    config golangci.
+    """
+
+    def _is_not_skipped(self, file, lint_err_lines):
+        """For each lint error in the given file check if it's nolinted.
+
+        Args:
+            lint_err_lines: a list of (line (0-indexed), message) tuples
+        Returns:
+            a list of booleans, one per input, True if that lint error has
+            not been skipped via `@Nolint`.
+        """
+        with open(file) as f:
+            lines = f.readlines()
+            line_count = len(lines) - 1
+            # Cap the indexing at the max number of lines in the file
+            return [not _has_nolint(lines[min(lint_err[0], line_count)])
+                    for lint_err in lint_err_lines]
+
+    def process_files(self, files):
+        exec_path = os.path.abspath(os.path.join(_CWD, 'vendor', 'github.com',
+                                                       'golangci',
+                                                       'golangci-lint', 'cmd',
+                                                       'golangci-lint',
+                                                       'main.go'))
+        assert os.path.isfile(exec_path), (
+            "Vendoring error: golangci-lint is missing from '%s'" % exec_path)
+
+        golint_command = ['xargs', '-0', 'go', 'run', exec_path, 'run']
+
+        pipe = subprocess.Popen(
+            golint_command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+        stdout, stderr = pipe.communicate(input='\0'.join(files))
+        stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
+
+        # Below is one go linter error message format. The first line includes
+        # "file:line:col:message", the second line is the code, and third
+        # line is the pointer.
+        # "
+        # query_test.go:191:2: var `reqJson` should be `reqJSON` (golint)
+        #  	reqJson := []byte(
+        #   ^
+        # "
+        num_errors = 0
+        lint_by_file = {}
+
+        for line in stdout.splitlines():
+            result = re.match(r'(.*?).go:\d{1,}:\d{1,}:(.*?)', line)
+            # check the first line of error message only, no need to have
+            # the second line and third line (the error and pointer).
+            if result:
+                parts = line.split(':', 3)
+                if len(parts) != 4:
+                    raise RuntimeError("Unexpected stdout from linter:\n%s" %
+                                       stdout)
+
+                file, line_number, _, _ = parts
+
+                lint_by_file.setdefault(file, [])
+                lint_by_file[file].append((int(line_number) - 1, line))
+
+        for file, lint in lint_by_file.items():
+            for _, lint_err in itertools.compress(
+                    lint, self._is_not_skipped(file, lint)):
+                self.report(lint_err)
+                num_errors += 1
+
+        return num_errors
