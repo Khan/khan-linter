@@ -265,7 +265,6 @@ _EXISTING_FILE_WHITELIST = [
     "stylesheets/maps-package/knowledgemap.less",
     "stylesheets/mobile-package/mobile.less",
     "stylesheets/moderation-package/moderation.less",
-    "stylesheets/museums-package/museums.less",
     "stylesheets/nav-package/nav.less",
     "stylesheets/notifications-package/challenge-notification.less",
     "stylesheets/notifications-package/notifications.less",
