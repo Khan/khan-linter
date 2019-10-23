@@ -2,6 +2,7 @@
 """Linters process files or lists of files for correctness."""
 
 import itertools
+import json
 import logging
 import os
 import re
@@ -845,6 +846,8 @@ class GoLint(Linter):
     config golangci.
     """
 
+    _ERROR_RE = re.compile(r'(.*?)\.go:\d{1,}:(.*?)')
+
     def _is_not_skipped(self, file, lint_err_lines):
         """For each lint error in the given file check if it's nolinted.
 
@@ -887,9 +890,9 @@ class GoLint(Linter):
         # probably need to compile the whole package anyway, so it's not a big
         # loss), and then discard the errors that aren't for files we asked
         # about.
-        dirs = sorted({os.path.dirname(f) for f in files})
+        dirs = sorted({os.path.abspath(os.path.dirname(f)) for f in files})
         process = subprocess.Popen(
-            ['xargs', '-0', output_path, 'run'],
+            ['xargs', '-0', output_path, 'run', '--out-format=json'],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
@@ -903,40 +906,41 @@ class GoLint(Linter):
         if stderr:
             raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
 
-        # Below is one go linter error message format. The first line includes
-        # "file:line:col:message", the second line is the code, and third
-        # line is the pointer.
-        # "
-        # query_test.go:191:2: var `reqJson` should be `reqJSON` (golint)
-        #  	reqJson := []byte(
-        #   ^
-        # "
+        results = json.loads(stdout)
         num_errors = 0
-        lint_by_file = {}
-        files = set(files)
+        for issue in results['Issues']:
+            # The format doesn't seem to be documented, but here's a sample
+            # issue:
+            # {
+            #   "FromLinter": "lll",
+            #   "Text": "line is 111 characters",
+            #   "SourceLines": ["<elided>"],
+            #   "Replacement": null,
+            #   "Pos": {
+            #     "Filename": "resolver.go",
+            #     "Offset": 0,
+            #     "Line": 95,
+            #     "Column": 0
+            #   }
+            # }
+            filename = issue["Pos"]["Filename"]
+            if filename not in files:
+                continue  # not a file we wanted to lint (see HACK above)
 
-        for line in stdout.splitlines():
-            result = re.match(r'(.*?).go:\d{1,}:\d{1,}:(.*?)', line)
-            # check the first line of error message only, no need to have
-            # the second line and third line (the error and pointer).
-            if result:
-                parts = line.split(':', 3)
-                if len(parts) != 4:
-                    raise RuntimeError("Unexpected stdout from linter:\n%s" %
-                                       stdout)
+            # TODO(benkraft): Do we want to settle on using golangci-lint's
+            # convention of "// nolint" instead of our "@Nolint"?  If so,
+            # remove this check.
+            if _has_nolint('\n'.join(issue["SourceLines"])):
+                continue
 
-                file, line_number, _, _ = parts
+            lineno = issue["Pos"]["Line"]
+            colno = issue["Pos"]["Column"]
+            postext = "%s:%s" % (lineno, colno) if colno else str(lineno)
+            # Format like golangci-lint's default text output
+            msg = "%s:%s: %s (%s)" % (
+                filename, postext, issue["Text"], issue["FromLinter"])
 
-                if file not in files:
-                    continue  # not a file we wanted to lint (see HACK above)
-
-                lint_by_file.setdefault(file, [])
-                lint_by_file[file].append((int(line_number) - 1, line))
-
-        for file, lint in lint_by_file.items():
-            for _, lint_err in itertools.compress(
-                    lint, self._is_not_skipped(file, lint)):
-                self.report(lint_err)
-                num_errors += 1
+            num_errors += 1
+            self.report(msg)
 
         return num_errors
