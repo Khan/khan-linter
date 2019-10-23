@@ -1,5 +1,2 @@
 *.pyc
 *.log
-# This is built from truly vendored code, but we can't actually vendor the
-# binary.
-bin/golangci-lint

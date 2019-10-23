@@ -862,46 +862,24 @@ class GoLint(Linter):
                     for lint_err in lint_err_lines]
 
     def process_files(self, files):
-        exec_path = os.path.abspath(os.path.join(
-            _CWD, 'vendor', 'github.com', 'golangci', 'golangci-lint',
-            'cmd', 'golangci-lint', 'main.go'))
-        output_path = os.path.abspath(os.path.join(
-            _CWD, 'bin', 'golangci-lint'))
-
+        exec_path = os.path.abspath(os.path.join(_CWD, 'vendor', 'github.com',
+                                                       'golangci',
+                                                       'golangci-lint', 'cmd',
+                                                       'golangci-lint',
+                                                       'main.go'))
         assert os.path.isfile(exec_path), (
             "Vendoring error: golangci-lint is missing from '%s'" % exec_path)
 
-        # We can't just use go run, because we need to run the build in
-        # khan-linter's go module, but the files under lint, and the caller's
-        # working directory, may be in another go module.  So instead we build
-        # in khan-linter, and then call the binary in caller's cwd.
-        # TODO(benkraft): Only run `go build` if anything in the repo has
-        # changed.  (Not a big deal, since it's pretty fast.)
-        subprocess.check_call(['go', 'build', '-o', output_path, exec_path],
-                              cwd=_CWD)
+        golint_command = ['xargs', '-0', 'go', 'run', exec_path, 'run']
 
-        # HACK: Sadly, while golangci-lint can accept files as arguments, it
-        # doesn't handle them in a first-class way: among other things, they
-        # must all be in the same package.  So we pass all the directories we
-        # care about, and let golangci-lint lint the whole package (it would
-        # probably need to compile the whole package anyway, so it's not a big
-        # loss), and then discard the errors that aren't for files we asked
-        # about.
-        dirs = sorted({os.path.dirname(f) for f in files})
-        process = subprocess.Popen(
-            ['xargs', '-0', output_path, 'run'],
+        pipe = subprocess.Popen(
+            golint_command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        stdout, stderr = process.communicate(input='\0'.join(dirs))
+        stdout, stderr = pipe.communicate(input='\0'.join(files))
         stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
-
-        # golangci-lint seems to exit 123 on errors, even if you tell it not to
-        # (with --issues-exit-code).  So we just check stderr to see if
-        # anything crashed.
-        if stderr:
-            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
 
         # Below is one go linter error message format. The first line includes
         # "file:line:col:message", the second line is the code, and third
@@ -913,7 +891,6 @@ class GoLint(Linter):
         # "
         num_errors = 0
         lint_by_file = {}
-        files = set(files)
 
         for line in stdout.splitlines():
             result = re.match(r'(.*?).go:\d{1,}:\d{1,}:(.*?)', line)
@@ -926,9 +903,6 @@ class GoLint(Linter):
                                        stdout)
 
                 file, line_number, _, _ = parts
-
-                if file not in files:
-                    continue  # not a file we wanted to lint (see HACK above)
 
                 lint_by_file.setdefault(file, [])
                 lint_by_file[file].append((int(line_number) - 1, line))
