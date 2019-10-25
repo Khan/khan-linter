@@ -90,10 +90,10 @@
     lodash "^4.17.11"
     to-fast-properties "^2.0.0"
 
-"@khanacademy/eslint-plugin@^0.2.1":
-  version "0.2.1"
-  resolved "https://registry.yarnpkg.com/@khanacademy/eslint-plugin/-/eslint-plugin-0.2.1.tgz#fc1d6ee0b34ab79a244c445fe4c40631e1974b48"
-  integrity sha512-GO9M27Sor0QrOmnmdwORJtpgzwn8KiS908GI1Bw7hYfLe/PvbEb9iclLdDtObx9sx0WNj65OL1QuAgZo4+mO9g==
+"@khanacademy/eslint-plugin@^0.2.2":
+  version "0.2.2"
+  resolved "https://registry.yarnpkg.com/@khanacademy/eslint-plugin/-/eslint-plugin-0.2.2.tgz#c92ae153c3cd12ad2b887bfa3a520677233896eb"
+  integrity sha512-JmLTlbbx9lZAwElSaRiQerTyrIsH/im2GsY1+0m8gBVF1MZzNORMQU5Lw8cZUKyfIlyNOn/s5L8xoYD266TVMA==
 
 acorn-jsx@^5.0.0:
   version "5.0.1"

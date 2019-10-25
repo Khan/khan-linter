@@ -9,4 +9,5 @@ eslint plugin with our set of custom rules for various things
 - [khan/flow-array-type-style](docs/flow-array-type-style.md)
 - [khan/flow-no-one-tuple](docs/flow-no-one-tuple.md)
 - [khan/imports-requiring-flow](docs/imports-requiring-flow.md)
+- [khan/react-no-method-jsx-attribute](docs/react-no-method-jsx-attribute.md)
 - [khan/react-no-subscriptions-before-mount](docs/react-no-subscriptions-before-mount.md)
