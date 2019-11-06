@@ -916,8 +916,8 @@ class GoLint(Linter):
             colno = issue["Pos"]["Column"]
             postext = "%s:%s" % (lineno, colno) if colno else str(lineno)
             # Format like golangci-lint's default text output
-            msg = "%s:%s: %s (%s)" % (
-                filename, postext, issue["Text"], issue["FromLinter"])
+            msg = "%s:%s: E%s %s" % (
+                filename, postext, issue["FromLinter"], issue["Text"])
 
             num_errors += 1
             self.report(msg)
