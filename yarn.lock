@@ -90,10 +90,21 @@
     lodash "^4.17.11"
     to-fast-properties "^2.0.0"
 
-"@khanacademy/eslint-plugin@^0.2.2":
-  version "0.2.2"
-  resolved "https://registry.yarnpkg.com/@khanacademy/eslint-plugin/-/eslint-plugin-0.2.2.tgz#c92ae153c3cd12ad2b887bfa3a520677233896eb"
-  integrity sha512-JmLTlbbx9lZAwElSaRiQerTyrIsH/im2GsY1+0m8gBVF1MZzNORMQU5Lw8cZUKyfIlyNOn/s5L8xoYD266TVMA==
+"@babel/types@^7.7.4":
+  version "7.7.4"
+  resolved "https://registry.yarnpkg.com/@babel/types/-/types-7.7.4.tgz#516570d539e44ddf308c07569c258ff94fde9193"
+  integrity sha512-cz5Ji23KCi4T+YIE/BolWosrJuSmoZeN1EFnRtBwF+KKLi8GG/Z2c2hOJJeCXPk4mwk4QFvTmwIodJowXgttRA==
+  dependencies:
+    esutils "^2.0.2"
+    lodash "^4.17.13"
+    to-fast-properties "^2.0.0"
+
+"@khanacademy/eslint-plugin@0.2.5":
+  version "0.2.5"
+  resolved "https://registry.yarnpkg.com/@khanacademy/eslint-plugin/-/eslint-plugin-0.2.5.tgz#00b94c35f038c75054c732c110e1bda7c94f6ed7"
+  integrity sha512-6ZcBbc56/epaY8z9VeZBdREv7uVktplAeHIhAuysqCNJbtMgDP23RPUP7WKBchZPQ4c2QdE7Bo7OixweNsw/NA==
+  dependencies:
+    "@babel/types" "^7.7.4"
 
 acorn-jsx@^5.0.0:
   version "5.0.1"
@@ -1355,6 +1366,11 @@ lodash@^4.11.1, lodash@^4.17.10, lodash@^4.17.11, lodash@^4.17.4, lodash@^4.17.5
   version "4.17.14"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.14.tgz#9ce487ae66c96254fe20b599f21b6816028078ba"
   integrity sha512-mmKYbW3GLuJeX+iGP+Y7Gp1AiGHGbXHCOh/jZmrawMmsE7MS4znI3RL2FsjbqOyMayHInjOeykW7PEajUk1/xw==
+
+lodash@^4.17.13:
+  version "4.17.15"
+  resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.15.tgz#b447f6670a0455bbfeedd11392eff330ea097548"
+  integrity sha512-8xOcRHvCjnocdS5cpwXQXVzmmh5e5+saE2QGoeQmbKmRS6J3VQppPOIt0MnmE+4xlZoumy0GPG0D0MVIQbNA1A==
 
 loose-envify@^1.4.0:
   version "1.4.0"

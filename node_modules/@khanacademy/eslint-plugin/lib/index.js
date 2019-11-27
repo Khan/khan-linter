@@ -1,6 +1,8 @@
 module.exports = {
     rules: {
         "flow-array-type-style": require("./rules/flow-array-type-style.js"),
+        "flow-exact-props": require("./rules/flow-exact-props.js"),
+        "flow-exact-state": require("./rules/flow-exact-state.js"),
         "flow-no-one-tuple": require("./rules/flow-no-one-tuple.js"),
         "imports-requiring-flow": require("./rules/imports-requiring-flow.js"),
         "react-no-method-jsx-attribute": require("./rules/react-no-method-jsx-attribute.js"),
