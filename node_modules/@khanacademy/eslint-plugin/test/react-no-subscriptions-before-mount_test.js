@@ -1,4 +1,4 @@
-const rule = require("../lib/rules/react-no-subscriptions-before-mount");
+const {rules} = require("../lib/index.js");
 const RuleTester = require("eslint").RuleTester;
 
 const parserOptions = {
@@ -6,6 +6,8 @@ const parserOptions = {
 };
 
 const ruleTester = new RuleTester(parserOptions);
+const rule = rules["react-no-subscriptions-before-mount"];
+
 const message = rule.__message;
 const errors = [message];
 

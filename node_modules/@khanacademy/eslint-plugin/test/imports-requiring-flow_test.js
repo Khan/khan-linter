@@ -1,6 +1,6 @@
 const path = require("path");
 
-const rule = require("../lib/rules/imports-requiring-flow");
+const {rules} = require("../lib/index.js");
 const RuleTester = require("eslint").RuleTester;
 
 const parserOptions = {
@@ -8,6 +8,8 @@ const parserOptions = {
 };
 
 const ruleTester = new RuleTester(parserOptions);
+const rule = rules["imports-requiring-flow"];
+
 const message = rule.__message;
 const errors = [message];
 const rootDir = "/Users/nyancat/project";

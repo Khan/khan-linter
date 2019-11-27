@@ -1,6 +1,6 @@
 const path = require("path");
 
-const rule = require("../lib/index.js").rules["react-no-method-jsx-attribute"];
+const {rules} = require("../lib/index.js");
 const RuleTester = require("eslint").RuleTester;
 
 const parserOptions = {
@@ -8,6 +8,7 @@ const parserOptions = {
 };
 
 const ruleTester = new RuleTester(parserOptions);
+const rule = rules["react-no-method-jsx-attribute"];
 
 ruleTester.run("react-no-method-jsx-attribute", rule, {
     valid: [

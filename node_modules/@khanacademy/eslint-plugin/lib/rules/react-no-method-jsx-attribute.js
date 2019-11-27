@@ -9,8 +9,8 @@ module.exports = {
     },
 
     create(context) {
-        const methods = new Set();
-        const classProperties = new Set();
+        const methods = new Map();
+        const classProperties = new Map();
 
         return {
             ClassDeclaration(node) {
@@ -19,13 +19,13 @@ module.exports = {
                         child.type === "ClassProperty" &&
                         child.key.type === "Identifier"
                     ) {
-                        classProperties.add(child.key.name);
+                        classProperties.set(child.key.name, child);
                     } else if (
                         child.type === "MethodDefinition" &&
                         child.kind === "method" &&
                         child.key.type === "Identifier"
                     ) {
-                        methods.add(child.key.name);
+                        methods.set(child.key.name, child);
                     }
                 }
             },
@@ -59,7 +59,7 @@ module.exports = {
                             const {name} = property;
                             if (methods.has(name)) {
                                 context.report({
-                                    node: node,
+                                    node: methods.get(name),
                                     message:
                                         "Methods cannot be passed as props, use a class property instead.",
                                 });
