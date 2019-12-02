@@ -889,7 +889,7 @@ class GoLint(Linter):
 
         results = json.loads(stdout)
         num_errors = 0
-        for issue in results['Issues']:
+        for issue in results['Issues'] or []:
             # The format doesn't seem to be documented, but here's a sample
             # issue:
             # {
