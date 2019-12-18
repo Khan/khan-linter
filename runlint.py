@@ -797,7 +797,12 @@ if __name__ == '__main__':
 
     options, args = parser.parse_args()
     if not args:
-        args = ['.']
+        # We used to lint the whole directory-tree when args was null,
+        # but we want to be able to run
+        #   git ls-files ... | xargs runlint.py
+        # and we want it to be a noop if git does not find any files.
+        # (If we were linux-only we'd use `xargs -r`, but we are os x.)
+        sys.exit(0)
 
     _LOGGER = _setup_custom_logger(options.verbose)
 
