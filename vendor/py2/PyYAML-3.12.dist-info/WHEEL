@@ -1,5 +1,5 @@
 Wheel-Version: 1.0
-Generator: bdist_wheel (0.33.6)
+Generator: bdist_wheel (0.30.0)
 Root-Is-Purelib: false
-Tag: cp27-cp27m-macosx_10_15_x86_64
+Tag: cp27-cp27m-linux_x86_64
 

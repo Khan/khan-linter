@@ -39,8 +39,6 @@ import tempfile
 import textwrap
 import itertools
 import inspect
-import ntpath
-import posixpath
 from pkgutil import get_importer
 
 try:
@@ -48,11 +46,6 @@ try:
 except ImportError:
     # Python 3.2 compatibility
     import imp as _imp
-
-try:
-    FileExistsError
-except NameError:
-    FileExistsError = OSError
 
 from pkg_resources.extern import six
 from pkg_resources.extern.six.moves import urllib, map, filter
@@ -85,11 +78,8 @@ __import__('pkg_resources.extern.packaging.requirements')
 __import__('pkg_resources.extern.packaging.markers')
 
 
-__metaclass__ = type
-
-
-if (3, 0) < sys.version_info < (3, 5):
-    raise RuntimeError("Python 3.5 or later is required")
+if (3, 0) < sys.version_info < (3, 3):
+    raise RuntimeError("Python 3.3 or later is required")
 
 if six.PY2:
     # Those builtin exceptions are only defined in Python 3
@@ -100,21 +90,6 @@ if six.PY2:
 # satisfy the linters.
 require = None
 working_set = None
-add_activation_listener = None
-resources_stream = None
-cleanup_resources = None
-resource_dir = None
-resource_stream = None
-set_extraction_path = None
-resource_isdir = None
-resource_string = None
-iter_entry_points = None
-resource_listdir = None
-resource_filename = None
-resource_exists = None
-_distribution_finders = None
-_namespace_handlers = None
-_namespace_packages = None
 
 
 class PEP440Warning(RuntimeWarning):
@@ -124,11 +99,118 @@ class PEP440Warning(RuntimeWarning):
     """
 
 
+class _SetuptoolsVersionMixin(object):
+    def __hash__(self):
+        return super(_SetuptoolsVersionMixin, self).__hash__()
+
+    def __lt__(self, other):
+        if isinstance(other, tuple):
+            return tuple(self) < other
+        else:
+            return super(_SetuptoolsVersionMixin, self).__lt__(other)
+
+    def __le__(self, other):
+        if isinstance(other, tuple):
+            return tuple(self) <= other
+        else:
+            return super(_SetuptoolsVersionMixin, self).__le__(other)
+
+    def __eq__(self, other):
+        if isinstance(other, tuple):
+            return tuple(self) == other
+        else:
+            return super(_SetuptoolsVersionMixin, self).__eq__(other)
+
+    def __ge__(self, other):
+        if isinstance(other, tuple):
+            return tuple(self) >= other
+        else:
+            return super(_SetuptoolsVersionMixin, self).__ge__(other)
+
+    def __gt__(self, other):
+        if isinstance(other, tuple):
+            return tuple(self) > other
+        else:
+            return super(_SetuptoolsVersionMixin, self).__gt__(other)
+
+    def __ne__(self, other):
+        if isinstance(other, tuple):
+            return tuple(self) != other
+        else:
+            return super(_SetuptoolsVersionMixin, self).__ne__(other)
+
+    def __getitem__(self, key):
+        return tuple(self)[key]
+
+    def __iter__(self):
+        component_re = re.compile(r'(\d+ | [a-z]+ | \.| -)', re.VERBOSE)
+        replace = {
+            'pre': 'c',
+            'preview': 'c',
+            '-': 'final-',
+            'rc': 'c',
+            'dev': '@',
+        }.get
+
+        def _parse_version_parts(s):
+            for part in component_re.split(s):
+                part = replace(part, part)
+                if not part or part == '.':
+                    continue
+                if part[:1] in '0123456789':
+                    # pad for numeric comparison
+                    yield part.zfill(8)
+                else:
+                    yield '*' + part
+
+            # ensure that alpha/beta/candidate are before final
+            yield '*final'
+
+        def old_parse_version(s):
+            parts = []
+            for part in _parse_version_parts(s.lower()):
+                if part.startswith('*'):
+                    # remove '-' before a prerelease tag
+                    if part < '*final':
+                        while parts and parts[-1] == '*final-':
+                            parts.pop()
+                    # remove trailing zeros from each series of numeric parts
+                    while parts and parts[-1] == '00000000':
+                        parts.pop()
+                parts.append(part)
+            return tuple(parts)
+
+        # Warn for use of this function
+        warnings.warn(
+            "You have iterated over the result of "
+            "pkg_resources.parse_version. This is a legacy behavior which is "
+            "inconsistent with the new version class introduced in setuptools "
+            "8.0. In most cases, conversion to a tuple is unnecessary. For "
+            "comparison of versions, sort the Version instances directly. If "
+            "you have another use case requiring the tuple, please file a "
+            "bug with the setuptools project describing that need.",
+            RuntimeWarning,
+            stacklevel=1,
+        )
+
+        for part in old_parse_version(str(self)):
+            yield part
+
+
+class SetuptoolsVersion(_SetuptoolsVersionMixin, packaging.version.Version):
+    pass
+
+
+class SetuptoolsLegacyVersion(_SetuptoolsVersionMixin,
+                              packaging.version.LegacyVersion):
+    pass
+
+
 def parse_version(v):
     try:
-        return packaging.version.Version(v)
+        return SetuptoolsVersion(v)
     except packaging.version.InvalidVersion:
-        return packaging.version.LegacyVersion(v)
+        return SetuptoolsLegacyVersion(v)
 
 
 _state_vars = {}
@@ -240,9 +322,6 @@ __all__ = [
     'register_finder', 'register_namespace_handler', 'register_loader_type',
     'fixup_namespace_packages', 'get_importer',
 
-    # Warnings
-    'PkgResourcesDeprecationWarning',
-
     # Deprecated/backward compatibility only
     'run_main', 'AvailableDistributions',
 ]
@@ -333,7 +412,7 @@ class UnknownExtra(ResolutionError):
 
 _provider_factories = {}
 
-PY_MAJOR = '{}.{}'.format(*sys.version_info)
+PY_MAJOR = sys.version[:3]
 EGG_DIST = 3
 BINARY_DIST = 2
 SOURCE_DIST = 1
@@ -390,7 +469,11 @@ def get_build_platform():
     XXX Currently this is the same as ``distutils.util.get_platform()``, but it
     needs some hacks for Linux and Mac OS X.
     """
-    from sysconfig import get_platform
+    try:
+        # Python 2.7 or >=3.2
+        from sysconfig import get_platform
+    except ImportError:
+        from distutils.util import get_platform
 
     plat = get_platform()
     if sys.platform == "darwin" and not plat.startswith('macosx-'):
@@ -550,7 +633,7 @@ class IResourceProvider(IMetadataProvider):
         """List of resource names in the directory (like ``os.listdir()``)"""
 
 
-class WorkingSet:
+class WorkingSet(object):
     """A collection of active distributions on sys.path (or a similar list)"""
 
     def __init__(self, entries=None):
@@ -650,12 +733,13 @@ class WorkingSet:
         distributions in the working set, otherwise only ones matching
         both `group` and `name` are yielded (in distribution order).
         """
-        return (
-            entry
-            for dist in self
-            for entry in dist.get_entry_map(group).values()
-            if name is None or name == entry.name
-        )
+        for dist in self:
+            entries = dist.get_entry_map(group)
+            if name is None:
+                for ep in entries.values():
+                    yield ep
+            elif name in entries:
+                yield entries[name]
 
     def run_script(self, requires, script_name):
         """Locate distribution for `requires` and run `script_name` script"""
@@ -956,7 +1040,7 @@ class _ReqExtras(dict):
         return not req.marker or any(extra_evals)
 
 
-class Environment:
+class Environment(object):
     """Searchable snapshot of distributions on a search path"""
 
     def __init__(
@@ -971,7 +1055,7 @@ class Environment:
         `platform` is an optional string specifying the name of the platform
         that platform-specific distributions must be compatible with.  If
         unspecified, it defaults to the current platform.  `python` is an
-        optional string naming the desired version of Python (e.g. ``'3.6'``);
+        optional string naming the desired version of Python (e.g. ``'3.3'``);
         it defaults to the current version.
 
         You may explicitly set `platform` (and/or `python`) to ``None`` if you
@@ -990,12 +1074,9 @@ class Environment:
         requirements specified when this environment was created, or False
         is returned.
         """
-        py_compat = (
-            self.python is None
-            or dist.py_version is None
-            or dist.py_version == self.python
-        )
-        return py_compat and compatible_platforms(dist.platform, self.platform)
+        return (self.python is None or dist.py_version is None
+            or dist.py_version == self.python) \
+            and compatible_platforms(dist.platform, self.platform)
 
     def remove(self, dist):
         """Remove `dist` from the environment"""
@@ -1208,7 +1289,7 @@ class ResourceManager:
         target_path = os.path.join(extract_path, archive_name + '-tmp', *names)
         try:
             _bypass_ensure_directory(target_path)
-        except Exception:
+        except:
             self.extraction_error()
 
         self._warn_unsafe_extraction_path(extract_path)
@@ -1403,30 +1484,14 @@ class NullProvider:
     def has_resource(self, resource_name):
         return self._has(self._fn(self.module_path, resource_name))
 
-    def _get_metadata_path(self, name):
-        return self._fn(self.egg_info, name)
-
     def has_metadata(self, name):
-        if not self.egg_info:
-            return self.egg_info
-
-        path = self._get_metadata_path(name)
-        return self._has(path)
+        return self.egg_info and self._has(self._fn(self.egg_info, name))
 
     def get_metadata(self, name):
         if not self.egg_info:
             return ""
-        path = self._get_metadata_path(name)
-        value = self._get(path)
-        if six.PY2:
-            return value
-        try:
-            return value.decode('utf-8')
-        except UnicodeDecodeError as exc:
-            # Include the path in the error message to simplify
-            # troubleshooting, and without changing the exception type.
-            exc.reason += ' in {} file at path: {}'.format(name, path)
-            raise
+        value = self._get(self._fn(self.egg_info, name))
+        return value.decode('utf-8') if six.PY3 else value
 
     def get_metadata_lines(self, name):
         return yield_lines(self.get_metadata(name))
@@ -1484,85 +1549,9 @@ class NullProvider:
         )
 
     def _fn(self, base, resource_name):
-        self._validate_resource_path(resource_name)
         if resource_name:
             return os.path.join(base, *resource_name.split('/'))
         return base
-
-    @staticmethod
-    def _validate_resource_path(path):
-        """
-        Validate the resource paths according to the docs.
-        https://setuptools.readthedocs.io/en/latest/pkg_resources.html#basic-resource-access
-
-        >>> warned = getfixture('recwarn')
-        >>> warnings.simplefilter('always')
-        >>> vrp = NullProvider._validate_resource_path
-        >>> vrp('foo/bar.txt')
-        >>> bool(warned)
-        False
-        >>> vrp('../foo/bar.txt')
-        >>> bool(warned)
-        True
-        >>> warned.clear()
-        >>> vrp('/foo/bar.txt')
-        >>> bool(warned)
-        True
-        >>> vrp('foo/../../bar.txt')
-        >>> bool(warned)
-        True
-        >>> warned.clear()
-        >>> vrp('foo/f../bar.txt')
-        >>> bool(warned)
-        False
-
-        Windows path separators are straight-up disallowed.
-        >>> vrp(r'\\foo/bar.txt')
-        Traceback (most recent call last):
-        ...
-        ValueError: Use of .. or absolute path in a resource path \
-is not allowed.
-
-        >>> vrp(r'C:\\foo/bar.txt')
-        Traceback (most recent call last):
-        ...
-        ValueError: Use of .. or absolute path in a resource path \
-is not allowed.
-
-        Blank values are allowed
-
-        >>> vrp('')
-        >>> bool(warned)
-        False
-
-        Non-string values are not.
-
-        >>> vrp(None)
-        Traceback (most recent call last):
-        ...
-        AttributeError: ...
-        """
-        invalid = (
-            os.path.pardir in path.split(posixpath.sep) or
-            posixpath.isabs(path) or
-            ntpath.isabs(path)
-        )
-        if not invalid:
-            return
-
-        msg = "Use of .. or absolute path in a resource path is not allowed."
-
-        # Aggressively disallow Windows absolute paths
-        if ntpath.isabs(path) and not posixpath.isabs(path):
-            raise ValueError(msg)
-
-        # for compatibility, warn; in future
-        # raise ValueError(msg)
-        warnings.warn(
-            msg[:-1] + " and will raise exceptions in a future release.",
-            DeprecationWarning,
-            stacklevel=4,
-        )
 
     def _get(self, path):
         if hasattr(self.loader, 'get_data'):
@@ -1618,10 +1607,12 @@ class DefaultProvider(EggProvider):
 
     @classmethod
     def _register(cls):
-        loader_names = 'SourceFileLoader', 'SourcelessFileLoader',
-        for name in loader_names:
-            loader_cls = getattr(importlib_machinery, name, type(None))
-            register_loader_type(loader_cls, cls)
+        loader_cls = getattr(
+            importlib_machinery,
+            'SourceFileLoader',
+            type(None),
+        )
+        register_loader_type(loader_cls, cls)
 
 
 DefaultProvider._register()
@@ -1630,15 +1621,10 @@ DefaultProvider._register()
 class EmptyProvider(NullProvider):
     """Provider that returns nothing for all requests"""
 
-    module_path = None
-
     _isdir = _has = lambda self, path: False
-
-    def _get(self, path):
-        return ''
-
-    def _listdir(self, path):
-        return []
+    _get = lambda self, path: ''
+    _listdir = lambda self, path: []
+    module_path = None
 
     def __init__(self):
         pass
@@ -1884,9 +1870,6 @@ class FileMetadata(EmptyProvider):
     def __init__(self, path):
         self.path = path
 
-    def _get_metadata_path(self, name):
-        return self.path
-
     def has_metadata(self, name):
         return name == 'PKG-INFO' and os.path.isfile(self.path)
 
@@ -1985,7 +1968,7 @@ def find_eggs_in_zip(importer, path_item, only=False):
     if only:
         # don't yield nested distros
         return
-    for subitem in metadata.resource_listdir(''):
+    for subitem in metadata.resource_listdir('/'):
         if _is_egg_path(subitem):
             subpath = os.path.join(path_item, subitem)
             dists = find_eggs_in_zip(zipimport.zipimporter(subpath), subpath)
@@ -2194,12 +2177,7 @@ def _handle_ns(packageName, path_item):
     importer = get_importer(path_item)
     if importer is None:
         return None
-
-    # capture warnings due to #1111
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        loader = importer.find_module(packageName)
-
+    loader = importer.find_module(packageName)
     if loader is None:
         return None
     module = sys.modules.get(packageName)
@@ -2244,13 +2222,12 @@ def _rebuild_mod_path(orig_path, package_name, module):
         parts = path_parts[:-module_parts]
         return safe_sys_path_index(_normalize_cached(os.sep.join(parts)))
 
-    new_path = sorted(orig_path, key=position_in_sys_path)
-    new_path = [_normalize_cached(p) for p in new_path]
+    if not isinstance(orig_path, list):
+        # Is this behavior useful when module.__path__ is not a list?
+        return
 
-    if isinstance(module.__path__, list):
-        module.__path__[:] = new_path
-    else:
-        module.__path__ = new_path
+    orig_path.sort(key=position_in_sys_path)
+    module.__path__[:] = [_normalize_cached(p) for p in orig_path]
 
 
 def declare_namespace(packageName):
@@ -2261,10 +2238,9 @@ def declare_namespace(packageName):
         if packageName in _namespace_packages:
             return
 
-        path = sys.path
-        parent, _, _ = packageName.rpartition('.')
-
-        if parent:
+        path, parent = sys.path, None
+        if '.' in packageName:
+            parent = '.'.join(packageName.split('.')[:-1])
             declare_namespace(parent)
             if parent not in _namespace_packages:
                 __import__(parent)
@@ -2275,7 +2251,7 @@ def declare_namespace(packageName):
 
         # Track what packages are namespaces, so when new path items are added,
         # they can be updated
-        _namespace_packages.setdefault(parent or None, []).append(packageName)
+        _namespace_packages.setdefault(parent, []).append(packageName)
         _namespace_packages.setdefault(packageName, [])
 
         for path_item in path:
@@ -2328,18 +2304,7 @@ register_namespace_handler(object, null_ns_handler)
 
 def normalize_path(filename):
     """Normalize a file/dir name for comparison purposes"""
-    return os.path.normcase(os.path.realpath(os.path.normpath(_cygwin_patch(filename))))
-
-
-def _cygwin_patch(filename):  # pragma: nocover
-    """
-    Contrary to POSIX 2008, on Cygwin, getcwd (3) contains
-    symlink components. Using
-    os.path.abspath() works around this limitation. A fix in os.getcwd()
-    would probably better, in Cygwin even more so, except
-    that this seems to be by design...
-    """
-    return os.path.abspath(filename) if sys.platform == 'cygwin' else filename
+    return os.path.normcase(os.path.realpath(filename))
 
 
 def _normalize_cached(filename, _cache={}):
@@ -2404,7 +2369,7 @@ EGG_NAME = re.compile(
 ).match
 
 
-class EntryPoint:
+class EntryPoint(object):
     """Object representing an advertised importable object"""
 
     def __init__(self, name, module_name, attrs=(), extras=(), dist=None):
@@ -2435,7 +2400,7 @@ class EntryPoint:
             warnings.warn(
                 "Parameters to load are deprecated.  Call .resolve and "
                 ".require separately.",
-                PkgResourcesDeprecationWarning,
+                DeprecationWarning,
                 stacklevel=2,
             )
         if require:
@@ -2550,15 +2515,14 @@ def _version_from_file(lines):
     Given an iterable of lines from a Metadata file, return
     the value of the Version field, if present, or None otherwise.
     """
-    def is_version_line(line):
-        return line.lower().startswith('version:')
+    is_version_line = lambda line: line.lower().startswith('version:')
     version_lines = filter(is_version_line, lines)
     line = next(iter(version_lines), '')
     _, _, value = line.partition(':')
     return safe_version(value.strip()) or None
 
 
-class Distribution:
+class Distribution(object):
     """Wrap an actual or potential sys.path entry w/metadata"""
     PKG_INFO = 'PKG-INFO'
 
@@ -2680,56 +2644,31 @@ class Distribution:
         try:
             return self._version
         except AttributeError:
-            version = self._get_version()
+            version = _version_from_file(self._get_metadata(self.PKG_INFO))
             if version is None:
-                path = self._get_metadata_path_for_display(self.PKG_INFO)
-                msg = (
-                    "Missing 'Version:' header and/or {} file at path: {}"
-                ).format(self.PKG_INFO, path)
-                raise ValueError(msg, self)
-
+                tmpl = "Missing 'Version:' header and/or %s file"
+                raise ValueError(tmpl % self.PKG_INFO, self)
             return version
 
     @property
     def _dep_map(self):
-        """
-        A map of extra to its list of (direct) requirements
-        for this distribution, including the null extra.
-        """
         try:
             return self.__dep_map
         except AttributeError:
-            self.__dep_map = self._filter_extras(self._build_dep_map())
-        return self.__dep_map
-
-    @staticmethod
-    def _filter_extras(dm):
-        """
-        Given a mapping of extras to dependencies, strip off
-        environment markers and filter out any dependencies
-        not matching the markers.
-        """
-        for extra in list(filter(None, dm)):
-            new_extra = extra
-            reqs = dm.pop(extra)
-            new_extra, _, marker = extra.partition(':')
-            fails_marker = marker and (
-                invalid_marker(marker)
-                or not evaluate_marker(marker)
-            )
-            if fails_marker:
-                reqs = []
-            new_extra = safe_extra(new_extra) or None
-
-            dm.setdefault(new_extra, []).extend(reqs)
-        return dm
-
-    def _build_dep_map(self):
-        dm = {}
-        for name in 'requires.txt', 'depends.txt':
-            for extra, reqs in split_sections(self._get_metadata(name)):
-                dm.setdefault(extra, []).extend(parse_requirements(reqs))
-        return dm
+            dm = self.__dep_map = {None: []}
+            for name in 'requires.txt', 'depends.txt':
+                for extra, reqs in split_sections(self._get_metadata(name)):
+                    if extra:
+                        if ':' in extra:
+                            extra, marker = extra.split(':', 1)
+                            if invalid_marker(marker):
+                                # XXX warn
+                                reqs = []
+                            elif not evaluate_marker(marker):
+                                reqs = []
+                        extra = safe_extra(extra) or None
+                    dm.setdefault(extra, []).extend(parse_requirements(reqs))
+            return dm
 
     def requires(self, extras=()):
         """List of Requirements needed for this distro if `extras` are used"""
@@ -2745,33 +2684,10 @@ class Distribution:
                 )
         return deps
 
-    def _get_metadata_path_for_display(self, name):
-        """
-        Return the path to the given metadata file, if available.
-        """
-        try:
-            # We need to access _get_metadata_path() on the provider object
-            # directly rather than through this class's __getattr__()
-            # since _get_metadata_path() is marked private.
-            path = self._provider._get_metadata_path(name)
-
-        # Handle exceptions e.g. in case the distribution's metadata
-        # provider doesn't support _get_metadata_path().
-        except Exception:
-            return '[could not detect]'
-
-        return path
-
     def _get_metadata(self, name):
         if self.has_metadata(name):
             for line in self.get_metadata_lines(name):
                 yield line
-
-    def _get_version(self):
-        lines = self._get_metadata(self.PKG_INFO)
-        version = _version_from_file(lines)
-
-        return version
 
     def activate(self, path=None, replace=False):
         """Ensure distribution is importable on `path` (default=sys.path)"""
@@ -2814,19 +2730,6 @@ class Distribution:
         if attr.startswith('_'):
             raise AttributeError(attr)
         return getattr(self._provider, attr)
-
-    def __dir__(self):
-        return list(
-            set(super(Distribution, self).__dir__())
-            | set(
-                attr for attr in self._provider.__dir__()
-                if not attr.startswith('_')
-            )
-        )
-
-    if not hasattr(object, '__dir__'):
-        # python 2.7 not supported
-        del __dir__
 
     @classmethod
     def from_filename(cls, filename, metadata=None, **kw):
@@ -2991,7 +2894,7 @@ class EggInfoDistribution(Distribution):
         take an extra step and try to get the version number from
         the metadata file itself instead of the filename.
         """
-        md_version = self._get_version()
+        md_version = _version_from_file(self._get_metadata(self.PKG_INFO))
         if md_version:
             self._version = md_version
         return self
@@ -3087,10 +2990,7 @@ def parse_requirements(strs):
         # If there is a line continuation, drop it, and append the next line.
         if line.endswith('\\'):
             line = line[:-2].strip()
-            try:
-                line += next(lines)
-            except StopIteration:
-                return
+            line += next(lines)
         yield Requirement(line)
 
 
@@ -3109,7 +3009,6 @@ class Requirement(packaging.requirements.Requirement):
         self.extras = tuple(map(safe_extra, self.extras))
         self.hashCmp = (
             self.key,
-            self.url,
             self.specifier,
             frozenset(self.extras),
             str(self.marker) if self.marker else None,
@@ -3180,10 +3079,7 @@ def _bypass_ensure_directory(path):
     dirname, filename = split(path)
     if dirname and filename and not isdir(dirname):
         _bypass_ensure_directory(dirname)
-        try:
-            mkdir(dirname, 0o755)
-        except FileExistsError:
-            pass
+        mkdir(dirname, 0o755)
 
 
 def split_sections(s):
@@ -3286,11 +3182,3 @@ def _initialize_master_working_set():
     # match order
     list(map(working_set.add_entry, sys.path))
     globals().update(locals())
-
-class PkgResourcesDeprecationWarning(Warning):
-    """
-    Base class for warning about deprecations in ``pkg_resources``
-
-    This class is not derived from ``DeprecationWarning``, and as such is
-    visible by default.
-    """

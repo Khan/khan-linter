@@ -8,15 +8,19 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+
 from backports.configparser import (
     RawConfigParser,
     ConfigParser,
     SafeConfigParser,
     SectionProxy,
+
     Interpolation,
     BasicInterpolation,
     ExtendedInterpolation,
     LegacyInterpolation,
+
+    Error,
     NoSectionError,
     DuplicateSectionError,
     DuplicateOptionError,
@@ -28,34 +32,21 @@ from backports.configparser import (
     ParsingError,
     MissingSectionHeaderError,
     ConverterMapping,
+
+    _UNSET,
     DEFAULTSECT,
     MAX_INTERPOLATION_DEPTH,
+    _default_dict,
+    _ChainMap,
 )
 
-from backports.configparser import Error, _UNSET, _default_dict, _ChainMap  # noqa: F401
-
-__all__ = [
-    "NoSectionError",
-    "DuplicateOptionError",
-    "DuplicateSectionError",
-    "NoOptionError",
-    "InterpolationError",
-    "InterpolationDepthError",
-    "InterpolationMissingOptionError",
-    "InterpolationSyntaxError",
-    "ParsingError",
-    "MissingSectionHeaderError",
-    "ConfigParser",
-    "SafeConfigParser",
-    "RawConfigParser",
-    "Interpolation",
-    "BasicInterpolation",
-    "ExtendedInterpolation",
-    "LegacyInterpolation",
-    "SectionProxy",
-    "ConverterMapping",
-    "DEFAULTSECT",
-    "MAX_INTERPOLATION_DEPTH",
-]
+__all__ = ["NoSectionError", "DuplicateOptionError", "DuplicateSectionError",
+           "NoOptionError", "InterpolationError", "InterpolationDepthError",
+           "InterpolationMissingOptionError", "InterpolationSyntaxError",
+           "ParsingError", "MissingSectionHeaderError",
+           "ConfigParser", "SafeConfigParser", "RawConfigParser",
+           "Interpolation", "BasicInterpolation",  "ExtendedInterpolation",
+           "LegacyInterpolation", "SectionProxy", "ConverterMapping",
+           "DEFAULTSECT", "MAX_INTERPOLATION_DEPTH"]
 
 # NOTE: names missing from __all__ imported anyway for backwards compatibility.

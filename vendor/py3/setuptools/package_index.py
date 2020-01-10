@@ -7,8 +7,12 @@ import socket
 import base64
 import hashlib
 import itertools
-import warnings
 from functools import wraps
+
+try:
+    from urllib.parse import splituser
+except ImportError:
+    from urllib2 import splituser
 
 from setuptools.extern import six
 from setuptools.extern.six.moves import urllib, http_client, configparser, map
@@ -24,16 +28,14 @@ from distutils import log
 from distutils.errors import DistutilsError
 from fnmatch import translate
 from setuptools.py27compat import get_all_headers
-from setuptools.py33compat import unescape
 from setuptools.wheel import Wheel
 
-__metaclass__ = type
-
 EGG_FRAGMENT = re.compile(r'^egg=([-A-Za-z0-9_.+!]+)$')
-HREF = re.compile(r"""href\s*=\s*['"]?([^'"> ]+)""", re.I)
+HREF = re.compile("""href\\s*=\\s*['"]?([^'"> ]+)""", re.I)
+# this is here to fix emacs' cruddy broken syntax highlighting
 PYPI_MD5 = re.compile(
-    r'<a href="([^"#]+)">([^<]+)</a>\n\s+\(<a (?:title="MD5 hash"\n\s+)'
-    r'href="[^?]+\?:action=show_md5&amp;digest=([0-9a-f]{32})">md5</a>\)'
+    '<a href="([^"#]+)">([^<]+)</a>\n\\s+\\(<a (?:title="MD5 hash"\n\\s+)'
+    'href="[^?]+\\?:action=show_md5&amp;digest=([0-9a-f]{32})">md5</a>\\)'
 )
 URL_SCHEME = re.compile('([-+.a-z0-9]{2,}):', re.I).match
 EXTENSIONS = ".tar.gz .tar.bz2 .tar .zip .tgz".split()
@@ -46,7 +48,7 @@ __all__ = [
 _SOCKET_TIMEOUT = 15
 
 _tmpl = "setuptools/{setuptools.__version__} Python-urllib/{py_major}"
-user_agent = _tmpl.format(py_major='{}.{}'.format(*sys.version_info), setuptools=setuptools)
+user_agent = _tmpl.format(py_major=sys.version[:3], setuptools=setuptools)
 
 
 def parse_requirement_arg(spec):
@@ -237,7 +239,7 @@ def find_external_links(url, page):
                 yield urllib.parse.urljoin(url, htmldecode(match.group(1)))
 
 
-class ContentChecker:
+class ContentChecker(object):
     """
     A null content checker that defines the interface for checking content
     """
@@ -299,7 +301,7 @@ class PackageIndex(Environment):
     """A distribution index that scans web pages for download URLs"""
 
     def __init__(
-            self, index_url="https://pypi.org/simple/", hosts=('*',),
+            self, index_url="https://pypi.python.org/simple", hosts=('*',),
             ca_bundle=None, verify_ssl=True, *args, **kw
     ):
         Environment.__init__(self, *args, **kw)
@@ -849,14 +851,13 @@ class PackageIndex(Environment):
         raise DistutilsError("Unexpected HTML page found at " + url)
 
     def _download_svn(self, url, filename):
-        warnings.warn("SVN download support is deprecated", UserWarning)
         url = url.split('#', 1)[0]  # remove any fragment for svn's sake
         creds = ''
         if url.lower().startswith('svn:') and '@' in url:
             scheme, netloc, path, p, q, f = urllib.parse.urlparse(url)
             if not netloc and path.startswith('//') and '/' in path[2:]:
                 netloc, path = path[2:].split('/', 1)
-                auth, host = _splituser(netloc)
+                auth, host = splituser(netloc)
                 if auth:
                     if ':' in auth:
                         user, pw = auth.split(':', 1)
@@ -897,7 +898,7 @@ class PackageIndex(Environment):
 
         if rev is not None:
             self.info("Checking out %s", rev)
-            os.system("git -C %s checkout --quiet %s" % (
+            os.system("(cd %s && git checkout --quiet %s)" % (
                 filename,
                 rev,
             ))
@@ -913,7 +914,7 @@ class PackageIndex(Environment):
 
         if rev is not None:
             self.info("Updating to %s", rev)
-            os.system("hg --cwd %s up -C -r %s -q" % (
+            os.system("(cd %s && hg up -C -r %s -q)" % (
                 filename,
                 rev,
             ))
@@ -935,20 +936,27 @@ class PackageIndex(Environment):
 entity_sub = re.compile(r'&(#(\d+|x[\da-fA-F]+)|[\w.:-]+);?').sub
 
 
+def uchr(c):
+    if not isinstance(c, int):
+        return c
+    if c > 255:
+        return six.unichr(c)
+    return chr(c)
+
+
 def decode_entity(match):
-    what = match.group(0)
-    return unescape(what)
+    what = match.group(1)
+    if what.startswith('#x'):
+        what = int(what[2:], 16)
+    elif what.startswith('#'):
+        what = int(what[1:])
+    else:
+        what = six.moves.html_entities.name2codepoint.get(what, match.group(0))
+    return uchr(what)
 
 
 def htmldecode(text):
-    """
-    Decode HTML entities in the given text.
-
-    >>> htmldecode(
-    ...     'https://../package_name-0.1.2.tar.gz'
-    ...     '?tokena=A&amp;tokenb=B">package_name-0.1.2.tar.gz')
-    'https://../package_name-0.1.2.tar.gz?tokena=A&tokenb=B">package_name-0.1.2.tar.gz'
-    """
+    """Decode HTML entities in the given text."""
     return entity_sub(decode_entity, text)
 
 
@@ -982,14 +990,15 @@ def _encode_auth(auth):
     auth_s = urllib.parse.unquote(auth)
     # convert to bytes
     auth_bytes = auth_s.encode()
-    encoded_bytes = base64.b64encode(auth_bytes)
+    # use the legacy interface for Python 2.3 support
+    encoded_bytes = base64.encodestring(auth_bytes)
     # convert back to a string
     encoded = encoded_bytes.decode()
     # strip the trailing carriage return
     return encoded.replace('\n', '')
 
 
-class Credential:
+class Credential(object):
     """
     A username/password pair. Use like a namedtuple.
     """
@@ -1047,8 +1056,7 @@ class PyPIConfig(configparser.RawConfigParser):
 def open_with_auth(url, opener=urllib.request.urlopen):
     """Open a urllib2 request, handling HTTP authentication"""
 
-    parsed = urllib.parse.urlparse(url)
-    scheme, netloc, path, params, query, frag = parsed
+    scheme, netloc, path, params, query, frag = urllib.parse.urlparse(url)
 
     # Double scheme does not raise on Mac OS X as revealed by a
     # failing test. We would expect "nonnumeric port". Refs #20.
@@ -1056,7 +1064,7 @@ def open_with_auth(url, opener=urllib.request.urlopen):
         raise http_client.InvalidURL("nonnumeric port: ''")
 
     if scheme in ('http', 'https'):
-        auth, address = _splituser(netloc)
+        auth, host = splituser(netloc)
     else:
         auth = None
 
@@ -1069,7 +1077,7 @@ def open_with_auth(url, opener=urllib.request.urlopen):
 
     if auth:
         auth = "Basic " + _encode_auth(auth)
-        parts = scheme, address, path, params, query, frag
+        parts = scheme, host, path, params, query, frag
         new_url = urllib.parse.urlunparse(parts)
         request = urllib.request.Request(new_url)
         request.add_header("Authorization", auth)
@@ -1083,18 +1091,11 @@ def open_with_auth(url, opener=urllib.request.urlopen):
         # Put authentication info back into request URL if same host,
         # so that links found on the page will work
         s2, h2, path2, param2, query2, frag2 = urllib.parse.urlparse(fp.url)
-        if s2 == scheme and h2 == address:
+        if s2 == scheme and h2 == host:
             parts = s2, netloc, path2, param2, query2, frag2
             fp.url = urllib.parse.urlunparse(parts)
 
     return fp
-
-
-# copy of urllib.parse._splituser from Python 3.8
-def _splituser(host):
-    """splituser('user[:passwd]@host[:port]') --> 'user[:passwd]', 'host[:port]'."""
-    user, delim, host = host.rpartition('@')
-    return (user if delim else None), host
 
 
 # adding a timeout to avoid freezing package_index

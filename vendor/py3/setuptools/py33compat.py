@@ -2,20 +2,13 @@ import dis
 import array
 import collections
 
-try:
-    import html
-except ImportError:
-    html = None
-
 from setuptools.extern import six
-from setuptools.extern.six.moves import html_parser
 
-__metaclass__ = type
 
 OpArg = collections.namedtuple('OpArg', 'opcode arg')
 
 
-class Bytecode_compat:
+class Bytecode_compat(object):
     def __init__(self, code):
         self.code = code
 
@@ -50,10 +43,3 @@ class Bytecode_compat:
 
 
 Bytecode = getattr(dis, 'Bytecode', Bytecode_compat)
-
-
-unescape = getattr(html, 'unescape', None)
-if unescape is None:
-    # HTMLParser.unescape is deprecated since Python 3.4, and will be removed
-    # from 3.9.
-    unescape = html_parser.HTMLParser().unescape

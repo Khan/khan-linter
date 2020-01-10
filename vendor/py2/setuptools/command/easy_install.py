@@ -40,16 +40,12 @@ import subprocess
 import shlex
 import io
 
-
-from sysconfig import get_config_vars, get_path
-
-from setuptools import SetuptoolsDeprecationWarning
-
 from setuptools.extern import six
 from setuptools.extern.six.moves import configparser, map
 
 from setuptools import Command
 from setuptools.sandbox import run_setup
+from setuptools.py31compat import get_path, get_config_vars
 from setuptools.py27compat import rmtree_safe
 from setuptools.command import setopt
 from setuptools.archive_util import unpack_archive
@@ -65,8 +61,6 @@ from pkg_resources import (
     VersionConflict, DEVELOP_DIST,
 )
 import pkg_resources.py31compat
-
-__metaclass__ = type
 
 # Turn on PEP440Warnings
 warnings.filterwarnings("default", category=pkg_resources.PEP440Warning)
@@ -99,7 +93,7 @@ def samefile(p1, p2):
 
 if six.PY2:
 
-    def _to_bytes(s):
+    def _to_ascii(s):
         return s
 
     def isascii(s):
@@ -110,8 +104,8 @@ if six.PY2:
             return False
 else:
 
-    def _to_bytes(s):
-        return s.encode('utf8')
+    def _to_ascii(s):
+        return s.encode('ascii')
 
     def isascii(s):
         try:
@@ -241,7 +235,7 @@ class easy_install(Command):
         """
         Render the Setuptools version and installation details, then exit.
         """
-        ver = '{}.{}'.format(*sys.version_info)
+        ver = sys.version[:3]
         dist = get_distribution('setuptools')
         tmpl = 'setuptools {dist.version} from {dist.location} (Python {ver})'
         print(tmpl.format(**locals()))
@@ -325,7 +319,7 @@ class easy_install(Command):
                     self.all_site_dirs.append(normalize_path(d))
         if not self.editable:
             self.check_site_dir()
-        self.index_url = self.index_url or "https://pypi.org/simple/"
+        self.index_url = self.index_url or "https://pypi.python.org/simple"
         self.shadow_path = self.all_site_dirs[:]
         for path_item in self.install_dir, normalize_path(self.script_dir):
             if path_item not in self.shadow_path:
@@ -410,13 +404,7 @@ class easy_install(Command):
         ]
         self._expand_attrs(dirs)
 
-    def run(self, show_deprecation=True):
-        if show_deprecation:
-            self.announce(
-                "WARNING: The easy_install command is deprecated "
-                "and will be removed in a future version."
-                , log.WARN,
-            )
+    def run(self):
         if self.verbose != self.distribution.verbose:
             log.set_verbosity(self.verbose)
         try:
@@ -641,7 +629,7 @@ class easy_install(Command):
 
     @contextlib.contextmanager
     def _tmpdir(self):
-        tmpdir = tempfile.mkdtemp(prefix=u"easy_install-")
+        tmpdir = tempfile.mkdtemp(prefix=six.u("easy_install-"))
         try:
             # cast to str as workaround for #709 and #710 and #712
             yield str(tmpdir)
@@ -814,7 +802,7 @@ class easy_install(Command):
         if is_script:
             body = self._load_template(dev_path) % locals()
             script_text = ScriptWriter.get_header(script_text) + body
-        self.write_script(script_name, _to_bytes(script_text), 'b')
+        self.write_script(script_name, _to_ascii(script_text), 'b')
 
     @staticmethod
     def _load_template(dev_path):
@@ -1186,7 +1174,8 @@ class easy_install(Command):
         # to the setup.cfg file.
         ei_opts = self.distribution.get_option_dict('easy_install').copy()
         fetch_directives = (
-            'find_links', 'site_dirs', 'index_url', 'optimize', 'allow_hosts',
+            'find_links', 'site_dirs', 'index_url', 'optimize',
+            'site_dirs', 'allow_hosts',
         )
         fetch_options = {}
         for key, val in ei_opts.items():
@@ -1417,7 +1406,7 @@ def get_site_dirs():
                     os.path.join(
                         prefix,
                         "lib",
-                        "python{}.{}".format(*sys.version_info),
+                        "python" + sys.version[:3],
                         "site-packages",
                     ),
                     os.path.join(prefix, "lib", "site-python"),
@@ -1438,7 +1427,7 @@ def get_site_dirs():
                             home,
                             'Library',
                             'Python',
-                            '{}.{}'.format(*sys.version_info),
+                            sys.version[:3],
                             'site-packages',
                         )
                         sitedirs.append(home_sp)
@@ -2060,7 +2049,7 @@ class WindowsCommandSpec(CommandSpec):
     split_args = dict(posix=False)
 
 
-class ScriptWriter:
+class ScriptWriter(object):
     """
     Encapsulates behavior around writing entry point scripts for console and
     gui apps.
@@ -2085,7 +2074,7 @@ class ScriptWriter:
     @classmethod
     def get_script_args(cls, dist, executable=None, wininst=False):
         # for backward compatibility
-        warnings.warn("Use get_args", EasyInstallDeprecationWarning)
+        warnings.warn("Use get_args", DeprecationWarning)
         writer = (WindowsScriptWriter if wininst else ScriptWriter).best()
         header = cls.get_script_header("", executable, wininst)
         return writer.get_args(dist, header)
@@ -2093,10 +2082,12 @@ class ScriptWriter:
     @classmethod
     def get_script_header(cls, script_text, executable=None, wininst=False):
         # for backward compatibility
-        warnings.warn("Use get_header", EasyInstallDeprecationWarning, stacklevel=2)
+        warnings.warn("Use get_header", DeprecationWarning)
         if wininst:
             executable = "python.exe"
-        return cls.get_header(script_text, executable)
+        cmd = cls.command_spec_class.best().from_param(executable)
+        cmd.install_options(script_text)
+        return cmd.as_header()
 
     @classmethod
     def get_args(cls, dist, header=None):
@@ -2128,7 +2119,7 @@ class ScriptWriter:
     @classmethod
     def get_writer(cls, force_windows):
         # for backward compatibility
-        warnings.warn("Use best", EasyInstallDeprecationWarning)
+        warnings.warn("Use best", DeprecationWarning)
         return WindowsScriptWriter.best() if force_windows else cls.best()
 
     @classmethod
@@ -2160,7 +2151,7 @@ class WindowsScriptWriter(ScriptWriter):
     @classmethod
     def get_writer(cls):
         # for backward compatibility
-        warnings.warn("Use best", EasyInstallDeprecationWarning)
+        warnings.warn("Use best", DeprecationWarning)
         return cls.best()
 
     @classmethod
@@ -2341,7 +2332,3 @@ def _patch_usage():
         yield
     finally:
         distutils.core.gen_usage = saved
-
-class EasyInstallDeprecationWarning(SetuptoolsDeprecationWarning):
-    """Class for warning about deprecations in EasyInstall in SetupTools. Not ignored by default, unlike DeprecationWarning."""
-    

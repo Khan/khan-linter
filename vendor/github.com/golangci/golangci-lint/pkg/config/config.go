@@ -190,8 +190,6 @@ type LintersSettings struct {
 	Godox    GodoxSettings
 	Dogsled  DogsledSettings
 	Gocognit GocognitSettings
-
-	Custom map[string]CustomLinterSettings
 }
 
 type GovetSettings struct {
@@ -299,12 +297,6 @@ var defaultLintersSettings = LintersSettings{
 		AllowCaseTrailingWhitespace: true,
 		AllowCuddleDeclaration:      false,
 	},
-}
-
-type CustomLinterSettings struct {
-	Path        string
-	Description string
-	OriginalURL string `mapstructure:"original-url"`
 }
 
 type Linters struct {
