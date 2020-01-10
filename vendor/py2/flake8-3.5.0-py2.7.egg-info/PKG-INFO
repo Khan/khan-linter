@@ -1,12 +1,13 @@
-Metadata-Version: 1.1
+Metadata-Version: 1.2
 Name: flake8
 Version: 3.5.0
 Summary: the modular source code checker: pep8, pyflakes and co
 Home-page: https://gitlab.com/pycqa/flake8
-Author: Ian Stapleton Cordasco
-Author-email: graffatcolmingov@gmail.com
+Author: Tarek Ziade
+Author-email: tarek@ziade.org
+Maintainer: Ian Stapleton Cordasco
+Maintainer-email: graffatcolmingov@gmail.com
 License: MIT
-Description-Content-Type: UNKNOWN
 Description: ========
          Flake8
         ========

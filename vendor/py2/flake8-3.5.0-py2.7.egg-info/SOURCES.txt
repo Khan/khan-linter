@@ -5,6 +5,7 @@ MANIFEST.in
 README.rst
 pytest.ini
 setup.cfg
+setup.py
 tox.ini
 docs/source/conf.py
 docs/source/faq.rst
