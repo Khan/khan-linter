@@ -4,8 +4,10 @@ go 1.12
 
 require github.com/golangci/golangci-lint v1.21.0
 
+require gopkg.in/yaml.v2 v2.2.7 // Lock the version to the same as golangci-lint
+
 // https://github.com/golangci/golangci-lint/pull/841
-replace github.com/golangci/golangci-lint => github.com/dbraley/golangci-lint v1.21.1-0.20191111174454-ba0c6ddd069d
+replace github.com/golangci/golangci-lint => github.com/dbraley/golangci-lint v1.21.1-0.20200110145939-8a72db8a2a50
 
 // https://github.com/golang/tools/pull/156
 // https://github.com/golang/tools/pull/160
