@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"go/token"
 	"runtime"
 	"sort"
 	"strings"
@@ -11,19 +12,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golangci/golangci-lint/pkg/timeutils"
-
-	"github.com/golangci/golangci-lint/internal/pkgcache"
-	"github.com/golangci/golangci-lint/pkg/logutils"
-
-	"golang.org/x/tools/go/packages"
-
 	"github.com/pkg/errors"
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/packages"
 
+	"github.com/golangci/golangci-lint/internal/pkgcache"
 	"github.com/golangci/golangci-lint/pkg/lint/linter"
+	"github.com/golangci/golangci-lint/pkg/logutils"
 	libpackages "github.com/golangci/golangci-lint/pkg/packages"
 	"github.com/golangci/golangci-lint/pkg/result"
+	"github.com/golangci/golangci-lint/pkg/timeutils"
 )
 
 const (
@@ -222,21 +220,63 @@ func buildIssues(diags []Diagnostic, linterNameBuilder func(diag *Diagnostic) st
 	var issues []result.Issue
 	for i := range diags {
 		diag := &diags[i]
-		linterName := linterNameBuilder(diag)
-		var text string
-		if diag.Analyzer.Name == linterName {
-			text = diag.Message
-		} else {
-			text = fmt.Sprintf("%s: %s", diag.Analyzer.Name, diag.Message)
-		}
-		issues = append(issues, result.Issue{
-			FromLinter: linterName,
-			Text:       text,
-			Pos:        diag.Position,
-			Pkg:        diag.Pkg,
-		})
+		issues = append(issues, buildSingleIssue(diag, linterNameBuilder(diag)))
 	}
 	return issues
+}
+
+func buildSingleIssue(diag *Diagnostic, linterName string) result.Issue {
+	text := generateIssueText(diag, linterName)
+	issue := result.Issue{
+		FromLinter: linterName,
+		Text:       text,
+		Pos:        diag.Position,
+		Pkg:        diag.Pkg,
+	}
+
+	if len(diag.SuggestedFixes) > 0 {
+		// Don't really have a better way of picking a best fix right now
+		chosenFix := diag.SuggestedFixes[0]
+
+		// It could be confusing to return more than one issue per single diagnostic,
+		// but if we return a subset it might be a partial application of a fix. Don't
+		// apply a fix unless there is only one for now
+		if len(chosenFix.TextEdits) == 1 {
+			edit := chosenFix.TextEdits[0]
+
+			pos := diag.Pkg.Fset.Position(edit.Pos)
+			end := diag.Pkg.Fset.Position(edit.End)
+
+			newLines := strings.Split(string(edit.NewText), "\n")
+
+			// This only works if we're only replacing whole lines with brand new lines
+			if onlyReplacesWholeLines(pos, end, newLines) {
+
+				// both original and new content ends with newline, omit to avoid partial line replacement
+				newLines = newLines[:len(newLines)-1]
+
+				issue.Replacement = &result.Replacement{NewLines: newLines}
+				issue.LineRange = &result.Range{From: pos.Line, To: end.Line - 1}
+
+				return issue
+			}
+		}
+	}
+
+	return issue
+}
+
+func onlyReplacesWholeLines(oPos token.Position, oEnd token.Position, newLines []string) bool {
+	return oPos.Column == 1 && oEnd.Column == 1 &&
+		oPos.Line < oEnd.Line && // must be replacing at least one line
+		newLines[len(newLines)-1] == "" // edit.NewText ended with '\n'
+}
+
+func generateIssueText(diag *Diagnostic, linterName string) string {
+	if diag.Analyzer.Name == linterName {
+		return diag.Message
+	}
+	return fmt.Sprintf("%s: %s", diag.Analyzer.Name, diag.Message)
 }
 
 func (lnt *Linter) preRun(lintCtx *linter.Context) error {
@@ -435,7 +475,9 @@ func loadIssuesFromCache(pkgs []*packages.Package, lintCtx *linter.Context,
 func runAnalyzers(cfg runAnalyzersConfig, lintCtx *linter.Context) ([]result.Issue, error) {
 	log := lintCtx.Log.Child("goanalysis")
 	sw := timeutils.NewStopwatch("analyzers", log)
-	defer sw.PrintTopStages(10)
+
+	const stagesToPrint = 10
+	defer sw.PrintTopStages(stagesToPrint)
 
 	runner := newRunner(cfg.getName(), log, lintCtx.PkgCache, lintCtx.LoadGuard, cfg.getLoadMode(), sw)
 
