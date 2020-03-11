@@ -421,6 +421,7 @@ _EXTENSION_DICT = {'.py': 'python',
                    '.yaml': 'yaml',
                    '.kt': 'kotlin',
                    '.go': 'go',
+                   '.graphql': 'sdl',   # graphql "schema definition language"
                    }
 
 
@@ -643,6 +644,9 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
             'yaml': (linters.YamlLinter(logger=_get_logger()),
                      linters.Git(logger=_get_logger()),
                      ),
+            'sdl': (linters.GraphqlSchemaLint(logger=_get_logger()),
+                    linters.Git(logger=_get_logger()),
+                    ),
             'unknown': (linters.Git(logger=_get_logger()),
                         ),
         }
