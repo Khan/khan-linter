@@ -43,8 +43,7 @@ module.exports = function generate_items(it, $keyword, $ruleType) {
       }
       var __err = out;
       out = $$outStack.pop();
-      if (!it.compositeRule && $breakOnError) {
-        /* istanbul ignore if */
+      if (!it.compositeRule && $breakOnError) { /* istanbul ignore if */
         if (it.async) {
           out += ' throw new ValidationError([' + (__err) + ']); ';
         } else {
