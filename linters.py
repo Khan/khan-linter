@@ -76,6 +76,8 @@ class Linter(object):
         for f in files:
             try:
                 contents = open(f, 'U').read()
+                if isinstance(contents, bytes):
+                    contents = contents.decode('utf-8')
             except (IOError, OSError) as why:
                 self.logger.warning("SKIPPING lint of %s: %s"
                                     % (f, why.args[1]))  # get the errno-string
@@ -633,12 +635,200 @@ class Eslint(Linter):
                 lintlines = file_to_lint_output[filename]
                 try:
                     contents = open(filename, 'U').read()
+                    if isinstance(contents, bytes):
+                        contents = contents.decode('utf-8')
                 except (IOError, OSError, UnicodeDecodeError) as why:
                     self.logger.warning("SKIPPING lint of %s: %s"
                                         % (filename, why.args[1]))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
+        return num_errors
+
+
+class GraphqlSchemaLint(Linter):
+    """Linter for graphql SDL (schema) files.  process() processes one file."""
+    def __init__(self, config_path, logger, propose_arc_fixes=False):
+        super(GraphqlSchemaLint, self).__init__(logger=logger)
+        self._config_path = config_path
+        self._propose_arc_fixes = propose_arc_fixes
+
+    def _maybe_add_arc_fix(self, lintline, bad_line):
+        """Optionally add a patch for arc lint to use for autofixing."""
+        if not self._propose_arc_fixes:
+            return lintline
+
+        if 'should have a blank line before it' in lintline:
+            return lint_util.add_arc_fix_str(
+                lintline, bad_line, re.compile(r'^', re.M), '\n',
+                search_backwards=True)
+
+        if 'should use triple-quotes' in lintline:
+            return lint_util.add_arc_fix_str(lintline, bad_line, '"', '"""')
+
+        if 'should not include a blank line' in lintline:
+            return lint_util.add_arc_fix_str(
+                lintline, bad_line, re.compile(r'^[ \t]*\n', re.M), '')
+
+        if 'should not put the leading triple-quote on its own line' in (
+                lintline):
+            return lint_util.add_arc_fix_str(
+                lintline, bad_line, '"""\n', '"""')
+
+        if 'should put the leading triple-quote on its own line' in lintline:
+            # We need to indent the new line that we add.  We use as much
+            # indentation as bad_line has.
+            indent = bad_line[len(bad_line) - len(bad_line.lstrip(" \t")):]
+            return lint_util.add_arc_fix_str(
+                lintline, bad_line, '"""', '"""\n%s' % indent)
+
+        if 'should not put the trailing triple-quote on its own line' in (
+                lintline):
+            return lint_util.add_arc_fix_str(
+                lintline, bad_line, '\n"""', '"""')
+
+        if 'should put the trailing triple-quote on its own line' in lintline:
+            # We need to indent the new line same as bad_line.
+            indent = bad_line[len(bad_line) - len(bad_line.lstrip(" \t")):]
+            return lint_util.add_arc_fix_str(
+                lintline, bad_line, '"""', '\n%s"""' % indent)
+
+        return lintline
+
+    def _process_one_line(self, filename, output_line, contents_lines):
+        """If line is no-linted, return 0.  Else, print it and return 1.
+
+        Arguments:
+           filename: path to file being linted
+           output_line: one line of the eslint error-output
+           contents_lines: the contents of the file being linted,
+              as a list of lines.
+
+        Returns:
+           1 (indicating one error) if we print the error line, 0 else.
+        """
+        # output_line is like:
+        #   stdin:<line>:<col> <message>
+        # which is almost what we need!  We need to add a `:` and an error
+        # code.  For now we use a generic one.
+        # TODO(csilvers): rewrite the linter to use error codes everywhere,
+        #                 so we don't have to parse error text.
+        (_, bad_linenum, col_and_msg) = output_line.split(':', 2)
+        (bad_colnum, msg) = col_and_msg.split(' ', 1)
+
+        output_line = ('%s:%s:%s: Eschema %s'
+                       % (filename, bad_linenum, bad_colnum, msg))
+
+        bad_linenum = int(output_line.split(':', 2)[1])   # first line is '1'
+        if 1 <= bad_linenum <= len(contents_lines):
+            bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
+        else:
+            # If we can't figure out what line it's on (e.g. it's an error in
+            # an empty file), try our best to report anyway.
+            bad_line = ''
+
+        # If the line has a nolint directive, ignore it.
+        if _has_nolint(bad_line):
+            return 0
+
+        self.report(self._maybe_add_arc_fix(output_line, bad_line))
+        return 1
+
+    def _run_linter(self, contents_of_f):
+        # In theory we can process all the schema files in one call to
+        # the linter, but in practice we run afoul of the fact that
+        # graphql-schema-linter is not federation-aware.  As a result,
+        # when parsing multiple schema files it keeps complaining
+        # about things like `Query is defined twice` (same for all
+        # @external fields).  I'm hopeful that processing files one at
+        # a time, there won't be any duplicate definitions.
+        p = subprocess.Popen(
+            [os.path.join(_CWD, 'node_modules/.bin/graphql-schema-linter'),
+             '--config-directory=%s' % os.path.dirname(self._config_path),
+             '--format=compact',
+             '--stdin',
+             ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+        (stdout, stderr) = p.communicate(input=contents_of_f.encode('utf-8'))
+        (stdout, stderr) = (stdout.decode('utf-8'), stderr.decode('utf-8'))
+
+        if stderr:
+            raise RuntimeError(
+                "Unexpected output from linter (rc %s):\n"
+                "stderr:\n%s\nstdout:\n%s"
+                % (p.returncode, stderr, stdout))
+
+        return stdout
+
+    def process(self, f, contents_of_f):
+        # We need to define the directives that federation
+        # uses, otherwise we'll get an "unknown directive" error.
+        # We just put them at the end of the file.  They are from:
+        #    https://www.apollographql.com/docs/apollo-server/federation/federation-spec/#federation-schema-specification
+        contents_of_f += """
+        scalar _FieldSet
+        directive @external on FIELD_DEFINITION
+        directive @requires(fields: _FieldSet!) on FIELD_DEFINITION
+        directive @provides(fields: _FieldSet!) on FIELD_DEFINITION
+        directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
+        directive @extends on OBJECT | INTERFACE
+        """
+
+        # The linter also complains if a schema file doesn't have a
+        # (not-extending) Query, which is fine in federation-land.  We
+        # add one if need be.
+        if (contents_of_f.count("type Query") ==
+                contents_of_f.count("extend type Query")):
+            contents_of_f += ('\n"""\nfake\n"""\ntype Query {\n'
+                              '"""fake"""\nid: ID }\n')
+
+        stdout = self._run_linter(contents_of_f)
+
+        # Because we only lint one file at a time, there are likely
+        # a bunch of unknown types that are defines in other schemas.
+        # e.g. you might have "type MyList { item: ListItem! }" but
+        # ListItem is defined in another schema file.  We handle
+        # this by running the linter once, finding all "unknown type"
+        # errors -- and the similar "Cannot extend unknown type" --
+        # and define dummy types, then try again.
+        # THIS IS SUPER-HACKY!  An alternative is when linting a schema
+        # file, also lint all the other files in that directory -- or
+        # even more accurately, that are listed in the same gqlgen.yml
+        # file -- but edit everything first to remove `@external` fields,
+        # and then elide errors from files other than the requested one.
+        # That's hacky in its own way; it's not clear which is better.
+        new_type_re = re.compile(
+            r'(?:Unknown type|Cannot extend type) "([^"]*)"')
+        added_types = set()
+        for output_line in stdout.splitlines():
+            m = new_type_re.search(output_line)
+            if m and m.group(1) not in added_types:
+                new_type = m.group(1)
+                if (' implements %s ' % new_type) in contents_of_f:
+                    # e.g. "type Foo implements InterfaceInOtherFile { ... }"
+                    type_dfn = 'interface %s' % new_type
+                elif (('%s)' % new_type) in contents_of_f or
+                      ('%s,' % new_type) in contents_of_f):
+                    # e.g. "myvar(param: InputInOtherFile): String"
+                    type_dfn = 'input %s' % new_type
+                else:
+                    # e.g. "myvar: TypeInOtherFile"
+                    type_dfn = 'type %s' % new_type
+                contents_of_f += ('\n"""\nfake\n"""\n%s {\n'
+                                  '"""fake"""\nid: ID }\n' % type_dfn)
+                added_types.add(new_type)
+        if added_types:
+            stdout = self._run_linter(contents_of_f)
+
+        num_errors = 0
+        contents_lines = contents_of_f.splitlines()  # need these for filtering
+        for output_line in stdout.splitlines():
+            if output_line:
+                num_errors += self._process_one_line(f, output_line,
+                                                     contents_lines)
         return num_errors
 
 
@@ -709,6 +899,8 @@ class LessHint(Linter):
                 lintlines = file_to_lint_output[filename]
                 try:
                     contents = open(filename, 'U').read()
+                    if isinstance(contents, bytes):
+                        contents = contents.decode('utf-8')
                 except (IOError, OSError, UnicodeDecodeError) as why:
                     self.logger.warning("SKIPPING lint of %s: %s"
                                         % (filename, why.args[1]))
