@@ -416,11 +416,12 @@ def find_files_to_lint(files_and_directories,
 _EXTENSION_DICT = {'.py': 'python',
                    '.js': 'javascript',
                    '.html': 'html',
-                   '.jsx': 'jsx',
+                   '.jsx': 'javascript',
                    '.less': 'less',
                    '.yaml': 'yaml',
                    '.kt': 'kotlin',
                    '.go': 'go',
+                   '.graphql': 'sdl',   # graphql "schema definition language"
                    }
 
 
@@ -577,33 +578,34 @@ def _maybe_pull():
     return new_sha != old_sha
 
 
-def _find_base_eslint_config(file_to_lint, default_location):
-    """Return a .eslintrc file in the repo's root directory if it exists.
+def _find_base_config(file_to_lint, config_filename):
+    """Return `config_filename` in the repo's root directory if it exists.
 
-    If this file exists, it will replace khan-linter's `eslintrc` as the
-    config file used for javascript linting. If you'd like a repo to use
-    khan-linter's eslintrc plus other stuff, create a .eslintrc in the root
-    directory of that repo and have it include a field:
-        "extends": "../devtoools/khan-linter/eslintrc"`
+    If this file exists, it will replace khan-linter's default config file.
 
-    If the custom eslintrc depends on any extra node modules, for plugins or
-    parsers, these node modules should be referenced as relative to the
-    eslintrc file, but without the preceeding "./" often used to denote
-    relative paths. For example, if the parser module `babel-eslint` is in
-    `repo/javascript/node_modules/babel-eslint` and the custom `.eslint` file
-    is in `repo/.eslint`, then the path in the eslint file should be
-    `javascript/node_modules/babel-eslint`.
+    Example use: for eslintc.
+
+    If you'd like a repo to use khan-linter's eslintrc plus other stuff,
+    create a .eslintrc in the root directory of that repo and have it
+    include a field: "extends": "../devtoools/khan-linter/eslintrc"`
+
+    If the custom eslintrc depends on any extra node modules, for
+    plugins or parsers, these node modules should be referenced as
+    relative to the eslintrc file, but without the preceeding "./" often
+    used to denote relative paths. For example, if the parser module
+    `babel-eslint` is in `repo/javascript/node_modules/babel-eslint` and
+    the custom `.eslint` file is in `repo/.eslint`, then the path in the
+    eslint file should be `javascript/node_modules/babel-eslint`.
     """
     if not file_to_lint:
-        return default_location
+        return None
 
     base_git = _resolve_ancestor('<ancestor>/.git', file_to_lint)
     base_directory = os.path.dirname(base_git)
-
-    base_eslint_config = os.path.join(base_directory, '.eslintrc')
-    if os.path.exists(base_eslint_config):
-        return base_eslint_config
-    return default_location
+    base_config = os.path.join(base_directory, config_filename)
+    if os.path.exists(base_config):
+        return base_config
+    return None
 
 
 def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
@@ -628,6 +630,12 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
                        linters.CustomPythonLinter(logger=_get_logger()),
                        linters.Git(logger=_get_logger()),
                        ),
+            # Note: this is the default eslinter, but see below for
+            # how we override it for repos with their own eslintrc.
+            'javascript': (linters.Eslint(os.path.join(_CWD, "eslintrc"),
+                                          _get_logger(), propose_arc_fixes),
+                           linters.Git(logger=_get_logger()),
+                           ),
             'html': (linters.HtmlLinter(logger=_get_logger()),
                      linters.Git(logger=_get_logger()),
                      ),
@@ -643,6 +651,12 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
             'yaml': (linters.YamlLinter(logger=_get_logger()),
                      linters.Git(logger=_get_logger()),
                      ),
+            'sdl': (
+                linters.GraphqlSchemaLint(
+                    os.path.join(_CWD, "graphql-schema-linterrc"),
+                    _get_logger(), propose_arc_fixes),
+                linters.Git(logger=_get_logger()),
+            ),
             'unknown': (linters.Git(logger=_get_logger()),
                         ),
         }
@@ -650,22 +664,36 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
 
     file_lang = _lang(file_to_lint, lang)
 
-    # We support multiple configuration files for eslint, which allows runlint
-    # to run against subrepos with different eslint configurations.
-    if file_lang in ['javascript', 'jsx']:
-        default_eslint_config = os.path.join(_CWD, "eslintrc")
-        eslint_config = _find_base_eslint_config(file_to_lint,
-                                                 default_eslint_config)
-        cache_key = "js-%s" % eslint_config
+    # We support multiple configuration files for eslint and our graphql
+    # schema linter, , which allows runlint to run against subrepos with
+    # different configurations.
+    if file_lang == 'javascript':
+        eslint_config = _find_base_config(file_to_lint, '.eslintrc')
+        if eslint_config:
+            cache_key = "js-%s" % eslint_config
+            if cache_key not in _LINTERS_BY_LANG:
+                # Use the javascript linters, but replace the eslint
+                # linter with one that uses the config for our repo.
+                _LINTERS_BY_LANG[cache_key] = list(
+                    _LINTERS_BY_LANG['javascript'])
+                _LINTERS_BY_LANG[cache_key][0] = (
+                    linters.Eslint(eslint_config, _get_logger(),
+                                   propose_arc_fixes))
+            return _LINTERS_BY_LANG[cache_key]
 
-        if cache_key not in _LINTERS_BY_LANG:
-            _LINTERS_BY_LANG[cache_key] = (
-                linters.Eslint(eslint_config, _get_logger(),
-                               propose_arc_fixes),
-                linters.Git(logger=_get_logger()),
-            )
-
-        return _LINTERS_BY_LANG[cache_key]
+    if file_lang == 'sdl':
+        schema_config = _find_base_config(
+            file_to_lint, '.graphql-schema-linterrc')
+        if schema_config:
+            cache_key = "sdl-%s" % schema_config
+            if cache_key not in _LINTERS_BY_LANG:
+                # Use the sdl linters, but replace the schema
+                # linter with one that uses the config for our repo.
+                _LINTERS_BY_LANG[cache_key] = list(_LINTERS_BY_LANG['sdl'])
+                _LINTERS_BY_LANG[cache_key][0] = (
+                    linters.GraphqlSchemaLint(schema_config, _get_logger(),
+                                              propose_arc_fixes))
+            return _LINTERS_BY_LANG[cache_key]
 
     return _LINTERS_BY_LANG.get(file_lang, None)
 
