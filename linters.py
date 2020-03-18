@@ -76,8 +76,6 @@ class Linter(object):
         for f in files:
             try:
                 contents = open(f, 'U').read()
-                if isinstance(contents, bytes):
-                    contents = contents.decode('utf-8')
             except (IOError, OSError) as why:
                 self.logger.warning("SKIPPING lint of %s: %s"
                                     % (f, why.args[1]))  # get the errno-string
