@@ -676,7 +676,7 @@ class GraphqlSchemaLint(Linter):
         if 'should put the leading triple-quote on its own line' in lintline:
             # We need to indent the new line that we add.  We use as much
             # indentation as bad_line has.
-            indent = bad_line[len(bad_line) - len(bad_line.lstrip(" \t")):]
+            indent = bad_line[:len(bad_line) - len(bad_line.lstrip(" \t"))]
             return lint_util.add_arc_fix_str(
                 lintline, bad_line, '"""', '"""\n%s' % indent)
 
@@ -687,7 +687,7 @@ class GraphqlSchemaLint(Linter):
 
         if 'should put the trailing triple-quote on its own line' in lintline:
             # We need to indent the new line same as bad_line.
-            indent = bad_line[len(bad_line) - len(bad_line.lstrip(" \t")):]
+            indent = bad_line[:len(bad_line) - len(bad_line.lstrip(" \t"))]
             return lint_util.add_arc_fix_str(
                 lintline, bad_line, '"""', '\n%s"""' % indent)
 
