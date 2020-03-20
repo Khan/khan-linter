@@ -644,6 +644,11 @@ class Eslint(Linter):
         return num_errors
 
 
+def _indent_of(s):
+    """Return the prefix of s that is whitespace."""
+    return s[:len(s) - len(s.lstrip(" \t"))]
+
+
 class GraphqlSchemaLint(Linter):
     """Linter for graphql SDL (schema) files.  process() processes one file."""
     def __init__(self, config_path, logger, propose_arc_fixes=False):
@@ -651,14 +656,15 @@ class GraphqlSchemaLint(Linter):
         self._config_path = config_path
         self._propose_arc_fixes = propose_arc_fixes
 
-    def _maybe_add_arc_fix(self, lintline, bad_line):
+    def _maybe_add_arc_fix(self, lintline, bad_line,
+                           line_before_bad_line, line_after_bad_line):
         """Optionally add a patch for arc lint to use for autofixing."""
         if not self._propose_arc_fixes:
             return lintline
 
         if 'should have a blank line before it' in lintline:
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, re.compile(r'^', re.M), '\n',
+                lintline, bad_line, re.compile(r'^'), '\n',
                 search_backwards=True)
 
         if 'should use triple-quotes' in lintline:
@@ -666,30 +672,40 @@ class GraphqlSchemaLint(Linter):
 
         if 'should not include a blank line' in lintline:
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, re.compile(r'^[ \t]*\n', re.M), '')
+                lintline, bad_line, bad_line + '\n', '')
 
         if 'should not put the leading triple-quote on its own line' in (
                 lintline):
+            # We also want to get rid of the indentation on the subsequent
+            # line.
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, '"""\n', '"""')
+                lintline, bad_line,
+                '"""\n%s' % _indent_of(line_after_bad_line), '"""')
 
         if 'should put the leading triple-quote on its own line' in lintline:
             # We need to indent the new line that we add.  We use as much
             # indentation as bad_line has.
-            indent = bad_line[:len(bad_line) - len(bad_line.lstrip(" \t"))]
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, '"""', '"""\n%s' % indent)
+                lintline, bad_line, '"""', '"""\n%s' % _indent_of(bad_line))
 
         if 'should not put the trailing triple-quote on its own line' in (
                 lintline):
+            # We need to get rid of the newline on the previous line,
+            # plus the leading whitespace on this line.  That means,
+            # from arc's point of view, the line being edited is
+            # actually the *previous* line, so we need to munge lintline.
+            (location, rest) = lintline.split(' ', 1)
+            (fname, line, col, loc_rest) = location.split(':', 3)
+            lintline = '%s:%s:%s:%s %s' % (fname, int(line) - 1, 1, loc_rest,
+                                           rest)
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, '\n"""', '"""')
+                lintline, line_before_bad_line,
+                '\n%s' % _indent_of(bad_line), '')
 
         if 'should put the trailing triple-quote on its own line' in lintline:
             # We need to indent the new line same as bad_line.
-            indent = bad_line[:len(bad_line) - len(bad_line.lstrip(" \t"))]
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, '"""', '\n%s"""' % indent)
+                lintline, bad_line, '"""', '\n%s"""' % _indent_of(bad_line))
 
         return lintline
 
@@ -725,11 +741,21 @@ class GraphqlSchemaLint(Linter):
             # an empty file), try our best to report anyway.
             bad_line = ''
 
+        if 1 <= bad_linenum - 1 <= len(contents_lines):
+            line_before_bad_line = contents_lines[bad_linenum - 2]
+        else:
+            line_before_bad_line = ''
+        if 1 <= bad_linenum + 1 <= len(contents_lines):
+            line_after_bad_line = contents_lines[bad_linenum]
+        else:
+            line_after_bad_line = ''
+
         # If the line has a nolint directive, ignore it.
         if _has_nolint(bad_line):
             return 0
 
-        self.report(self._maybe_add_arc_fix(output_line, bad_line))
+        self.report(self._maybe_add_arc_fix(
+            output_line, bad_line, line_before_bad_line, line_after_bad_line))
         return 1
 
     def _run_linter(self, contents_of_f):
