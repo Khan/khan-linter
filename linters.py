@@ -665,14 +665,15 @@ class GraphqlSchemaLint(Linter):
         if 'should have a blank line before it' in lintline:
             return lint_util.add_arc_fix_str(
                 lintline, bad_line, re.compile(r'^'), '\n',
-                search_backwards=True)
+                search_backwards=True, limit_to_80=False)
 
         if 'should use triple-quotes' in lintline:
-            return lint_util.add_arc_fix_str(lintline, bad_line, '"', '"""')
+            return lint_util.add_arc_fix_str(
+                lintline, bad_line, '"', '"""', limit_to_80=False)
 
         if 'should not include a blank line' in lintline:
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, bad_line + '\n', '')
+                lintline, bad_line, bad_line + '\n', '', limit_to_80=False)
 
         if 'should not put the leading triple-quote on its own line' in (
                 lintline):
@@ -680,13 +681,15 @@ class GraphqlSchemaLint(Linter):
             # line.
             return lint_util.add_arc_fix_str(
                 lintline, bad_line,
-                '"""\n%s' % _indent_of(line_after_bad_line), '"""')
+                '"""\n%s' % _indent_of(line_after_bad_line), '"""',
+                limit_to_80=False)
 
         if 'should put the leading triple-quote on its own line' in lintline:
             # We need to indent the new line that we add.  We use as much
             # indentation as bad_line has.
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, '"""', '"""\n%s' % _indent_of(bad_line))
+                lintline, bad_line, '"""', '"""\n%s' % _indent_of(bad_line),
+                limit_to_80=False)
 
         if 'should not put the trailing triple-quote on its own line' in (
                 lintline):
@@ -700,12 +703,13 @@ class GraphqlSchemaLint(Linter):
                                            rest)
             return lint_util.add_arc_fix_str(
                 lintline, line_before_bad_line,
-                '\n%s' % _indent_of(bad_line), '')
+                '\n%s' % _indent_of(bad_line), '', limit_to_80=False)
 
         if 'should put the trailing triple-quote on its own line' in lintline:
             # We need to indent the new line same as bad_line.
             return lint_util.add_arc_fix_str(
-                lintline, bad_line, '"""', '\n%s"""' % _indent_of(bad_line))
+                lintline, bad_line, '"""', '\n%s"""' % _indent_of(bad_line),
+                limit_to_80=False)
 
         return lintline
 
