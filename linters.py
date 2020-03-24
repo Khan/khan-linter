@@ -792,6 +792,9 @@ class GraphqlSchemaLint(Linter):
         return stdout
 
     def process(self, f, contents_of_f):
+        # TODO(csilvers): re-enable once we import external types better
+        return 0
+
         # We need to define the directives that federation
         # uses, otherwise we'll get an "unknown directive" error.
         # We just put them at the end of the file.  They are from:
