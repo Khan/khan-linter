@@ -2,6 +2,7 @@
 """Linters process files or lists of files for correctness."""
 
 import itertools
+import glob
 import json
 import logging
 import os
@@ -737,7 +738,7 @@ class GraphqlSchemaLint(Linter):
         output_line = ('%s:%s:%s: Eschema %s'
                        % (filename, bad_linenum, bad_colnum, msg))
 
-        bad_linenum = int(output_line.split(':', 2)[1])   # first line is '1'
+        bad_linenum = int(bad_linenum)
         if 1 <= bad_linenum <= len(contents_lines):
             bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
         else:
@@ -792,13 +793,36 @@ class GraphqlSchemaLint(Linter):
         return stdout
 
     def process(self, f, contents_of_f):
-        # TODO(csilvers): re-enable once we import external types better
-        return 0
+        num_lines = contents_of_f.count('\n')
 
-        # We need to define the directives that federation
-        # uses, otherwise we'll get an "unknown directive" error.
-        # We just put them at the end of the file.  They are from:
-        #    https://www.apollographql.com/docs/apollo-server/federation/federation-spec/#federation-schema-specification
+        # It's likely the schema we're linting references types
+        # defined in other schema files.  The linter needs those types
+        # to be defined in order to be able to parse.  We append those
+        # definitions to the end of our file-to-lint, but ignore any
+        # lint errors in them (since the user didn't ask to lint those
+        # types).  That's why we calculated num_lines above.
+        #
+        # Ideally, we'd just append the entire composed schema (well,
+        # excepting the file we're linting), which is guaranteed to
+        # define all the types we use.  But that runs into problems
+        # with `@extends`; see
+        #    https://github.com/cjoudrey/graphql-schema-linter/issues/210
+        #
+        # So instead we take a two-pronged approach:
+        # 1) We append all the other schema files in our directory.
+        #    This matches what gqlgen does, and will not have the
+        #    @extends problem since it's only for a single backend.
+        #    TODO(csilvers): read gqlgen.yml to figure out what
+        #    schema files to include, instead of glob.
+        # 2) We then try to run the linter and catch all "undefined
+        #    type" errors.  We then add fake definitions for those
+        #    types, and re-run the linter.
+        # The only external symbols it's really important we define
+        # correctly are interfaces, since our linter needs to know
+        # what fields an interface defines.  Hopefully we never
+        # extend an interface defined in a different service!
+
+        # But first, let's define the directives that graphql uses.
         contents_of_f += """
         scalar _FieldSet
         directive @external on FIELD_DEFINITION
@@ -808,29 +832,32 @@ class GraphqlSchemaLint(Linter):
         directive @extends on OBJECT | INTERFACE
         """
 
-        # The linter also complains if a schema file doesn't have a
-        # (not-extending) Query, which is fine in federation-land.  We
-        # add one if need be.
+        schema_files = glob.glob(os.path.join(os.path.dirname(f), '*.graphql'))
+        for other_f in schema_files:
+            if other_f == f:
+                continue
+            # TODO(csilvers): cache these.
+            with open(other_f, 'U') as fp:
+                try:
+                    contents_of_other_f = fp.read()
+                    if isinstance(contents_of_other_f, bytes):
+                        contents_of_other_f = contents_of_other_f.decode(
+                            'utf-8')
+                    contents_of_f += '\n' + contents_of_other_f + '\n'
+                except (IOError, OSError, UnicodeDecodeError):
+                    # We'll just fall back to the "define fake types".
+                    continue
+
+        # The linter also complains if a schema file doesn't
+        # have a (not-extending) Query, which is fine in
+        # federation-land.  We add one if need be.
         if (contents_of_f.count("type Query") ==
                 contents_of_f.count("extend type Query")):
-            contents_of_f += ('\n"""\nfake\n"""\ntype Query {\n'
-                              '"""fake"""\nid: ID }\n')
+            contents_of_f += '\ntype Query { id: ID }\n'
 
         stdout = self._run_linter(contents_of_f)
 
-        # Because we only lint one file at a time, there are likely
-        # a bunch of unknown types that are defines in other schemas.
-        # e.g. you might have "type MyList { item: ListItem! }" but
-        # ListItem is defined in another schema file.  We handle
-        # this by running the linter once, finding all "unknown type"
-        # errors -- and the similar "Cannot extend unknown type" --
-        # and define dummy types, then try again.
-        # THIS IS SUPER-HACKY!  An alternative is when linting a schema
-        # file, also lint all the other files in that directory -- or
-        # even more accurately, that are listed in the same gqlgen.yml
-        # file -- but edit everything first to remove `@external` fields,
-        # and then elide errors from files other than the requested one.
-        # That's hacky in its own way; it's not clear which is better.
+        # Now find undefined types and add them in.
         new_type_re = re.compile(
             r'(?:Unknown type|Cannot extend type) "([^"]*)"')
         added_types = set()
@@ -840,16 +867,16 @@ class GraphqlSchemaLint(Linter):
                 new_type = m.group(1)
                 if (' implements %s ' % new_type) in contents_of_f:
                     # e.g. "type Foo implements InterfaceInOtherFile { ... }"
-                    type_dfn = 'interface %s' % new_type
+                    # TODO(csilvers): we don't know the interface has an
+                    # `id` field!  What should we do??
+                    contents_of_f += '\ninterface %s { id: ID }\n' % new_type
                 elif (('%s)' % new_type) in contents_of_f or
                       ('%s,' % new_type) in contents_of_f):
                     # e.g. "myvar(param: InputInOtherFile): String"
-                    type_dfn = 'input %s' % new_type
+                    contents_of_f += '\ninput %s { id: ID }\n' % new_type
                 else:
                     # e.g. "myvar: TypeInOtherFile"
-                    type_dfn = 'type %s' % new_type
-                contents_of_f += ('\n"""\nfake\n"""\n%s {\n'
-                                  '"""fake"""\nid: ID }\n' % type_dfn)
+                    contents_of_f += '\ntype %s { id: ID }\n' % new_type
                 added_types.add(new_type)
         if added_types:
             stdout = self._run_linter(contents_of_f)
@@ -857,9 +884,16 @@ class GraphqlSchemaLint(Linter):
         num_errors = 0
         contents_lines = contents_of_f.splitlines()  # need these for filtering
         for output_line in stdout.splitlines():
-            if output_line:
-                num_errors += self._process_one_line(f, output_line,
-                                                     contents_lines)
+            if not output_line:
+                continue
+
+            (_, bad_linenum, _) = output_line.split(':', 2)
+            if int(bad_linenum) > num_lines:
+                continue  # a lint error in the "fake" text we added
+
+            num_errors += self._process_one_line(f, output_line,
+                                                 contents_lines)
+
         return num_errors
 
 
