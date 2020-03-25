@@ -67,25 +67,46 @@ class Linter(object):
     though if you override process_files then it doesn't matter what
     process does).
     """
+    # By default, we assume all linters lint text (utf-8) files.  If a
+    # linter can lint binary files, it should set CAN_BE_BINARY_FILE
+    # to False.  In that case we call `process` with the raw
+    # file-text, not converted to utf-8.  This only really matters for
+    # python3.
+    CAN_BE_BINARY_FILE = False
+
     def __init__(self, logger):
         self.logger = logger
         self.verbose = _is_verbose(logger)
+
+    def _read_file(self, filename):
+        """Contents of filename.
+
+        The return type is either bytes or unicode depending on the
+        value of CAN_BE_BINARY_FILE.
+        """
+        try:
+            contents = open(filename, 'rb').read()
+        except (IOError, OSError) as why:
+            # Give a more useful exception mesage, that has the
+            # errno-string in it.
+            raise ValueError(why.args[1])
+
+        if not self.CAN_BE_BINARY_FILE:
+            contents = contents.decode('utf-8')
+
+        return contents
 
     def process_files(self, files):
         """Print lint errors for a list of filenames and return error count."""
         num_errors = 0
         for f in files:
             try:
-                contents = open(f, 'U').read()
-            except (IOError, OSError) as why:
-                self.logger.warning("SKIPPING lint of %s: %s"
-                                    % (f, why.args[1]))  # get the errno-string
-                num_errors += 1
-                continue
-            except UnicodeDecodeError as why:
+                contents = self._read_file(f)
+            except Exception as why:
                 self.logger.warning("SKIPPING lint of %s: %s" % (f, why))
                 num_errors += 1
                 continue
+
             num_errors += self.process(f, contents)
         return num_errors
 
@@ -314,25 +335,27 @@ class Git(Linter):
     conflict markers in it.  This lint check will hopefully catch
     that.
     """
+    CAN_BE_BINARY_FILE = True
+
     # We don't check for ======= because it might legitimately be in
     # a file (for purposes other than as a git conflict marker).
-    _MARKERS = ('<' * 7, '|' * 7, '>' * 7)
-    _MARKERS_RE = re.compile(r'^(%s)( |$)'
-                             % '|'.join(re.escape(m) for m in _MARKERS),
+    _MARKERS = (b'<' * 7, b'|' * 7, b'>' * 7)
+    _MARKERS_RE = re.compile(br'^(%s)( |$)'
+                             % b'|'.join(re.escape(m) for m in _MARKERS),
                              re.MULTILINE)
 
     def process(self, f, contents_of_f):
         # Ignore files that git thinks are binary; those don't ever
         # get merge conflict markers.  This is how we check, sez
         # http://stackoverflow.com/questions/6119956/how-to-determine-if-git-handles-a-file-as-binary-or-as-text:
-        if '\0' in contents_of_f[:8000]:
+        if b'\0' in contents_of_f[:8000]:
             return 0      # a binary file
 
         num_errors = 0
         for m in self._MARKERS_RE.finditer(contents_of_f):
             linenum = contents_of_f.count('\n', 0, m.start()) + 1
             self.report(('%s:%s:1: E1 git conflict marker "%s" found'
-                         % (f, linenum, m.group(1))))
+                         % (f, linenum, str(m.group(1), 'ascii'))))
             num_errors += 1
         return num_errors
 
@@ -633,12 +656,10 @@ class Eslint(Linter):
             if filename in file_to_lint_output:
                 lintlines = file_to_lint_output[filename]
                 try:
-                    contents = open(filename, 'U').read()
-                    if isinstance(contents, bytes):
-                        contents = contents.decode('utf-8')
-                except (IOError, OSError, UnicodeDecodeError) as why:
+                    contents = self._read_file(filename)
+                except Exception as why:
                     self.logger.warning("SKIPPING lint of %s: %s"
-                                        % (filename, why.args[1]))
+                                        % (filename, why))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
@@ -837,16 +858,12 @@ class GraphqlSchemaLint(Linter):
             if other_f == f:
                 continue
             # TODO(csilvers): cache these.
-            with open(other_f, 'U') as fp:
-                try:
-                    contents_of_other_f = fp.read()
-                    if isinstance(contents_of_other_f, bytes):
-                        contents_of_other_f = contents_of_other_f.decode(
-                            'utf-8')
-                    contents_of_f += '\n' + contents_of_other_f + '\n'
-                except (IOError, OSError, UnicodeDecodeError):
-                    # We'll just fall back to the "define fake types".
-                    continue
+            try:
+                contents_of_other_f = self._read_file(other_f)
+                contents_of_f += '\n' + contents_of_other_f + '\n'
+            except Exception:
+                # We'll just fall back to the "define fake types".
+                continue
 
         # The linter also complains if a schema file doesn't
         # have a (not-extending) Query, which is fine in
@@ -963,12 +980,10 @@ class LessHint(Linter):
             if filename in file_to_lint_output:
                 lintlines = file_to_lint_output[filename]
                 try:
-                    contents = open(filename, 'U').read()
-                    if isinstance(contents, bytes):
-                        contents = contents.decode('utf-8')
-                except (IOError, OSError, UnicodeDecodeError) as why:
+                    contents = self._read_file(filename)
+                except Exception as why:
                     self.logger.warning("SKIPPING lint of %s: %s"
-                                        % (filename, why.args[1]))
+                                        % (filename, why))
                     num_errors += 1
                     continue
                 num_errors += self.process(filename, contents, lintlines)
