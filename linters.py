@@ -870,7 +870,7 @@ class GraphqlSchemaLint(Linter):
         # federation-land.  We add one if need be.
         if (contents_of_f.count("type Query") ==
                 contents_of_f.count("extend type Query")):
-            contents_of_f += '\ntype Query { id: ID }\n'
+            contents_of_f += '\ntype Query { dummyForLinting: string }\n'
 
         stdout = self._run_linter(contents_of_f)
 
@@ -890,10 +890,12 @@ class GraphqlSchemaLint(Linter):
                 elif (('%s)' % new_type) in contents_of_f or
                       ('%s,' % new_type) in contents_of_f):
                     # e.g. "myvar(param: InputInOtherFile): String"
-                    contents_of_f += '\ninput %s { id: ID }\n' % new_type
+                    contents_of_f += (
+                        '\ninput %s { dummyForLinting: string }\n' % new_type)
                 else:
                     # e.g. "myvar: TypeInOtherFile"
-                    contents_of_f += '\ntype %s { id: ID }\n' % new_type
+                    contents_of_f += (
+                        '\ntype %s { dummyForLinting: string }\n' % new_type)
                 added_types.add(new_type)
         if added_types:
             stdout = self._run_linter(contents_of_f)
