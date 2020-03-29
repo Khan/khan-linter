@@ -792,18 +792,28 @@ class GraphqlSchemaLint(Linter):
         # about things like `Query is defined twice` (same for all
         # @external fields).  I'm hopeful that processing files one at
         # a time, there won't be any duplicate definitions.
-        p = subprocess.Popen(
-            [os.path.join(_CWD, 'node_modules/.bin/graphql-schema-linter'),
-             '--config-directory=%s' % os.path.dirname(self._config_path),
-             '--format=compact',
-             '--stdin',
-             ],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+        for _ in xrange(100):
+            p = subprocess.Popen(
+                [os.path.join(_CWD, 'node_modules/.bin/graphql-schema-linter'),
+                 '--config-directory=%s' % os.path.dirname(self._config_path),
+                 '--format=compact',
+                 '--stdin',
+                 ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
 
-        (stdout, stderr) = p.communicate(input=contents_of_f.encode('utf-8'))
-        (stdout, stderr) = (stdout.decode('utf-8'), stderr.decode('utf-8'))
+            (stdout, stderr) = p.communicate(
+                input=contents_of_f.encode('utf-8'))
+            (stdout, stderr) = (stdout.decode('utf-8'), stderr.decode('utf-8'))
+
+            # A bug in graphql-schema-linter causes trouble with --stdin.
+            # It's intermittent, so we just retry if it happens.  Any
+            # other problem and we bail.  See
+            # https://github.com/cjoudrey/graphql-schema-linter/issues/211
+            if 'No valid schema input' in stderr:
+                continue
+            break
 
         if stderr:
             raise RuntimeError(
@@ -884,8 +894,8 @@ class GraphqlSchemaLint(Linter):
                 new_type = m.group(1)
                 if (' implements %s ' % new_type) in contents_of_f:
                     # e.g. "type Foo implements InterfaceInOtherFile { ... }"
-                    # TODO(csilvers): we don't know the interface has an
-                    # `id` field!  What should we do??
+                    # TODO(csilvers): It's unlikely Foo defines dummyForLinting
+                    # so this will give an opaque error.  What should we do??
                     contents_of_f += (
                         '\ninterface %s { dummyForLinting: String }\n'
                         % new_type)
