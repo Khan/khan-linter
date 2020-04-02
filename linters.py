@@ -883,6 +883,24 @@ class GraphqlSchemaLint(Linter):
             contents_of_f += '\ntype Query { dummyForLinting: String }\n'
 
         stdout = self._run_linter(contents_of_f)
+        num_errors = 0
+
+        if not stdout.strip():
+            # There are no errors to report. Return early to avoid all of the
+            # text manipulation below.
+            return num_errors
+
+        # Remove descriptions and comments so that when we search for unknown
+        # types in the schema we don't match free-form text that happens to
+        # match the schema text we're looking for.
+        #
+        # Note that the removal of `#` comments isn't entirely correct since
+        # `#` can appear inside a string, but the following regex is good
+        # enough for our purposes.
+        contents_without_comments = re.sub(
+            r'""".*?"""', "", contents_of_f, flags=re.DOTALL)
+        contents_without_comments = re.sub(
+            r'#.*$', r"\1", contents_without_comments)
 
         # Now find undefined types and add them in.
         new_type_re = re.compile(
@@ -892,15 +910,15 @@ class GraphqlSchemaLint(Linter):
             m = new_type_re.search(output_line)
             if m and m.group(1) not in added_types:
                 new_type = m.group(1)
-                if (' implements %s ' % new_type) in contents_of_f:
+                if (' implements %s ' % new_type) in contents_without_comments:
                     # e.g. "type Foo implements InterfaceInOtherFile { ... }"
                     # TODO(csilvers): It's unlikely Foo defines dummyForLinting
                     # so this will give an opaque error.  What should we do??
                     contents_of_f += (
                         '\ninterface %s { dummyForLinting: String }\n'
                         % new_type)
-                elif (('%s)' % new_type) in contents_of_f or
-                      ('%s,' % new_type) in contents_of_f):
+                elif (('%s)' % new_type) in contents_without_comments or
+                      ('%s,' % new_type) in contents_without_comments):
                     # e.g. "myvar(param: InputInOtherFile): String"
                     contents_of_f += (
                         '\ninput %s { dummyForLinting: String }\n' % new_type)
@@ -912,7 +930,6 @@ class GraphqlSchemaLint(Linter):
         if added_types:
             stdout = self._run_linter(contents_of_f)
 
-        num_errors = 0
         contents_lines = contents_of_f.splitlines()  # need these for filtering
         for output_line in stdout.splitlines():
             if not output_line:
