@@ -884,6 +884,14 @@ class GraphqlSchemaLint(Linter):
 
         stdout = self._run_linter(contents_of_f)
 
+        # Remove descriptions and comments so that when we search for unknown
+        # types in the schema we don't match free-form text that happens to
+        # match the schema text we're looking for.
+        contents_without_comments = re.sub(
+            r'(^.*?)#.*$', r"\1", contents_of_f, flags=re.MULTILINE)
+        contents_without_comments = re.sub(
+            r'""".*?"""', "", contents_without_comments, flags=re.DOTALL)
+
         # Now find undefined types and add them in.
         new_type_re = re.compile(
             r'(?:Unknown type|Cannot extend type) "([^"]*)"')
@@ -892,15 +900,15 @@ class GraphqlSchemaLint(Linter):
             m = new_type_re.search(output_line)
             if m and m.group(1) not in added_types:
                 new_type = m.group(1)
-                if (' implements %s ' % new_type) in contents_of_f:
+                if (' implements %s ' % new_type) in contents_without_comments:
                     # e.g. "type Foo implements InterfaceInOtherFile { ... }"
                     # TODO(csilvers): It's unlikely Foo defines dummyForLinting
                     # so this will give an opaque error.  What should we do??
                     contents_of_f += (
                         '\ninterface %s { dummyForLinting: String }\n'
                         % new_type)
-                elif (('%s)' % new_type) in contents_of_f or
-                      ('%s,' % new_type) in contents_of_f):
+                elif (('%s)' % new_type) in contents_without_comments or
+                      ('%s,' % new_type) in contents_without_comments):
                     # e.g. "myvar(param: InputInOtherFile): String"
                     contents_of_f += (
                         '\ninput %s { dummyForLinting: String }\n' % new_type)
