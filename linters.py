@@ -900,7 +900,7 @@ class GraphqlSchemaLint(Linter):
         contents_without_comments = re.sub(
             r'""".*?"""', "", contents_of_f, flags=re.DOTALL)
         contents_without_comments = re.sub(
-            r'#.*$', r"\1", contents_without_comments)
+            r'#.*', '', contents_without_comments)
 
         # Now find undefined types and add them in.
         new_type_re = re.compile(
