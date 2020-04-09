@@ -857,6 +857,7 @@ class GraphqlSchemaLint(Linter):
         contents_of_f += """
         scalar _FieldSet
         directive @external on FIELD_DEFINITION
+        directive @migrate(from: String!, state: String!) on FIELD_DEFINITION
         directive @requires(fields: _FieldSet!) on FIELD_DEFINITION
         directive @provides(fields: _FieldSet!) on FIELD_DEFINITION
         directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
