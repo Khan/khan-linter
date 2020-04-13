@@ -699,13 +699,17 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
                 for cmd in cmds
             ]
 
-    # We support multiple configuration files for eslint and our graphql
-    # schema linter, , which allows runlint to run against subrepos with
+    # We support multiple eslint configuration files as well as eslint
+    # executables which allows runlint to run against subrepos with
     # different configurations.
     if file_lang == 'javascript':
+        # If eslint_config is None, linters.Eslint will default to the
+        # configuration in the khan-linter repo.
         eslint_config = _find_base_config(file_to_lint, '.eslintrc')
-        if eslint_config:
-            cache_key = "js-%s" % eslint_config
+        # The same is true for the eslint executable.
+        exec_path = _find_base_config(file_to_lint, 'node_modules/.bin/eslint')
+        if eslint_config or exec_path:
+            cache_key = "js-%s-%s" % (eslint_config, exec_path)
             if cache_key not in _LINTERS_BY_LANG:
                 # Use the javascript linters, but replace the eslint
                 # linter with one that uses the config for our repo.
@@ -713,9 +717,11 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
                     _LINTERS_BY_LANG['javascript'])
                 _LINTERS_BY_LANG[cache_key][0] = (
                     linters.Eslint(eslint_config, _get_logger(),
-                                   propose_arc_fixes))
+                                   exec_path, propose_arc_fixes))
             return _LINTERS_BY_LANG[cache_key]
 
+    # We also support multiple configuration files for our graphql schema
+    # linter for same reason.
     if file_lang == 'sdl':
         schema_config = _find_base_config(
             file_to_lint, '.graphql-schema-linterrc')
