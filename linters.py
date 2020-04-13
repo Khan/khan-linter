@@ -2,7 +2,6 @@
 """Linters process files or lists of files for correctness."""
 
 import itertools
-import glob
 import json
 import logging
 import os
@@ -840,11 +839,10 @@ class GraphqlSchemaLint(Linter):
         #    https://github.com/cjoudrey/graphql-schema-linter/issues/210
         #
         # So instead we take a two-pronged approach:
-        # 1) We append all the other schema files in our directory.
-        #    This matches what gqlgen does, and will not have the
-        #    @extends problem since it's only for a single backend.
-        #    TODO(csilvers): read gqlgen.yml to figure out what
-        #    schema files to include, instead of glob.
+        # 1) We find the `gqlgen.yml` file that belongs to this service and
+        #   parse it to find out all the other schema files the service depends
+        #   on. This matches what gqlgen does, and will not have the @extends
+        #   problem since it's only for a single backend.
         # 2) We then try to run the linter and catch all "undefined
         #    type" errors.  We then add fake definitions for those
         #    types, and re-run the linter.
@@ -861,12 +859,22 @@ class GraphqlSchemaLint(Linter):
         directive @provides(fields: _FieldSet!) on FIELD_DEFINITION
         directive @key(fields: _FieldSet!) on OBJECT | INTERFACE
         directive @extends on OBJECT | INTERFACE
-
-        # Khan-specific directives
-        directive @migrate(from: String!, state: String!) on FIELD_DEFINITION
         """
+        # All schema files should live at the top level of a service, so we can
+        # look for the current gqlgen.yml
+        service_root = os.path.dirname(f)
+        gqlgen_path = os.path.join(service_root, "gqlgen.yml")
 
-        schema_files = glob.glob(os.path.join(os.path.dirname(f), '*.graphql'))
+        try:
+            gqlgen_contents = yaml.safe_load(self._read_file(gqlgen_path))
+            schema_files = [
+                os.path.join(service_root, schema_file)
+                for schema_file in gqlgen_contents["schema"]]
+        except Exception:
+            # If the gqlgen.yml file doesn't exist (for shared schemas) we
+            # assume there are no related files we need.
+            schema_files = []
+
         for other_f in schema_files:
             if other_f == f:
                 continue
@@ -884,6 +892,17 @@ class GraphqlSchemaLint(Linter):
         if (contents_of_f.count("type Query") ==
                 contents_of_f.count("extend type Query")):
             contents_of_f += '\ntype Query { dummyForLinting: String }\n'
+
+        # We likewise need to add in a `@migrate` directive if one hasn't been
+        # added for us, since we use this directive.
+        # TODO(dhruv): Remove this section once D62244 lands and a few days
+        # have gone by to allow folks to update old branches, definitely by
+        # 2020/04/27.
+        migrate_def = """
+        directive @migrate(from: String!, state: String!) on FIELD_DEFINITION
+        """
+        if (contents_of_f.count("directive @migrate") == 0):
+            contents_of_f += migrate_def
 
         stdout = self._run_linter(contents_of_f)
         num_errors = 0
