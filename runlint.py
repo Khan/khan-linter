@@ -673,8 +673,9 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
     # different configurations.
     if file_lang == 'javascript':
         eslint_config = _find_base_config(file_to_lint, '.eslintrc')
+        exec_path = _find_base_config(file_to_lint, 'node_modules/.bin/eslint')
         if eslint_config:
-            cache_key = "js-%s" % eslint_config
+            cache_key = "js-%s-%s" % (eslint_config, exec_path)
             if cache_key not in _LINTERS_BY_LANG:
                 # Use the javascript linters, but replace the eslint
                 # linter with one that uses the config for our repo.
@@ -682,7 +683,7 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
                     _LINTERS_BY_LANG['javascript'])
                 _LINTERS_BY_LANG[cache_key][0] = (
                     linters.Eslint(eslint_config, _get_logger(),
-                                   propose_arc_fixes))
+                                   exec_path, propose_arc_fixes))
             return _LINTERS_BY_LANG[cache_key]
 
     if file_lang == 'sdl':
