@@ -392,10 +392,19 @@ class Eslint(Linter):
 
     Arguments:
         config_path: the path of the eslintrc file
+        logger: logger
+        [exec_path]: the path of the eslint executable, uses khan-linter's
+            copy of eslint if none is specified.
+        [propose_arc_fixes]: whether or not to propose fixes to arc, defaults
+            to False.
     """
-    def __init__(self, config_path, logger, propose_arc_fixes=False):
+    def __init__(self, config_path, logger,
+                 exec_path=None,
+                 propose_arc_fixes=False):
         super(Eslint, self).__init__(logger=logger)
         self._config_path = config_path
+        self._exec_path = (
+            exec_path or os.path.join(_CWD, 'node_modules', '.bin', 'eslint'))
         self._propose_arc_fixes = propose_arc_fixes
 
     def _maybe_add_arc_fix(self, lintline, bad_line):
@@ -578,17 +587,11 @@ class Eslint(Linter):
 
     def _run_eslint(self, files):
         """Run eslint on the given files and returns stdout, sans header."""
-        exec_path = os.path.join(_CWD, 'node_modules', '.bin', 'eslint')
         reporter_path = os.path.join(_CWD, 'eslint_reporter.js')
-        assert os.path.isfile(exec_path), (
-            "Vendoring error: eslint is missing from '%s'" % exec_path)
+        assert os.path.isfile(self._exec_path), (
+            "Error: eslint is missing from '%s'" % self._exec_path)
 
-        # TODO(csilvers): split out files based on whether they're intended
-        # for node.js or not, and use eslintrc.node for the node.js files.
-        # Two ways to tell:
-        #    1) shebang line at the top of the file
-        #    2) '"use strict";' in the file somewhere
-        subprocess_args = [exec_path, '--config', self._config_path,
+        subprocess_args = [self._exec_path, '--config', self._config_path,
                            '-f', reporter_path, '--no-color'] + files
 
         env = os.environ.copy()
@@ -617,7 +620,9 @@ class Eslint(Linter):
 
         stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
 
-        if stderr:
+        # eslint prints out a warning about browserslist to stderr even
+        # though it's just a warning.
+        if stderr and not stderr.startswith("Browserslist:"):
             raise RuntimeError(
                 "Unexpected stderr from linter (exited %s):\n%s\nstdout:\n%s"
                 % (process.returncode, stderr, stdout))
