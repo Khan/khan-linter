@@ -120,6 +120,36 @@ class Linter(object):
             lint_util.print_(lint)
 
 
+class DelegatingLinter(Linter):
+    """A linter that just calls out to a binary to do its actual work."""
+    def __init__(self, argv, logger):
+        """argv is the command to run (as a lint).  Filenames are appended."""
+        super(DelegatingLinter, self).__init__(logger)
+        self._argv = argv
+
+    def process_files(self, files):
+        if not self._argv:
+            for f in files:
+                self.logger.warning(
+                    "SKIPPING lint of %s: "
+                    "no linting binary for %s files defined in this repo"
+                    % (f, os.path.splitext(f)[-1]))
+            return 0
+
+        pipe = subprocess.Popen(
+            self._argv + files,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        stdout, stderr = pipe.communicate()
+
+        if stderr:
+            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+        lines = stdout.rstrip('\n').splitlines()
+        for line in lines:
+            self.report(line)
+        return len(lines)
+
+
 def _capture_stdout_of(fn, *args, **kwargs):
     """Call fn(*args, **kwargs) and return (fn_retval, fn_stdout_output_fp)."""
     try:
@@ -1056,25 +1086,6 @@ class HtmlLinter(Linter):
             return len(errors)
         else:
             return 0
-
-
-class YamlLinter(Linter):
-    """Linter for .yaml files.  process() processes one file.
-
-    We just make sure the file has no syntax errors, and can be successfully
-    loaded.
-    """
-    def process(self, f, contents_of_f):
-        try:
-            yaml.safe_load(contents_of_f)
-            return 0
-        except yaml.parser.ParserError as e:
-            self.report(('%s:%s:%s: E=yaml= Error parsing yaml: %s %s'
-                         % (f,
-                            e.problem_mark.line + 1,  # yaml.Mark is 0-indexed
-                            1,
-                            e.problem, e.context)))
-            return 1
 
 
 class KtLint(Linter):
