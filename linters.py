@@ -1064,17 +1064,31 @@ class YamlLinter(Linter):
     We just make sure the file has no syntax errors, and can be successfully
     loaded.
     """
-    def process(self, f, contents_of_f):
-        try:
-            yaml.safe_load(contents_of_f)
+    def __init__(self, linter_binary, logger):
+        super(YamlLinter, self).__init__(logger=logger)
+        self._linter_binary = linter_binary
+
+    def process_files(self, files):
+        if not self._linter_binary:
+            for f in files:
+                self.logger.warning(
+                    "SKIPPING lint of %s: "
+                    "no yaml linter binary defined in this repo" % f)
             return 0
-        except yaml.parser.ParserError as e:
-            self.report(('%s:%s:%s: E=yaml= Error parsing yaml: %s %s'
-                         % (f,
-                            e.problem_mark.line + 1,  # yaml.Mark is 0-indexed
-                            1,
-                            e.problem, e.context)))
-            return 1
+
+        pipe = subprocess.Popen(
+            [self._linter_binary] + files,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        stdout, stderr = pipe.communicate()
+
+        if stderr:
+            raise RuntimeError("Unexpected stderr from yaml-linter:\n%s"
+                               % stderr)
+        lines = stdout.splitlines()
+        for line in lines:
+            self.report(line)
+        return len(lines)
 
 
 class KtLint(Linter):

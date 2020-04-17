@@ -605,6 +605,8 @@ def _find_base_config(file_to_lint, config_filename):
         return None
 
     base_git = _resolve_ancestor('<ancestor>/.git', file_to_lint)
+    if not base_git:
+        return None
     base_directory = os.path.dirname(base_git)
     base_config = os.path.join(base_directory, config_filename)
     if os.path.exists(base_config):
@@ -652,7 +654,11 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
             'go': (linters.GoLint(logger=_get_logger()),
                    linters.Git(logger=_get_logger()),
                    ),
-            'yaml': (linters.YamlLinter(logger=_get_logger()),
+            # Note: this is the default yaml linter (which is a noop), but see
+            # below for how we override it for repos with their own yaml linter
+            # binary.
+            'yaml': (linters.YamlLinter(linter_binary=None,
+                                        logger=_get_logger()),
                      linters.Git(logger=_get_logger()),
                      ),
             'sdl': (
@@ -697,6 +703,18 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
                 _LINTERS_BY_LANG[cache_key][0] = (
                     linters.GraphqlSchemaLint(schema_config, _get_logger(),
                                               propose_arc_fixes))
+            return _LINTERS_BY_LANG[cache_key]
+
+    if file_lang == 'yaml':
+        yaml_lint_binary = _find_base_config(
+            file_to_lint, 'testing/yaml-test.js')
+        if yaml_lint_binary:
+            cache_key = "yaml-%s" % yaml_lint_binary
+            if cache_key not in _LINTERS_BY_LANG:
+                _LINTERS_BY_LANG[cache_key] = list(_LINTERS_BY_LANG['yaml'])
+                _LINTERS_BY_LANG[cache_key][0] = (
+                    linters.YamlLinter(linter_binary=yaml_lint_binary,
+                                       logger=_get_logger()))
             return _LINTERS_BY_LANG[cache_key]
 
     return _LINTERS_BY_LANG.get(file_lang, None)
