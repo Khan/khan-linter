@@ -968,11 +968,11 @@ class LessHint(Linter):
         # output_line is like:
         #   <file>:<line>:<col>: W<code> <message>
         bad_linenum = int(output_line.split(':', 2)[1])   # first line is '1'
-        bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
-
-        # If the line has a nolint directive, ignore it.
-        if _has_nolint(bad_line):
-            return 0
+        if bad_linenum <= len(contents_lines):
+            bad_line = contents_lines[bad_linenum - 1]     # convert to 0-index
+            # If the line has a nolint directive, ignore it.
+            if _has_nolint(bad_line):
+                return 0
 
         self.report(output_line)
         return 1
