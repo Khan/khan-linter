@@ -120,6 +120,42 @@ class Linter(object):
             lint_util.print_(lint)
 
 
+class DelegatingLinter(Linter):
+    """A linter that just calls out to a binary to do its actual work."""
+    def __init__(self, argv, cwd, logger):
+        """argv is the command to run (as a lint).  Filenames are appended."""
+        super(DelegatingLinter, self).__init__(logger)
+        self._argv = argv
+        self._cwd = cwd
+
+    def process_files(self, files):
+        if not self._argv:
+            for f in files:
+                self.logger.warning(
+                    "SKIPPING lint of %s: "
+                    "no linting binary for %s files defined in this repo"
+                    % (f, os.path.splitext(f)[-1]))
+            return 0
+
+        # We need to refer to all filenames relative to self._cwd.
+        files = [f if os.path.isabs(f) else os.path.relpath(f, self._cwd)
+                 for f in files]
+
+        pipe = subprocess.Popen(
+            self._argv + files,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=self._cwd)
+        stdout, stderr = pipe.communicate()
+
+        if stderr:
+            raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+        lines = stdout.rstrip('\n').splitlines()
+        for line in lines:
+            self.report(line)
+        return len(lines)
+
+
 def _capture_stdout_of(fn, *args, **kwargs):
     """Call fn(*args, **kwargs) and return (fn_retval, fn_stdout_output_fp)."""
     try:
