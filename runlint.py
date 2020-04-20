@@ -615,6 +615,23 @@ def _find_base_config(file_to_lint, config_filename):
     return None
 
 
+_REPO_CONFIG_CACHE = {}
+
+
+def _find_repo_config(file_to_lint):
+    """Look for lintconfig.yaml for this file, and return it if found."""
+    repo_config_file = _find_base_config(file_to_lint, 'lintconfig.yaml')
+    if not repo_config_file:
+        return (None, {})
+
+    if repo_config_file not in _REPO_CONFIG_CACHE:
+        with open(repo_config_file) as f:
+            _REPO_CONFIG_CACHE[repo_config_file] = linters.yaml.safe_load(f)
+
+    return (os.path.dirname(repo_config_file),
+            _REPO_CONFIG_CACHE[repo_config_file])
+
+
 def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
     """Return the linters we wish to run for this file.
 
@@ -670,6 +687,17 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
         _LINTERS_BY_LANG.update(processor_dict)
 
     file_lang = _lang(file_to_lint, lang)
+
+    # We allow a repository to override linters for a particular
+    # language.  See if our repository does so.
+    (repo_config_dir, repo_config) = _find_repo_config(file_to_lint)
+    if repo_config:
+        cmds = repo_config.get('khan-linter-overrides', {}).get(file_lang)
+        if cmds is not None:
+            return [
+                linters.DelegatingLinter(cmd, repo_config_dir, _get_logger())
+                for cmd in cmds
+            ]
 
     # We support multiple configuration files for eslint and our graphql
     # schema linter, , which allows runlint to run against subrepos with
