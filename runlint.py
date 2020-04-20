@@ -419,6 +419,7 @@ _EXTENSION_DICT = {'.py': 'python',
                    '.jsx': 'javascript',
                    '.less': 'less',
                    '.yaml': 'yaml',
+                   '.yml': 'yaml',
                    '.kt': 'kotlin',
                    '.go': 'go',
                    '.graphql': 'sdl',   # graphql "schema definition language"
