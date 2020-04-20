@@ -606,6 +606,8 @@ def _find_base_config(file_to_lint, config_filename):
         return None
 
     base_git = _resolve_ancestor('<ancestor>/.git', file_to_lint)
+    if not base_git:
+        return None
     base_directory = os.path.dirname(base_git)
     base_config = os.path.join(base_directory, config_filename)
     if os.path.exists(base_config):
