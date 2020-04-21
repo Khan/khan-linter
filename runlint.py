@@ -632,6 +632,18 @@ def _find_repo_config(file_to_lint):
             _REPO_CONFIG_CACHE[repo_config_file])
 
 
+_DELEGATING_LINTER_CACHE = {}
+
+
+def _get_delegating_linter(cmd, repo_config_dir):
+    """Return a (hopefully cached) linter running this cmd from this dir."""
+    key = (tuple(cmd), repo_config_dir)
+    if key not in _DELEGATING_LINTER_CACHE:
+        _DELEGATING_LINTER_CACHE[key] = linters.DelegatingLinter(
+            cmd, repo_config_dir, _get_logger())
+    return _DELEGATING_LINTER_CACHE[key]
+
+
 def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
     """Return the linters we wish to run for this file.
 
@@ -694,10 +706,8 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
     if repo_config:
         cmds = repo_config.get('khan-linter-overrides', {}).get(file_lang)
         if cmds is not None:
-            return [
-                linters.DelegatingLinter(cmd, repo_config_dir, _get_logger())
-                for cmd in cmds
-            ]
+            return [_get_delegating_linter(cmd, repo_config_dir)
+                    for cmd in cmds]
 
     # We support multiple configuration files for eslint and our graphql
     # schema linter, , which allows runlint to run against subrepos with
