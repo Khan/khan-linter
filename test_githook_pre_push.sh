@@ -37,9 +37,13 @@ git init
 git remote add origin $remote_repo_path
 git commit --allow-empty -m 'initial commit'
 git push -u origin master
+mkdir -p .git/hooks
 echo '~/khan/devtools/khan-linter/githook.py --hook=pre-push "$@"' > .git/hooks/pre-push
 chmod +x .git/hooks/pre-push
 echo ''
+
+# Turn on lint checking
+export GIT_LINT=yes
 
 echo ''
 echo '>> Push. (Changes: <none>.)'
@@ -70,8 +74,14 @@ echo '>> Confirm: A is linted, push fails.'
 ! git push
 echo ''
 
+echo '>> Push with no-lint envvar set.'
+echo '>> Confirm: A is not linted, push succeeds.'
+env GIT_LINT= git push
+echo ''
+
 echo '>> Revert changes to A.'
 git reset --hard add-A-and-B
+git push -f
 echo ''
 
 echo '>> Commit. (Changes: Add C, which fails linting.)'
