@@ -97,6 +97,10 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
     The pre-push hook has a test script: test_githook_pre_push.sh. If you're
     making significant changes to this function, consider running the test!
     """
+    # You can disable linting by setting GIT_LINT to "no".
+    if os.getenv("GIT_LINT") == "no":
+        return
+
     for line in sys.stdin:
         # Skip blank lines - though we only expect this to happen in the case
         # of STDIN being empty, and the only input being a single blank line.
