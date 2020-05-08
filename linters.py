@@ -122,11 +122,12 @@ class Linter(object):
 
 class DelegatingLinter(Linter):
     """A linter that just calls out to a binary to do its actual work."""
-    def __init__(self, argv, cwd, logger):
+    def __init__(self, argv, cwd, arc_autofix_script, logger):
         """argv is the command to run (as a lint).  cwd is where to run it."""
         super(DelegatingLinter, self).__init__(logger)
         self._argv = argv
         self._cwd = cwd
+        self._arc_autofix_script = arc_autofix_script
 
     def process_files(self, files):
         # We need to refer to all filenames relative to self._cwd.
@@ -142,6 +143,23 @@ class DelegatingLinter(Linter):
 
         if stderr:
             raise RuntimeError("Unexpected stderr from linter:\n%s" % stderr)
+
+        if stdout.strip() and self._arc_autofix_script:
+            # Run through the autofix-script filter to modify each
+            # lint-line to include arc fixing information.
+            autofix_pipe = subprocess.Popen(
+                self._arc_autofix_script,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=self._cwd)
+            autofix_stdout, autofix_stderr = autofix_pipe.communicate(
+                input=stdout)
+            if autofix_stderr:
+                raise RuntimeError("Unexpected stderr from autofixer:\n%s"
+                                   % autofix_stderr)
+            stdout = autofix_stdout
+
         lines = stdout.rstrip('\n').splitlines()
         for line in lines:
             self.report(line)
