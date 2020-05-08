@@ -635,12 +635,12 @@ def _find_repo_config(file_to_lint):
 _DELEGATING_LINTER_CACHE = {}
 
 
-def _get_delegating_linter(cmd, repo_config_dir):
+def _get_delegating_linter(cmd, repo_config_dir, arc_autofix_script):
     """Return a (hopefully cached) linter running this cmd from this dir."""
     key = (tuple(cmd), repo_config_dir)
     if key not in _DELEGATING_LINTER_CACHE:
         _DELEGATING_LINTER_CACHE[key] = linters.DelegatingLinter(
-            cmd, repo_config_dir, _get_logger())
+            cmd, repo_config_dir, arc_autofix_script, _get_logger())
     return _DELEGATING_LINTER_CACHE[key]
 
 
@@ -704,9 +704,14 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
     # language.  See if our repository does so.
     (repo_config_dir, repo_config) = _find_repo_config(file_to_lint)
     if repo_config:
+        if propose_arc_fixes:
+            arc_autofix_script = repo_config.get('arc-autofix-script')
+        else:
+            arc_autofix_script = None
         cmds = repo_config.get('khan-linter-overrides', {}).get(file_lang)
         if cmds is not None:
-            return [_get_delegating_linter(cmd, repo_config_dir)
+            return [_get_delegating_linter(cmd, repo_config_dir,
+                                           arc_autofix_script)
                     for cmd in cmds]
 
     # We support multiple eslint configuration files as well as eslint
