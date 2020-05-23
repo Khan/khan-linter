@@ -817,7 +817,8 @@ def main(files_and_directories,
                                 % (num_new_errors, elapsed))
         except Exception:
             _get_logger().error(u"ERROR linting %r with %s:\n%s" % (
-                          files, type(lint_processor), traceback.format_exc()))
+                          files, type(lint_processor),
+                          traceback.format_exc().decode('utf-8')))
             num_framework_errors += 1
             continue
 
@@ -877,11 +878,29 @@ if __name__ == '__main__':
                       default=False,
                       help=('Propose patches that arc can apply to fix lint'
                             'errors. Only useful when used with phabricator.'))
+    parser.add_option('--stdin', action='store_true', default=False,
+                      help=('Read list of files from stdin rather than '
+                            'the commandline.  We do not auto-pull in '
+                            'this case.'))
+    parser.add_option('--fast', action='store_true', default=False,
+                      help=("Ignored; for compatibility with webapp's "
+                            "ka-lint"))
+    parser.add_option('--fix', action='store_true', default=False,
+                      help=("Ignored; for compatibility with webapp's "
+                            "ka-lint"))
     parser.add_option('--verbose', '-v', action='store_true', default=False,
                       help='Print information about what is happening.')
 
     options, args = parser.parse_args()
-    if not args:
+
+    if options.stdin:
+        filenames = sys.stdin.read().splitlines()
+        # We can't auto-pull because we'd lose stdin when we re-exec'ed.
+        options.no_auto_pull = True
+    else:
+        filenames = args
+
+    if not filenames:
         # We used to lint the whole directory-tree when args was null,
         # but we want to be able to run
         #   git ls-files ... | xargs runlint.py
@@ -903,7 +922,7 @@ if __name__ == '__main__':
 
     # normal operation
     (num_lint_errors, num_framework_errors) = main(
-        args,
+        filenames,
         options.blacklist, options.blacklist_filename,
         options.extra_linter, options.lang, options.verbose,
         options.propose_arc_fixes)
