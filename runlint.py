@@ -552,6 +552,7 @@ def _maybe_pull():
                 # needs to contact the remote.  If you know of a
                 # faster one, feel free to sub it in!
                 ['git', 'ls-remote', 'origin', 'master'],
+                cwd=os.path.dirname(__file__),
                 stdout=devnull, stderr=devnull)
             if rc != 0:
                 raise RuntimeError('git ls-remote returned %s' % rc)
