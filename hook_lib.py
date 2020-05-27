@@ -7,23 +7,30 @@ to get the data that needs linting.
 """
 
 import re
+import subprocess
 import sys
 
 import six
-
-import runlint
 
 
 def lint_files(files_to_lint):
     """Given a list of filenames in the commit, lint them all.
 
-    Emits errors it sees to stderr.
+    We use `ka_lint` to lint them all, which in most repos will call
+    runlint.py (in this directory) but in other repos -- notably webapp
+    -- will do its own thing.  In all cases, ka_lint will emit lint
+    errors to stdout, lint-framework errors to stderr, and have an rc of
+    0 if linting was successful or 1 if there were lint or framework
+    errors.
 
-    Returns the number of lint errors seen.
+    This helper also returns 0 if linting was successful or 1 otherwise.
     """
-    (lint_errors, framework_errors) = runlint.main(files_to_lint,
-                                                   blacklist='yes')
-    return lint_errors + framework_errors
+    # We could pass in the files-to-lint on the commandline, but using
+    # --stdin means we don't need to worry about how many files there are.
+    p = subprocess.Popen(['ka-lint', '--stdin', '--blacklist=yes'],
+                         stdin=subprocess.PIPE)
+    p.communicate(input='\n'.join(files_to_lint))
+    return p.wait()
 
 
 def lint_commit_message(commit_message):
