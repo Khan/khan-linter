@@ -1,1 +1,28 @@
-../runlint.py
+#!/bin/bash
+
+# A script that calls the proper runlint.py for the repo you are
+# currently in.
+#
+# For repos, such as webapp, that define their own ka-lint --
+# either at the top level or in <top-level>/testing -- we run
+# their ka-lint.  Otherwise we run runlint.py in khan-linter.
+#
+# Note that if you are in webapp-root, say, and run
+#    ka-lint /tmp/whatever
+# we will still use webapp's linter even though you are linting a file
+# outside webapp.  There's no great way to do otherwise -- what do we do
+# for
+#   ka-lint webapp_file.py /tmp/whatever
+# ?  Separate into separate ka-lint calls?  It's a mess.  And I
+# don't expect people to do this outside-repo linting anyway, so I'm not
+# going to worry about it for now.
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+
+if [ -n "$repo_root" -a -e "$repo_root/testing/ka-lint" ]; then
+    exec "$repo_root/testing/ka-lint" "$@"
+elif [ -n "$repo_root" -a -e "$repo_root/ka-lint" ]; then
+    exec "$repo_root/ka-lint" "$@"
+else
+    exec "$(dirname "${BASH_SOURCE[0]}")/../runlint.py" "$@"
+fi
