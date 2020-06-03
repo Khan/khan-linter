@@ -29,7 +29,7 @@ def lint_files(files_to_lint):
     # --stdin means we don't need to worry about how many files there are.
     p = subprocess.Popen(['ka-lint', '--stdin', '--blacklist=yes'],
                          stdin=subprocess.PIPE)
-    p.communicate(input='\n'.join(files_to_lint))
+    p.communicate(input='\n'.join(files_to_lint).encode('utf-8'))
     return p.wait()
 
 
