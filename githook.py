@@ -154,6 +154,10 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
             # the name of each added/modified/removed file, separated by NUL.
             '--pretty=format:', '--name-only', '--diff-filter=AMR', '-z',
 
+            # I'm not sure I totally understand it, but this flag
+            # lets us see resolved conflicts in merge commits.
+            '--cc',
+
             # Ignore submodules, because they're likely to have lint rules that
             # are different than the repository we're currently linting.
             '--ignore-submodules',
