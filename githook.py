@@ -147,6 +147,16 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
         #     origin/foobar. This push might contain many commits from
         #     origin/master which aren't yet in origin/foobar, but that *have*
         #     been linted already.
+        # TODO(csilvers): if our local change modifies or adds a linter,
+        #     then we need to run that linter on all remote-changed files.
+        #     We can test that by being in a deploy-branch that's behind
+        #     master, looking at `git diff ..origin/master` and then
+        #     making a change to a linter that causes one of those
+        #     changed lines to violate lint.  Check in the lint change,
+        #     then `git m origin/master`, then run:
+        #        echo '_ HEAD _ _' | githook.py --hook=pre-push _ _
+        #     It should detect the lint violation.
+        #     (In a perfect world we'd only re-run the linters that changed.)
         files_to_lint = subprocess.check_output([
             'git', 'log',
 
