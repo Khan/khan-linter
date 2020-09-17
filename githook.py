@@ -109,11 +109,31 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
 
         # For each branch we're trying to push, the git hook will tell us the
         # local branch name, local sha, remote branch name, and remote sha.
-        # For our purposes, we only care about the local sha.
-        (_, local_sha, _, _) = line.split()
+        (_, local_sha, _, remote_sha) = line.split()
 
-        if local_sha == '0000000000000000000000000000000000000000':
+        if local_sha == '0' * 40:
             continue    # means we're deleting this branch
+
+        # We use `git log` to find the files in the branch we're pushing.
+        git_log_cmd = [
+            'git', 'log',
+
+            # We "format" each commit by hiding its commit details, and listing
+            # the name of each added/modified/removed file, separated by NUL.
+            '--pretty=format:', '--name-only', '--diff-filter=AMR', '-z',
+
+            # I'm not sure I totally understand it, but this flag
+            # lets us see resolved conflicts in merge commits.
+            '--cc',
+
+            # Ignore submodules, because they're likely to have lint rules that
+            # are different than the repository we're currently linting.
+            '--ignore-submodules',
+
+            # Include commits that are reachable from the local state we intend
+            # to push.
+            local_sha,
+        ]
 
         # To find files that have been changed locally, we'll use `git log` to
         # find commits that are present in the branch state we intend to push,
@@ -147,25 +167,7 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
         #     origin/foobar. This push might contain many commits from
         #     origin/master which aren't yet in origin/foobar, but that *have*
         #     been linted already.
-        files_to_lint = subprocess.check_output([
-            'git', 'log',
-
-            # We "format" each commit by hiding its commit details, and listing
-            # the name of each added/modified/removed file, separated by NUL.
-            '--pretty=format:', '--name-only', '--diff-filter=AMR', '-z',
-
-            # I'm not sure I totally understand it, but this flag
-            # lets us see resolved conflicts in merge commits.
-            '--cc',
-
-            # Ignore submodules, because they're likely to have lint rules that
-            # are different than the repository we're currently linting.
-            '--ignore-submodules',
-
-            # Include commits that are reachable from the local state we intend
-            # to push.
-            local_sha,
-
+        files_to_lint = subprocess.check_output(git_log_cmd + [
             # Do not include commits that are reachable from any
             # remote-tracking branch's state. (The `--remotes` flag is
             # equivalent to manually listing `origin/master`, `origin/foobar`,
@@ -176,6 +178,23 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
         # Parse files to lint: split at NUL characters, remove blank entries,
         # and remove duplicates.
         files_to_lint = list({f for f in files_to_lint.split('\0') if f})
+
+        # An important case that violates our assumption that any change
+        # already on the remote server has been linted by a previous `git push`
+        # hook: our changes include a change to (or addition of) a linter.
+        # Files on the remote server won't have been linted by our new linter.
+        # So we lint them all as well.  But we only lint merged files,
+        # not files that were unchanged in our branch-to-push, under the
+        # assumption such files were linted as part of the normal testing
+        # for this new/modifier linter.
+        if (any('_lint.' in f for f in files_to_lint) and
+                remote_sha != '0' * 40):
+            files_to_lint = subprocess.check_output(git_log_cmd + [
+                '--not', remote_sha,
+            ]).decode('utf-8')
+            # TODO(csilvers): In a perfect world we'd only re-run the linters
+            # that changed.
+            files_to_lint = list({f for f in files_to_lint.split('\0') if f})
 
         # Lint the files, if any. If there are any errors, print a helpful
         # message, and return a nonzero status code to abort the push.
