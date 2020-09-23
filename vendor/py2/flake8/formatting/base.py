@@ -1,6 +1,13 @@
 """The base class and interface for all formatting plugins."""
 from __future__ import print_function
 
+import argparse
+from typing import IO, List, Optional, Tuple
+
+if False:  # `typing.TYPE_CHECKING` was introduced in 3.5.2
+    from flake8.statistics import Statistics
+    from flake8.style_guide import Violation
+
 
 class BaseFormatter(object):
     """Class defining the formatter interface.
@@ -25,52 +32,52 @@ class BaseFormatter(object):
     """
 
     def __init__(self, options):
+        # type: (argparse.Namespace) -> None
         """Initialize with the options parsed from config and cli.
 
         This also calls a hook, :meth:`after_init`, so subclasses do not need
         to call super to call this method.
 
-        :param optparse.Values options:
+        :param options:
             User specified configuration parsed from both configuration files
             and the command-line interface.
+        :type options:
+            :class:`argparse.Namespace`
         """
         self.options = options
         self.filename = options.output_file
-        self.output_fd = None
-        self.newline = '\n'
+        self.output_fd = None  # type: Optional[IO[str]]
+        self.newline = "\n"
         self.after_init()
 
-    def after_init(self):
+    def after_init(self):  # type: () -> None
         """Initialize the formatter further."""
-        pass
 
-    def beginning(self, filename):
+    def beginning(self, filename):  # type: (str) -> None
         """Notify the formatter that we're starting to process a file.
 
         :param str filename:
             The name of the file that Flake8 is beginning to report results
             from.
         """
-        pass
 
-    def finished(self, filename):
+    def finished(self, filename):  # type: (str) -> None
         """Notify the formatter that we've finished processing a file.
 
         :param str filename:
             The name of the file that Flake8 has finished reporting results
             from.
         """
-        pass
 
-    def start(self):
+    def start(self):  # type: () -> None
         """Prepare the formatter to receive input.
 
         This defaults to initializing :attr:`output_fd` if :attr:`filename`
         """
         if self.filename:
-            self.output_fd = open(self.filename, 'a')
+            self.output_fd = open(self.filename, "a")
 
-    def handle(self, error):
+    def handle(self, error):  # type: (Violation) -> None
         """Handle an error reported by Flake8.
 
         This defaults to calling :meth:`format`, :meth:`show_source`, and
@@ -87,7 +94,7 @@ class BaseFormatter(object):
         source = self.show_source(error)
         self.write(line, source)
 
-    def format(self, error):
+    def format(self, error):  # type: (Violation) -> Optional[str]
         """Format an error reported by Flake8.
 
         This method **must** be implemented by subclasses.
@@ -102,23 +109,27 @@ class BaseFormatter(object):
         :rtype:
             str
         """
-        raise NotImplementedError('Subclass of BaseFormatter did not implement'
-                                  ' format.')
+        raise NotImplementedError(
+            "Subclass of BaseFormatter did not implement" " format."
+        )
 
-    def show_statistics(self, statistics):
+    def show_statistics(self, statistics):  # type: (Statistics) -> None
         """Format and print the statistics."""
         for error_code in statistics.error_codes():
             stats_for_error_code = statistics.statistics_for(error_code)
             statistic = next(stats_for_error_code)
             count = statistic.count
             count += sum(stat.count for stat in stats_for_error_code)
-            self._write('{count:<5} {error_code} {message}'.format(
-                count=count,
-                error_code=error_code,
-                message=statistic.message,
-            ))
+            self._write(
+                "{count:<5} {error_code} {message}".format(
+                    count=count,
+                    error_code=error_code,
+                    message=statistic.message,
+                )
+            )
 
     def show_benchmarks(self, benchmarks):
+        # type: (List[Tuple[str, float]]) -> None
         """Format and print the benchmarks."""
         # NOTE(sigmavirus24): The format strings are a little confusing, even
         # to me, so here's a quick explanation:
@@ -130,8 +141,8 @@ class BaseFormatter(object):
         # the decimal point to be displayed. This is the precision and it
         # can not be specified for integers which is why we need two separate
         # format strings.
-        float_format = '{value:<10.3} {statistic}'.format
-        int_format = '{value:<10} {statistic}'.format
+        float_format = "{value:<10.3} {statistic}".format
+        int_format = "{value:<10} {statistic}".format
         for statistic, value in benchmarks:
             if isinstance(value, int):
                 benchmark = int_format(statistic=statistic, value=value)
@@ -139,7 +150,7 @@ class BaseFormatter(object):
                 benchmark = float_format(statistic=statistic, value=value)
             self._write(benchmark)
 
-    def show_source(self, error):
+    def show_source(self, error):  # type: (Violation) -> Optional[str]
         """Show the physical line generating the error.
 
         This also adds an indicator for the particular part of the line that
@@ -158,23 +169,27 @@ class BaseFormatter(object):
             str
         """
         if not self.options.show_source or error.physical_line is None:
-            return ''
+            return ""
 
         # Because column numbers are 1-indexed, we need to remove one to get
         # the proper number of space characters.
-        pointer = (' ' * (error.column_number - 1)) + '^'
+        indent = "".join(
+            c if c.isspace() else " "
+            for c in error.physical_line[: error.column_number - 1]
+        )
         # Physical lines have a newline at the end, no need to add an extra
         # one
-        return error.physical_line + pointer
+        return "{}{}^".format(error.physical_line, indent)
 
-    def _write(self, output):
+    def _write(self, output):  # type: (str) -> None
         """Handle logic of whether to use an output file or print()."""
         if self.output_fd is not None:
             self.output_fd.write(output + self.newline)
         if self.output_fd is None or self.options.tee:
-            print(output)
+            print(output, end=self.newline)
 
     def write(self, line, source):
+        # type: (Optional[str], Optional[str]) -> None
         """Write the line either to the output file or stdout.
 
         This handles deciding whether to write to a file or print to standard
@@ -192,7 +207,7 @@ class BaseFormatter(object):
         if source:
             self._write(source)
 
-    def stop(self):
+    def stop(self):  # type: () -> None
         """Clean up after reporting is finished."""
         if self.output_fd is not None:
             self.output_fd.close()

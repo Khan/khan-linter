@@ -10,31 +10,24 @@ This module
 
 """
 import logging
-try:
-    from logging import NullHandler
-except ImportError:
-    class NullHandler(logging.Handler):
-        """Shim for version of Python < 2.7."""
-
-        def emit(self, record):
-            """Do nothing."""
-            pass
 import sys
 
+if False:  # `typing.TYPE_CHECKING` was introduced in 3.5.2
+    from typing import Type  # `typing.Type` was introduced in 3.5.2
+
 LOG = logging.getLogger(__name__)
-LOG.addHandler(NullHandler())
+LOG.addHandler(logging.NullHandler())
 
-# Clean up after LOG config
-del NullHandler
-
-__version__ = '3.5.0'
-__version_info__ = tuple(int(i) for i in __version__.split('.') if i.isdigit())
+__version__ = "3.8.3"
+__version_info__ = tuple(
+    int(i) for i in __version__.split(".") if i.isdigit()
+)
 
 
 # There is nothing lower than logging.DEBUG (10) in the logging library,
 # but we want an extra level to avoid being too verbose when using -vv.
 _EXTRA_VERBOSE = 5
-logging.addLevelName(_EXTRA_VERBOSE, 'VERBOSE')
+logging.addLevelName(_EXTRA_VERBOSE, "VERBOSE")
 
 _VERBOSITY_TO_LOG_LEVEL = {
     # output more than warnings but not debugging info
@@ -45,8 +38,10 @@ _VERBOSITY_TO_LOG_LEVEL = {
     3: _EXTRA_VERBOSE,
 }
 
-LOG_FORMAT = ('%(name)-25s %(processName)-11s %(relativeCreated)6d '
-              '%(levelname)-8s %(message)s')
+LOG_FORMAT = (
+    "%(name)-25s %(processName)-11s %(relativeCreated)6d "
+    "%(levelname)-8s %(message)s"
+)
 
 
 def configure_logging(verbosity, filename=None, logformat=LOG_FORMAT):
@@ -67,9 +62,9 @@ def configure_logging(verbosity, filename=None, logformat=LOG_FORMAT):
 
     log_level = _VERBOSITY_TO_LOG_LEVEL[verbosity]
 
-    if not filename or filename in ('stderr', 'stdout'):
-        fileobj = getattr(sys, filename or 'stderr')
-        handler_cls = logging.StreamHandler
+    if not filename or filename in ("stderr", "stdout"):
+        fileobj = getattr(sys, filename or "stderr")
+        handler_cls = logging.StreamHandler  # type: Type[logging.Handler]
     else:
         fileobj = filename
         handler_cls = logging.FileHandler
@@ -78,5 +73,6 @@ def configure_logging(verbosity, filename=None, logformat=LOG_FORMAT):
     handler.setFormatter(logging.Formatter(logformat))
     LOG.addHandler(handler)
     LOG.setLevel(log_level)
-    LOG.debug('Added a %s logging handler to logger root at %s',
-              filename, __name__)
+    LOG.debug(
+        "Added a %s logging handler to logger root at %s", filename, __name__
+    )

@@ -3,23 +3,33 @@ import collections
 import fnmatch as _fnmatch
 import inspect
 import io
+import logging
 import os
 import platform
 import re
 import sys
 import tokenize
+from typing import Callable, Dict, Generator, List, Optional, Pattern
+from typing import Sequence, Set, Tuple, Union
 
-DIFF_HUNK_REGEXP = re.compile(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@.*$')
-COMMA_SEPARATED_LIST_RE = re.compile(r'[,\s]')
-LOCAL_PLUGIN_LIST_RE = re.compile(r'[,\t\n\r\f\v]')
+from flake8 import exceptions
+from flake8._compat import lru_cache
+
+if False:  # `typing.TYPE_CHECKING` was introduced in 3.5.2
+    from flake8.plugins.manager import Plugin
+
+DIFF_HUNK_REGEXP = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@.*$")
+COMMA_SEPARATED_LIST_RE = re.compile(r"[,\s]")
+LOCAL_PLUGIN_LIST_RE = re.compile(r"[,\t\n\r\f\v]")
+string_types = (str, type(u""))
 
 
 def parse_comma_separated_list(value, regexp=COMMA_SEPARATED_LIST_RE):
-    # type: (Union[Sequence[str], str]) -> List[str]
+    # type: (str, Pattern[str]) -> List[str]
     """Parse a comma-separated list.
 
     :param value:
-        String or list of strings to be parsed and normalized.
+        String to be parsed and normalized.
     :param regexp:
         Compiled regular expression used to split the value when it is a
         string.
@@ -30,27 +40,132 @@ def parse_comma_separated_list(value, regexp=COMMA_SEPARATED_LIST_RE):
     :rtype:
         list
     """
-    if not value:
-        return []
+    assert isinstance(value, string_types), value
 
-    if not isinstance(value, (list, tuple)):
-        value = regexp.split(value)
-
-    item_gen = (item.strip() for item in value)
+    separated = regexp.split(value)
+    item_gen = (item.strip() for item in separated)
     return [item for item in item_gen if item]
 
 
+_Token = collections.namedtuple("Token", ("tp", "src"))
+_CODE, _FILE, _COLON, _COMMA, _WS = "code", "file", "colon", "comma", "ws"
+_EOF = "eof"
+_FILE_LIST_TOKEN_TYPES = [
+    (re.compile(r"[A-Z]+[0-9]*(?=$|\s|,)"), _CODE),
+    (re.compile(r"[^\s:,]+"), _FILE),
+    (re.compile(r"\s*:\s*"), _COLON),
+    (re.compile(r"\s*,\s*"), _COMMA),
+    (re.compile(r"\s+"), _WS),
+]
+
+
+def _tokenize_files_to_codes_mapping(value):
+    # type: (str) -> List[_Token]
+    tokens = []
+    i = 0
+    while i < len(value):
+        for token_re, token_name in _FILE_LIST_TOKEN_TYPES:
+            match = token_re.match(value, i)
+            if match:
+                tokens.append(_Token(token_name, match.group().strip()))
+                i = match.end()
+                break
+        else:
+            raise AssertionError("unreachable", value, i)
+    tokens.append(_Token(_EOF, ""))
+
+    return tokens
+
+
+def parse_files_to_codes_mapping(value_):  # noqa: C901
+    # type: (Union[Sequence[str], str]) -> List[Tuple[str, List[str]]]
+    """Parse a files-to-codes maping.
+
+    A files-to-codes mapping a sequence of values specified as
+    `filenames list:codes list ...`.  Each of the lists may be separated by
+    either comma or whitespace tokens.
+
+    :param value: String to be parsed and normalized.
+    :type value: str
+    """
+    if not isinstance(value_, string_types):
+        value = "\n".join(value_)
+    else:
+        value = value_
+
+    ret = []  # type: List[Tuple[str, List[str]]]
+    if not value.strip():
+        return ret
+
+    class State:
+        seen_sep = True
+        seen_colon = False
+        filenames = []  # type: List[str]
+        codes = []  # type: List[str]
+
+    def _reset():  # type: () -> None
+        if State.codes:
+            for filename in State.filenames:
+                ret.append((filename, State.codes))
+        State.seen_sep = True
+        State.seen_colon = False
+        State.filenames = []
+        State.codes = []
+
+    def _unexpected_token():  # type: () -> exceptions.ExecutionError
+        def _indent(s):  # type: (str) -> str
+            return "    " + s.strip().replace("\n", "\n    ")
+
+        return exceptions.ExecutionError(
+            "Expected `per-file-ignores` to be a mapping from file exclude "
+            "patterns to ignore codes.\n\n"
+            "Configured `per-file-ignores` setting:\n\n{}".format(
+                _indent(value)
+            )
+        )
+
+    for token in _tokenize_files_to_codes_mapping(value):
+        # legal in any state: separator sets the sep bit
+        if token.tp in {_COMMA, _WS}:
+            State.seen_sep = True
+        # looking for filenames
+        elif not State.seen_colon:
+            if token.tp == _COLON:
+                State.seen_colon = True
+                State.seen_sep = True
+            elif State.seen_sep and token.tp == _FILE:
+                State.filenames.append(token.src)
+                State.seen_sep = False
+            else:
+                raise _unexpected_token()
+        # looking for codes
+        else:
+            if token.tp == _EOF:
+                _reset()
+            elif State.seen_sep and token.tp == _CODE:
+                State.codes.append(token.src)
+                State.seen_sep = False
+            elif State.seen_sep and token.tp == _FILE:
+                _reset()
+                State.filenames.append(token.src)
+                State.seen_sep = False
+            else:
+                raise _unexpected_token()
+
+    return ret
+
+
 def normalize_paths(paths, parent=os.curdir):
-    # type: (Union[Sequence[str], str], str) -> List[str]
-    """Parse a comma-separated list of paths.
+    # type: (Sequence[str], str) -> List[str]
+    """Normalize a list of paths relative to a parent directory.
 
     :returns:
         The normalized paths.
     :rtype:
         [str]
     """
-    return [normalize_path(p, parent)
-            for p in parse_comma_separated_list(paths)]
+    assert isinstance(paths, list), paths
+    return [normalize_path(p, parent) for p in paths]
 
 
 def normalize_path(path, parent=os.curdir):
@@ -67,39 +182,43 @@ def normalize_path(path, parent=os.curdir):
     # Unix style paths (/foo/bar).
     separator = os.path.sep
     # NOTE(sigmavirus24): os.path.altsep may be None
-    alternate_separator = os.path.altsep or ''
-    if separator in path or (alternate_separator and
-                             alternate_separator in path):
+    alternate_separator = os.path.altsep or ""
+    if separator in path or (
+        alternate_separator and alternate_separator in path
+    ):
         path = os.path.abspath(os.path.join(parent, path))
     return path.rstrip(separator + alternate_separator)
 
 
-def _stdin_get_value_py3():
+def _stdin_get_value_py3():  # type: () -> str
     stdin_value = sys.stdin.buffer.read()
     fd = io.BytesIO(stdin_value)
     try:
-        (coding, lines) = tokenize.detect_encoding(fd.readline)
-        return io.StringIO(stdin_value.decode(coding))
+        coding, _ = tokenize.detect_encoding(fd.readline)
+        return stdin_value.decode(coding)
     except (LookupError, SyntaxError, UnicodeError):
-        return io.StringIO(stdin_value.decode('utf-8'))
+        return stdin_value.decode("utf-8")
 
 
-def stdin_get_value():
-    # type: () -> str
+@lru_cache(maxsize=1)
+def stdin_get_value():  # type: () -> str
     """Get and cache it so plugins can use it."""
-    cached_value = getattr(stdin_get_value, 'cached_stdin', None)
-    if cached_value is None:
-        if sys.version_info < (3, 0):
-            stdin_value = io.BytesIO(sys.stdin.read())
-        else:
-            stdin_value = _stdin_get_value_py3()
-        stdin_get_value.cached_stdin = stdin_value
-        cached_value = stdin_get_value.cached_stdin
-    return cached_value.getvalue()
+    if sys.version_info < (3,):
+        return sys.stdin.read()
+    else:
+        return _stdin_get_value_py3()
+
+
+def stdin_get_lines():  # type: () -> List[str]
+    """Return lines of stdin split according to file splitting."""
+    if sys.version_info < (3,):
+        return list(io.BytesIO(stdin_get_value()))
+    else:
+        return list(io.StringIO(stdin_get_value()))
 
 
 def parse_unified_diff(diff=None):
-    # type: (str) -> List[str]
+    # type: (Optional[str]) -> Dict[str, Set[int]]
     """Parse the unified diff passed on stdin.
 
     :returns:
@@ -113,12 +232,12 @@ def parse_unified_diff(diff=None):
 
     number_of_rows = None
     current_path = None
-    parsed_paths = collections.defaultdict(set)
+    parsed_paths = collections.defaultdict(set)  # type: Dict[str, Set[int]]
     for line in diff.splitlines():
         if number_of_rows:
             # NOTE(sigmavirus24): Below we use a slice because stdin may be
             # bytes instead of text on Python 3.
-            if line[:1] != '-':
+            if line[:1] != "-":
                 number_of_rows -= 1
             # We're in the part of the diff that has lines starting with +, -,
             # and ' ' to show context and the changes made. We skip these
@@ -139,10 +258,10 @@ def parse_unified_diff(diff=None):
         #    +++ b/file.py\t100644
         # Which is an example that has the new file permissions/mode.
         # In this case we only care about the file name.
-        if line[:3] == '+++':
-            current_path = line[4:].split('\t', 1)[0]
+        if line[:3] == "+++":
+            current_path = line[4:].split("\t", 1)[0]
             # NOTE(sigmavirus24): This check is for diff output from git.
-            if current_path[:2] == 'b/':
+            if current_path[:2] == "b/":
                 current_path = current_path[2:]
             # We don't need to do anything else. We have set up our local
             # ``current_path`` variable. We can skip the rest of this loop.
@@ -161,6 +280,7 @@ def parse_unified_diff(diff=None):
                 1 if not group else int(group)
                 for group in hunk_match.groups()
             ]
+            assert current_path is not None
             parsed_paths[current_path].update(
                 range(row, row + number_of_rows)
             )
@@ -179,31 +299,7 @@ def is_windows():
     :rtype:
         bool
     """
-    return os.name == 'nt'
-
-
-# NOTE(sigmavirus24): If and when https://bugs.python.org/issue27649 is fixed,
-# re-enable multiprocessing support on Windows.
-def can_run_multiprocessing_on_windows():
-    # type: () -> bool
-    """Determine if we can use multiprocessing on Windows.
-
-    This presently will **always** return False due to a `bug`_ in the
-    :mod:`multiprocessing` module on Windows. Once fixed, we will check
-    to ensure that the version of Python contains that fix (via version
-    inspection) and *conditionally* re-enable support on Windows.
-
-    .. _bug:
-        https://bugs.python.org/issue27649
-
-    :returns:
-        True if the version of Python is modern enough, otherwise False
-    :rtype:
-        bool
-    """
-    is_new_enough_python27 = (2, 7, 11) <= sys.version_info < (3, 0)
-    is_new_enough_python3 = sys.version_info > (3, 2)
-    return False and (is_new_enough_python27 or is_new_enough_python3)
+    return os.name == "nt"
 
 
 def is_using_stdin(paths):
@@ -217,15 +313,15 @@ def is_using_stdin(paths):
     :rtype:
         bool
     """
-    return '-' in paths
+    return "-" in paths
 
 
-def _default_predicate(*args):
+def _default_predicate(*args):  # type: (*str) -> bool
     return False
 
 
 def filenames_from(arg, predicate=None):
-    # type: (str, callable) -> Generator
+    # type: (str, Optional[Callable[[str], bool]]) -> Generator[str, None, None]  # noqa: E501
     """Generate filenames from an argument.
 
     :param str arg:
@@ -259,15 +355,14 @@ def filenames_from(arg, predicate=None):
 
             for filename in files:
                 joined = os.path.join(root, filename)
-                if predicate(joined) or predicate(filename):
-                    continue
-                yield joined
+                if not predicate(joined):
+                    yield joined
     else:
         yield arg
 
 
-def fnmatch(filename, patterns, default=True):
-    # type: (str, List[str], bool) -> bool
+def fnmatch(filename, patterns):
+    # type: (str, Sequence[str]) -> bool
     """Wrap :func:`fnmatch.fnmatch` to add some functionality.
 
     :param str filename:
@@ -281,12 +376,12 @@ def fnmatch(filename, patterns, default=True):
         ``default`` if patterns is empty.
     """
     if not patterns:
-        return default
+        return True
     return any(_fnmatch.fnmatch(filename, pattern) for pattern in patterns)
 
 
 def parameters_for(plugin):
-    # type: (flake8.plugins.manager.Plugin) -> Dict[str, bool]
+    # type: (Plugin) -> Dict[str, bool]
     """Return the parameters for the plugin.
 
     This will inspect the plugin and return either the function parameters
@@ -312,24 +407,61 @@ def parameters_for(plugin):
         argspec = inspect.getargspec(func)
         start_of_optional_args = len(argspec[0]) - len(argspec[-1] or [])
         parameter_names = argspec[0]
-        parameters = collections.OrderedDict([
-            (name, position < start_of_optional_args)
-            for position, name in enumerate(parameter_names)
-        ])
+        parameters = collections.OrderedDict(
+            [
+                (name, position < start_of_optional_args)
+                for position, name in enumerate(parameter_names)
+            ]
+        )
     else:
-        parameters = collections.OrderedDict([
-            (parameter.name, parameter.default is parameter.empty)
-            for parameter in inspect.signature(func).parameters.values()
-            if parameter.kind == parameter.POSITIONAL_OR_KEYWORD
-        ])
+        parameters = collections.OrderedDict(
+            [
+                (parameter.name, parameter.default is parameter.empty)
+                for parameter in inspect.signature(func).parameters.values()
+                if parameter.kind == parameter.POSITIONAL_OR_KEYWORD
+            ]
+        )
 
     if is_class:
-        parameters.pop('self', None)
+        parameters.pop("self", None)
 
     return parameters
 
 
-def get_python_version():
+def matches_filename(path, patterns, log_message, logger):
+    # type: (str, Sequence[str], str, logging.Logger) -> bool
+    """Use fnmatch to discern if a path exists in patterns.
+
+    :param str path:
+        The path to the file under question
+    :param patterns:
+        The patterns to match the path against.
+    :type patterns:
+        list[str]
+    :param str log_message:
+        The message used for logging purposes.
+    :returns:
+        True if path matches patterns, False otherwise
+    :rtype:
+        bool
+    """
+    if not patterns:
+        return False
+    basename = os.path.basename(path)
+    if basename not in {".", ".."} and fnmatch(basename, patterns):
+        logger.debug(log_message, {"path": basename, "whether": ""})
+        return True
+
+    absolute_path = os.path.abspath(path)
+    match = fnmatch(absolute_path, patterns)
+    logger.debug(
+        log_message,
+        {"path": absolute_path, "whether": "" if match else "not "},
+    )
+    return match
+
+
+def get_python_version():  # type: () -> str
     """Find and format the python implementation and version.
 
     :returns:
@@ -337,9 +469,8 @@ def get_python_version():
     :rtype:
         str
     """
-    # The implementation isn't all that important.
-    try:
-        impl = platform.python_implementation() + " "
-    except AttributeError:  # Python 2.5
-        impl = ''
-    return '%s%s on %s' % (impl, platform.python_version(), platform.system())
+    return "%s %s on %s" % (
+        platform.python_implementation(),
+        platform.python_version(),
+        platform.system(),
+    )

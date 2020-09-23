@@ -1,4 +1,3 @@
-
 from sys import version_info
 
 from pyflakes import messages as m
@@ -94,6 +93,13 @@ class TestImportationObject(TestCase):
         binding = FutureImportation('print_function', None, None)
         assert binding.source_statement == 'from __future__ import print_function'
         assert str(binding) == '__future__.print_function'
+
+    def test_unusedImport_underscore(self):
+        """
+        The magic underscore var should be reported as unused when used as an
+        import alias.
+        """
+        self.flakes('import fu as _', m.UnusedImport)
 
 
 class Test(TestCase):
@@ -570,12 +576,15 @@ class Test(TestCase):
         ''')
 
     def test_redefinedByExcept(self):
-        as_exc = ', ' if version_info < (2, 6) else ' as '
+        expected = [m.RedefinedWhileUnused]
+        if version_info >= (3,):
+            # The exc variable is unused inside the exception handler.
+            expected.append(m.UnusedVariable)
         self.flakes('''
         import fu
         try: pass
-        except Exception%sfu: pass
-        ''' % as_exc, m.RedefinedWhileUnused)
+        except Exception as fu: pass
+        ''', *expected)
 
     def test_usedInRaise(self):
         self.flakes('''
@@ -878,6 +887,22 @@ class Test(TestCase):
         fu.x
         ''')
 
+    def test_used_package_with_submodule_import_of_alias(self):
+        """
+        Usage of package by alias marks submodule imports as used.
+        """
+        self.flakes('''
+        import foo as f
+        import foo.bar
+        f.bar.do_something()
+        ''')
+
+        self.flakes('''
+        import foo as f
+        import foo.bar.blah
+        f.bar.blah.do_something()
+        ''')
+
     def test_unused_package_with_submodule_import(self):
         """
         When a package and its submodule are imported, only report once.
@@ -1059,19 +1084,41 @@ class TestSpecialAll(TestCase):
             __all__ += ['c', 'd']
         ''', m.UndefinedExport, m.UndefinedExport)
 
-    def test_unrecognizable(self):
+    def test_concatenationAssignment(self):
         """
-        If C{__all__} is defined in a way that can't be recognized statically,
-        it is ignored.
+        The C{__all__} variable is defined through list concatenation.
         """
         self.flakes('''
-        import foo
-        __all__ = ["f" + "oo"]
-        ''', m.UnusedImport)
+        import sys
+        __all__ = ['a'] + ['b'] + ['c']
+        ''', m.UndefinedExport, m.UndefinedExport, m.UndefinedExport, m.UnusedImport)
+
+    def test_all_with_attributes(self):
         self.flakes('''
-        import foo
-        __all__ = [] + ["foo"]
-        ''', m.UnusedImport)
+        from foo import bar
+        __all__ = [bar.__name__]
+        ''')
+
+    def test_all_with_names(self):
+        # not actually valid, but shouldn't produce a crash
+        self.flakes('''
+        from foo import bar
+        __all__ = [bar]
+        ''')
+
+    def test_all_with_attributes_added(self):
+        self.flakes('''
+        from foo import bar
+        from bar import baz
+        __all__ = [bar.__name__] + [baz.__name__]
+        ''')
+
+    def test_all_mixed_attributes_and_strings(self):
+        self.flakes('''
+        from foo import bar
+        from foo import baz
+        __all__ = ['bar', baz.__name__]
+        ''')
 
     def test_unboundExported(self):
         """
@@ -1090,12 +1137,13 @@ class TestSpecialAll(TestCase):
 
     def test_importStarExported(self):
         """
-        Do not report undefined if import * is used
+        Report undefined if import * is used
         """
         self.flakes('''
-        from foolib import *
-        __all__ = ["foo"]
-        ''', m.ImportStarUsed)
+        from math import *
+        __all__ = ['sin', 'cos']
+        csc(1)
+        ''', m.ImportStarUsed, m.ImportStarUsage, m.ImportStarUsage, m.ImportStarUsage)
 
     def test_importStarNotExported(self):
         """Report unused import when not needed to satisfy __all__."""
@@ -1146,13 +1194,6 @@ class TestSpecialAll(TestCase):
             return "hello"
         ''', m.UndefinedName)
 
-
-class Python26Tests(TestCase):
-    """
-    Tests for checking of syntax which is valid in Python 2.6 and newer.
-    """
-
-    @skipIf(version_info < (2, 6), "Python >= 2.6 only")
     def test_usedAsClassDecorator(self):
         """
         Using an imported name as a class decorator results in no warnings,

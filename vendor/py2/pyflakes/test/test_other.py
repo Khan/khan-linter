@@ -81,7 +81,6 @@ class Test(TestCase):
         (1 for a, b in [(1, 2)])
         ''')
 
-    @skipIf(version_info < (2, 7), "Python >= 2.7 only")
     def test_redefinedInSetComprehension(self):
         """
         Test that reusing a variable in a set comprehension does not raise
@@ -111,7 +110,6 @@ class Test(TestCase):
         {1 for a, b in [(1, 2)]}
         ''')
 
-    @skipIf(version_info < (2, 7), "Python >= 2.7 only")
     def test_redefinedInDictComprehension(self):
         """
         Test that reusing a variable in a dict comprehension does not raise
@@ -149,6 +147,25 @@ class Test(TestCase):
         self.flakes('''
         def a(): pass
         def a(): pass
+        ''', m.RedefinedWhileUnused)
+
+    def test_redefinedUnderscoreFunction(self):
+        """
+        Test that shadowing a function definition named with underscore doesn't
+        raise anything.
+        """
+        self.flakes('''
+        def _(): pass
+        def _(): pass
+        ''')
+
+    def test_redefinedUnderscoreImportation(self):
+        """
+        Test that shadowing an underscore importation raises a warning.
+        """
+        self.flakes('''
+        from .i18n import _
+        def _(): pass
         ''', m.RedefinedWhileUnused)
 
     def test_redefinedClassFunction(self):
@@ -260,7 +277,6 @@ class Test(TestCase):
             a = classmethod(a)
         ''')
 
-    @skipIf(version_info < (2, 6), "Python >= 2.6 only")
     def test_modernProperty(self):
         self.flakes("""
         class A:
@@ -477,8 +493,10 @@ class Test(TestCase):
                     continue
         ''')
 
+    @skipIf(version_info > (3, 8), "Python <= 3.8 only")
     def test_continueInFinally(self):
         # 'continue' inside 'finally' is a special syntax error
+        # that is removed in 3.8
         self.flakes('''
         while True:
             try:
@@ -1143,6 +1161,37 @@ class Test(TestCase):
         def g(): foo = 'anything'; foo.is_used()
         ''')
 
+    def test_function_arguments(self):
+        """
+        Test to traverse ARG and ARGUMENT handler
+        """
+        self.flakes('''
+        def foo(a, b):
+            pass
+        ''')
+
+        self.flakes('''
+        def foo(a, b, c=0):
+            pass
+        ''')
+
+        self.flakes('''
+        def foo(a, b, c=0, *args):
+            pass
+        ''')
+
+        self.flakes('''
+        def foo(a, b, c=0, *args, **kwargs):
+            pass
+        ''')
+
+    @skipIf(version_info < (3, 3), "Python >= 3.3 only")
+    def test_function_arguments_python3(self):
+        self.flakes('''
+        def foo(a, b, c=0, *args, d=0, **kwargs):
+            pass
+        ''')
+
 
 class TestUnusedAssignment(TestCase):
     """
@@ -1158,6 +1207,16 @@ class TestUnusedAssignment(TestCase):
         def a():
             b = 1
         ''', m.UnusedVariable)
+
+    def test_unusedUnderscoreVariable(self):
+        """
+        Don't warn when the magic "_" (underscore) variable is unused.
+        See issue #202.
+        """
+        self.flakes('''
+        def a(unused_param):
+            _ = unused_param
+        ''')
 
     def test_unusedVariableAsLocals(self):
         """
@@ -1374,6 +1433,29 @@ class TestUnusedAssignment(TestCase):
         self.flakes("a = foo if True else 'oink'", m.UndefinedName)
         self.flakes("a = 'moo' if True else bar", m.UndefinedName)
 
+    def test_if_tuple(self):
+        """
+        Test C{if (foo,)} conditions.
+        """
+        self.flakes("""if (): pass""")
+        self.flakes("""
+        if (
+            True
+        ):
+            pass
+        """)
+        self.flakes("""
+        if (
+            True,
+        ):
+            pass
+        """, m.IfTuple)
+        self.flakes("""
+        x = 1 if (
+            True,
+        ) else 2
+        """, m.IfTuple)
+
     def test_withStatementNoNames(self):
         """
         No warnings are emitted for using inside or after a nameless C{with}
@@ -1565,7 +1647,6 @@ class TestUnusedAssignment(TestCase):
             pass
         ''', m.UndefinedName)
 
-    @skipIf(version_info < (2, 7), "Python >= 2.7 only")
     def test_dictComprehension(self):
         """
         Dict comprehensions are properly handled.
@@ -1574,7 +1655,6 @@ class TestUnusedAssignment(TestCase):
         a = {1: x for x in range(10)}
         ''')
 
-    @skipIf(version_info < (2, 7), "Python >= 2.7 only")
     def test_setComprehensionAndLiteral(self):
         """
         Set comprehensions are properly handled.
@@ -1585,17 +1665,31 @@ class TestUnusedAssignment(TestCase):
         ''')
 
     def test_exceptionUsedInExcept(self):
-        as_exc = ', ' if version_info < (2, 6) else ' as '
         self.flakes('''
         try: pass
-        except Exception%se: e
-        ''' % as_exc)
+        except Exception as e: e
+        ''')
 
         self.flakes('''
         def download_review():
             try: pass
-            except Exception%se: e
-        ''' % as_exc)
+            except Exception as e: e
+        ''')
+
+    @skipIf(version_info < (3,),
+            "In Python 2 exception names stay bound after the exception handler")
+    def test_exceptionUnusedInExcept(self):
+        self.flakes('''
+        try: pass
+        except Exception as e: pass
+        ''', m.UnusedVariable)
+
+    def test_exceptionUnusedInExceptInFunction(self):
+        self.flakes('''
+        def download_review():
+            try: pass
+            except Exception as e: pass
+        ''', m.UnusedVariable)
 
     def test_exceptWithoutNameInFunction(self):
         """
@@ -1685,6 +1779,168 @@ class TestUnusedAssignment(TestCase):
         print(f'\x7b4*baz\N{RIGHT CURLY BRACKET}')
         ''')
 
+    @skipIf(version_info < (3, 8), 'new in Python 3.8')
+    def test_assign_expr(self):
+        """Test PEP 572 assignment expressions are treated as usage / write."""
+        self.flakes('''
+        from foo import y
+        print(x := y)
+        print(x)
+        ''')
+
+
+class TestStringFormatting(TestCase):
+
+    @skipIf(version_info < (3, 6), 'new in Python 3.6')
+    def test_f_string_without_placeholders(self):
+        self.flakes("f'foo'", m.FStringMissingPlaceholders)
+        self.flakes('''
+            f"""foo
+            bar
+            """
+        ''', m.FStringMissingPlaceholders)
+        self.flakes('''
+            print(
+                f'foo'
+                f'bar'
+            )
+        ''', m.FStringMissingPlaceholders)
+        # this is an "escaped placeholder" but not a placeholder
+        self.flakes("f'{{}}'", m.FStringMissingPlaceholders)
+        # ok: f-string with placeholders
+        self.flakes('''
+            x = 5
+            print(f'{x}')
+        ''')
+        # ok: f-string with format specifiers
+        self.flakes('''
+            x = 'a' * 90
+            print(f'{x:.8}')
+        ''')
+        # ok: f-string with multiple format specifiers
+        self.flakes('''
+            x = y = 5
+            print(f'{x:>2} {y:>2}')
+        ''')
+
+    def test_invalid_dot_format_calls(self):
+        self.flakes('''
+            '{'.format(1)
+        ''', m.StringDotFormatInvalidFormat)
+        self.flakes('''
+            '{} {1}'.format(1, 2)
+        ''', m.StringDotFormatMixingAutomatic)
+        self.flakes('''
+            '{0} {}'.format(1, 2)
+        ''', m.StringDotFormatMixingAutomatic)
+        self.flakes('''
+            '{}'.format(1, 2)
+        ''', m.StringDotFormatExtraPositionalArguments)
+        self.flakes('''
+            '{}'.format(1, bar=2)
+        ''', m.StringDotFormatExtraNamedArguments)
+        self.flakes('''
+            '{} {}'.format(1)
+        ''', m.StringDotFormatMissingArgument)
+        self.flakes('''
+            '{2}'.format()
+        ''', m.StringDotFormatMissingArgument)
+        self.flakes('''
+            '{bar}'.format()
+        ''', m.StringDotFormatMissingArgument)
+        # too much string recursion (placeholder-in-placeholder)
+        self.flakes('''
+            '{:{:{}}}'.format(1, 2, 3)
+        ''', m.StringDotFormatInvalidFormat)
+        # ok: dotted / bracketed names need to handle the param differently
+        self.flakes("'{.__class__}'.format('')")
+        self.flakes("'{foo[bar]}'.format(foo={'bar': 'barv'})")
+        # ok: placeholder-placeholders
+        self.flakes('''
+            print('{:{}} {}'.format(1, 15, 2))
+        ''')
+        # ok: not a placeholder-placeholder
+        self.flakes('''
+            print('{:2}'.format(1))
+        ''')
+        # ok: not mixed automatic
+        self.flakes('''
+            '{foo}-{}'.format(1, foo=2)
+        ''')
+        # ok: we can't determine statically the format args
+        self.flakes('''
+            a = ()
+            "{}".format(*a)
+        ''')
+        self.flakes('''
+            k = {}
+            "{foo}".format(**k)
+        ''')
+
+    def test_invalid_percent_format_calls(self):
+        self.flakes('''
+            '%(foo)' % {'foo': 'bar'}
+        ''', m.PercentFormatInvalidFormat)
+        self.flakes('''
+            '%s %(foo)s' % {'foo': 'bar'}
+        ''', m.PercentFormatMixedPositionalAndNamed)
+        self.flakes('''
+            '%(foo)s %s' % {'foo': 'bar'}
+        ''', m.PercentFormatMixedPositionalAndNamed)
+        self.flakes('''
+            '%j' % (1,)
+        ''', m.PercentFormatUnsupportedFormatCharacter)
+        self.flakes('''
+            '%s %s' % (1,)
+        ''', m.PercentFormatPositionalCountMismatch)
+        self.flakes('''
+            '%s %s' % (1, 2, 3)
+        ''', m.PercentFormatPositionalCountMismatch)
+        self.flakes('''
+            '%(bar)s' % {}
+        ''', m.PercentFormatMissingArgument,)
+        self.flakes('''
+            '%(bar)s' % {'bar': 1, 'baz': 2}
+        ''', m.PercentFormatExtraNamedArguments)
+        self.flakes('''
+            '%(bar)s' % (1, 2, 3)
+        ''', m.PercentFormatExpectedMapping)
+        self.flakes('''
+            '%s %s' % {'k': 'v'}
+        ''', m.PercentFormatExpectedSequence)
+        self.flakes('''
+            '%(bar)*s' % {'bar': 'baz'}
+        ''', m.PercentFormatStarRequiresSequence)
+        # ok: single %s with mapping
+        self.flakes('''
+            '%s' % {'foo': 'bar', 'baz': 'womp'}
+        ''')
+        # ok: does not cause a MemoryError (the strings aren't evaluated)
+        self.flakes('''
+            "%1000000000000f" % 1
+        ''')
+        # ok: %% should not count towards placeholder count
+        self.flakes('''
+            '%% %s %% %s' % (1, 2)
+        ''')
+        # ok: * consumes one positional argument
+        self.flakes('''
+            '%.*f' % (2, 1.1234)
+            '%*.*f' % (5, 2, 3.1234)
+        ''')
+
+    @skipIf(version_info < (3, 5), 'new in Python 3.5')
+    def test_ok_percent_format_cannot_determine_element_count(self):
+        self.flakes('''
+            a = []
+            '%s %s' % [*a]
+            '%s %s' % (*a,)
+        ''')
+        self.flakes('''
+            k = {}
+            '%(k)s' % {**k}
+        ''')
+
 
 class TestAsyncStatements(TestCase):
 
@@ -1717,6 +1973,14 @@ class TestAsyncStatements(TestCase):
             async for row in db.cursor():
                 output.append(row)
             return output
+        ''')
+
+    @skipIf(version_info < (3, 5), 'new in Python 3.5')
+    def test_asyncForUnderscoreLoopVar(self):
+        self.flakes('''
+        async def coro(it):
+            async for _ in it:
+                pass
         ''')
 
     @skipIf(version_info < (3, 5), 'new in Python 3.5')
@@ -1764,6 +2028,7 @@ class TestAsyncStatements(TestCase):
         ''', m.BreakOutsideLoop)
 
     @skipIf(version_info < (3, 5), 'new in Python 3.5')
+    @skipIf(version_info > (3, 8), "Python <= 3.8 only")
     def test_continueInAsyncForFinally(self):
         self.flakes('''
         async def read_data(db):
@@ -1809,68 +2074,69 @@ class TestAsyncStatements(TestCase):
         f'{hi} {mom}'
         ''')
 
-    @skipIf(version_info < (3, 6), 'new in Python 3.6')
-    def test_variable_annotations(self):
+    def test_raise_notimplemented(self):
         self.flakes('''
-        name: str
-        age: int
+        raise NotImplementedError("This is fine")
         ''')
+
         self.flakes('''
-        name: str = 'Bob'
-        age: int = 18
+        raise NotImplementedError
         ''')
+
         self.flakes('''
-        class C:
-            name: str
-            age: int
+        raise NotImplemented("This isn't gonna work")
+        ''', m.RaiseNotImplemented)
+
+        self.flakes('''
+        raise NotImplemented
+        ''', m.RaiseNotImplemented)
+
+
+class TestIncompatiblePrintOperator(TestCase):
+    """
+    Tests for warning about invalid use of print function.
+    """
+
+    def test_valid_print(self):
+        self.flakes('''
+        print("Hello")
         ''')
+
+    def test_invalid_print_when_imported_from_future(self):
+        exc = self.flakes('''
+        from __future__ import print_function
+        import sys
+        print >>sys.stderr, "Hello"
+        ''', m.InvalidPrintSyntax).messages[0]
+
+        self.assertEqual(exc.lineno, 4)
+        self.assertEqual(exc.col, 0)
+
+    def test_print_function_assignment(self):
+        """
+        A valid assignment, tested for catching false positives.
+        """
         self.flakes('''
-        class C:
-            name: str = 'Bob'
-            age: int = 18
+        from __future__ import print_function
+        log = print
+        log("Hello")
         ''')
+
+    def test_print_in_lambda(self):
         self.flakes('''
-        def f():
-            name: str
-            age: int
+        from __future__ import print_function
+        a = lambda: print
         ''')
+
+    def test_print_returned_in_function(self):
         self.flakes('''
-        def f():
-            name: str = 'Bob'
-            age: int = 18
-            foo: not_a_real_type = None
-        ''', m.UnusedVariable, m.UnusedVariable, m.UnusedVariable, m.UndefinedName)
-        self.flakes('''
-        def f():
-            name: str
-            print(name)
-        ''', m.UndefinedName)
-        self.flakes('''
-        from typing import Any
-        def f():
-            a: Any
+        from __future__ import print_function
+        def a():
+            return print
         ''')
+
+    def test_print_as_condition_test(self):
         self.flakes('''
-        foo: not_a_real_type
-        ''', m.UndefinedName)
-        self.flakes('''
-        foo: not_a_real_type = None
-        ''', m.UndefinedName)
-        self.flakes('''
-        class C:
-            foo: not_a_real_type
-        ''', m.UndefinedName)
-        self.flakes('''
-        class C:
-            foo: not_a_real_type = None
-        ''', m.UndefinedName)
-        self.flakes('''
-        def f():
-            class C:
-                foo: not_a_real_type
-        ''', m.UndefinedName)
-        self.flakes('''
-        def f():
-            class C:
-                foo: not_a_real_type = None
-        ''', m.UndefinedName)
+        from __future__ import print_function
+        if print: pass
+        ''')
