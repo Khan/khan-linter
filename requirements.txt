@@ -9,6 +9,6 @@
 git+git://github.com/pycqa/flake8.git@dd1e9d1cb7e9a232946c06aca1564d48d4d6f65e
 
 # Required for yaml lint checking
-pyyaml==3.12
+pyyaml==5.4
 
 
