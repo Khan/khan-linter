@@ -1117,7 +1117,10 @@ class YamlLinter(Linter):
     """
     def process(self, f, contents_of_f):
         try:
-            yaml.safe_load(contents_of_f)
+            # We allow multiple documents within the same YAML file.
+            # Since safe_load_all returns a generator, we have to make sure it
+            # is properly unrolled.
+            list(yaml.safe_load_all(contents_of_f))
             return 0
         except yaml.parser.ParserError as e:
             self.report(('%s:%s:%s: E=yaml= Error parsing yaml: %s %s'
