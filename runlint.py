@@ -722,6 +722,10 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
         # If eslint_config is None, linters.Eslint will default to the
         # configuration in the khan-linter repo.
         eslint_config = _find_base_config(file_to_lint, '.eslintrc')
+
+        if eslint_config is None:
+            eslint_config = _find_base_config(file_to_lint, '.eslintrc.js')
+
         # The same is true for the eslint executable.
         exec_path = _find_base_config(file_to_lint, 'node_modules/.bin/eslint')
         if eslint_config or exec_path:
