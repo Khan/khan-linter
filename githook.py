@@ -175,7 +175,8 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
 
         # Parse files to lint: split at NUL characters, remove blank entries,
         # and remove duplicates.
-        files_to_lint = list({f for f in files_to_lint.split('\0') if f})
+        files_to_lint = list({f for f in files_to_lint.split('\0')
+                              if f and os.path.exists(f)})
 
         # Lint the files, if any. If there are any errors, print a helpful
         # message, and return a nonzero status code to abort the push.
