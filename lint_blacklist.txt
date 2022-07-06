@@ -32,3 +32,8 @@ contrib/
 # Other files
 main.py
 api/v1.py
+
+# Bitrise yml files in mobile repo contain unicode not supported by "narrow"
+# python. Hopefully we can remove this if python3 upgrade fixes the issue.
+bitrise.yml
+.bitrise/workflow_archives/**
