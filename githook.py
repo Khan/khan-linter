@@ -189,7 +189,7 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
                     '\n--- %s lint errors. Push aborted. ---' % num_errors,
                     file=sys.stderr)
                 six.print_(
-                    'Running `arc lint` may help to autofix the errors.',
+                    'Running `make fixc` may help to autofix the errors.',
                     file=sys.stderr)
                 return 1
 
