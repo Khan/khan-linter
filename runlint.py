@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Run some linters on files of various types."""
 
@@ -43,9 +43,6 @@ import traceback
 
 import linters
 import lint_util
-import six
-
-from six.moves import xrange
 
 
 _DEFAULT_BLACKLIST_PATTERN = '<ancestor>/lint_blacklist.txt'
@@ -158,7 +155,7 @@ def _extended_fnmatch_compile(pattern):
 
 # If the code below this line has horrible syntax highlighting, check
 # this out:  http://stackoverflow.com/questions/13210816/sublime-texts-syntax-highlighting-of-regexes-in-python-leaks-into-surrounding-c
-_METACHAR_RE = re.compile(r'[[*?!]')
+_METACHAR_RE = re.compile(r'[*?![]')
 
 
 def _parse_one_blacklist_line(line):
@@ -320,7 +317,7 @@ def _file_in_blacklist(fname, blacklist_pattern):
     # The blacklist can have regexp patterns in it, so we need to
     # check those too, one by one:
     for blacklist_entry in blacklist:
-        if not isinstance(blacklist_entry, six.string_types):
+        if not isinstance(blacklist_entry, str):
             if blacklist_entry.match(fname):
                 return True
 
@@ -335,7 +332,7 @@ def _files_under_directory(rootdir, blacklist_pattern):
         # backwards so we can use del.  (Weird os.walk() semantics:
         # calling del on an element of dirs suppresses os.walk()'s
         # traversal into that dir.)
-        for i in xrange(len(dirs) - 1, -1, -1):
+        for i in range(len(dirs) - 1, -1, -1):
             absdir = os.path.join(root, dirs[i])
             if os.path.islink(absdir):
                 _get_logger().debug('... skipping directory %s: is a symlink'
@@ -458,7 +455,7 @@ def _run_extra_linter(extra_linter_filename, files, verbose):
         if linter:
             linter_to_files.setdefault(linter, set()).add(f)
 
-    for (linter_filename, files) in six.iteritems(linter_to_files):
+    for (linter_filename, files) in linter_to_files.items():
         if not os.access(linter_filename, os.R_OK | os.X_OK):
             continue
         files = sorted(files)
@@ -822,7 +819,7 @@ def main(files_and_directories,
         except Exception:
             _get_logger().error(u"ERROR linting %r with %s:\n%s" % (
                           files, type(lint_processor),
-                          traceback.format_exc().decode('utf-8')))
+                          traceback.format_exc()))
             num_framework_errors += 1
             continue
 
