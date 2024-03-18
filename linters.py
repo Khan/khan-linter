@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Linters process files or lists of files for correctness."""
 
+import io
 import itertools
 import json
 import logging
@@ -11,20 +12,12 @@ import subprocess
 import sys
 
 import lint_util
-import six
-import six.moves
 
-from six.moves import cStringIO as StringIO
 
 # Add vendor path so we can find (our packaged versions of) flake8
 _CWD = lint_util.get_real_cwd()
 _parent_dir = os.path.abspath(_CWD)
-if six.PY2:
-    _vendor_version = 'py2'
-else:
-    _vendor_version = 'py3'
-
-_vendor_dir = os.path.join(_parent_dir, 'vendor', _vendor_version)
+_vendor_dir = os.path.join(_parent_dir, 'vendor', 'py3')
 sys.path.insert(0, _vendor_dir)
 
 import static_content_refs
@@ -170,7 +163,7 @@ def _capture_stdout_of(fn, *args, **kwargs):
     """Call fn(*args, **kwargs) and return (fn_retval, fn_stdout_output_fp)."""
     try:
         orig_stdout = sys.stdout
-        sys.stdout = StringIO()
+        sys.stdout = io.StringIO()
         retval = fn(*args, **kwargs)
         sys.stdout.seek(0)    # so new read()/readlines() calls will return
         return (retval, sys.stdout)
@@ -675,7 +668,7 @@ class Eslint(Linter):
         stdout_lines = []
         # We need to keep sum(|files|) less than about 250k for OS X's
         # commandline limit.  2000 files at a time should do that.
-        for i in six.moves.range(0, len(files), 2000):
+        for i in range(0, len(files), 2000):
             stdout_lines.extend(self._run_eslint(files[i:i + 2000]))
 
         # eslint_reporter specifies that errors are reported on

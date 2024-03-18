@@ -4,25 +4,16 @@ import os
 import re
 import sys
 
-import six
 
-
-if six.PY2:
-    def print_(text, end=None):
-        """Always emit text as utf-8.  Useful when piping output elsewhere."""
-        if isinstance(text, unicode):
-            text = text.encode('utf-8')
-        six.print_(text, end=end)
-else:
-    def print_(text, end=None):
-        """Always emit text as utf-8.  Useful when piping output elsewhere."""
-        if end is None:
-            end = os.linesep
-        if isinstance(text, str):
-            text = (text + end).encode('utf-8')
-        else:    # already bytes
-            text += end.encode('utf-8')
-        sys.stdout.buffer.write(text)
+def print_(text, end=None):
+    """Always emit text as utf-8.  Useful when piping output elsewhere."""
+    if end is None:
+        end = os.linesep
+    if isinstance(text, str):
+        text = (text + end).encode('utf-8')
+    else:    # already bytes
+        text += end.encode('utf-8')
+    sys.stdout.buffer.write(text)
 
 
 def get_real_cwd():
@@ -56,13 +47,13 @@ def add_arc_fix_str(lintline, bad_line, to_remove, to_add,
     # that they can interoperate, and ensures that we use byte indexes instead
     # of Unicode character indexes (because the autopatcher expects the
     # former).
-    if isinstance(lintline, unicode):
+    if isinstance(lintline, str):
         lintline = lintline.encode('utf-8')
-    if isinstance(bad_line, unicode):
+    if isinstance(bad_line, str):
         bad_line = bad_line.encode('utf-8')
-    if isinstance(to_add, unicode):
+    if isinstance(to_add, str):
         to_add = to_add.encode('utf-8')
-    if isinstance(to_remove, unicode):
+    if isinstance(to_remove, str):
         to_remove = to_remove.encode('utf-8')
 
     (location, errcode, msg) = lintline.split(' ', 2)
@@ -76,7 +67,7 @@ def add_arc_fix_str(lintline, bad_line, to_remove, to_add,
     if not to_remove:
         return lintline + "\0\0%s\0" % to_add
 
-    if not isinstance(to_remove, basestring):
+    if not isinstance(to_remove, str):
         # `to_remove` is a regexp.
         if search_backwards:
             # Match the last instance of `to_remove` before col.

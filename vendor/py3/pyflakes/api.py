@@ -3,18 +3,18 @@ API for the command-line I{pyflakes} tool.
 """
 from __future__ import with_statement
 
-import sys
+import ast
 import os
+import platform
 import re
-import _ast
+import sys
 
 from pyflakes import checker, __version__
 from pyflakes import reporter as modReporter
 
 __all__ = ['check', 'checkPath', 'checkRecursive', 'iterSourceCode', 'main']
 
-
-PYTHON_SHEBANG_REGEX = re.compile(br'^#!.*\bpython[23w]?\b\s*$')
+PYTHON_SHEBANG_REGEX = re.compile(br'^#!.*\bpython([23](\.\d+)?|w)?[dmu]?\s')
 
 
 def check(codeString, filename, reporter=None):
@@ -38,7 +38,7 @@ def check(codeString, filename, reporter=None):
         reporter = modReporter._makeDefaultReporter()
     # First, compile into an AST and handle syntax errors.
     try:
-        tree = compile(codeString, filename, "exec", _ast.PyCF_ONLY_AST)
+        tree = ast.parse(codeString, filename=filename)
     except SyntaxError:
         value = sys.exc_info()[1]
         msg = value.args[0]
@@ -70,7 +70,8 @@ def check(codeString, filename, reporter=None):
         reporter.unexpectedError(filename, 'problem decoding source')
         return 1
     # Okay, it's syntactically valid.  Now check it.
-    w = checker.Checker(tree, filename)
+    file_tokens = checker.make_tokens(codeString)
+    w = checker.Checker(tree, file_tokens=file_tokens, filename=filename)
     w.messages.sort(key=lambda m: m.lineno)
     for warning in w.messages:
         reporter.flake(warning)
@@ -89,22 +90,8 @@ def checkPath(filename, reporter=None):
     if reporter is None:
         reporter = modReporter._makeDefaultReporter()
     try:
-        # in Python 2.6, compile() will choke on \r\n line endings. In later
-        # versions of python it's smarter, and we want binary mode to give
-        # compile() the best opportunity to do the right thing WRT text
-        # encodings.
-        if sys.version_info < (2, 7):
-            mode = 'rU'
-        else:
-            mode = 'rb'
-
-        with open(filename, mode) as f:
+        with open(filename, 'rb') as f:
             codestr = f.read()
-        if sys.version_info < (2, 7):
-            codestr += '\n'     # Work around for Python <= 2.6
-    except UnicodeError:
-        reporter.unexpectedError(filename, 'problem decoding source')
-        return 1
     except IOError:
         msg = sys.exc_info()[1]
         reporter.unexpectedError(filename, msg.args[1])
@@ -117,6 +104,10 @@ def isPythonFile(filename):
     if filename.endswith('.py'):
         return True
 
+    # Avoid obvious Emacs backup files
+    if filename.endswith("~"):
+        return False
+
     max_bytes = 128
 
     try:
@@ -127,8 +118,7 @@ def isPythonFile(filename):
     except IOError:
         return False
 
-    first_line = text.splitlines()[0]
-    return PYTHON_SHEBANG_REGEX.match(first_line)
+    return PYTHON_SHEBANG_REGEX.match(text)
 
 
 def iterSourceCode(paths):
@@ -193,16 +183,28 @@ def _exitOnSignal(sigName, message):
         pass
 
 
+def _get_version():
+    """
+    Retrieve and format package version along with python version & OS used
+    """
+    return ('%s Python %s on %s' %
+            (__version__, platform.python_version(), platform.system()))
+
+
 def main(prog=None, args=None):
     """Entry point for the script "pyflakes"."""
-    import optparse
+    import argparse
 
     # Handle "Keyboard Interrupt" and "Broken pipe" gracefully
     _exitOnSignal('SIGINT', '... stopped')
     _exitOnSignal('SIGPIPE', 1)
 
-    parser = optparse.OptionParser(prog=prog, version=__version__)
-    (__, args) = parser.parse_args(args=args)
+    parser = argparse.ArgumentParser(prog=prog,
+                                     description='Check Python source files for errors')
+    parser.add_argument('-V', '--version', action='version', version=_get_version())
+    parser.add_argument('path', nargs='*',
+                        help='Path(s) of Python file(s) to check. STDIN if not given.')
+    args = parser.parse_args(args=args).path
     reporter = modReporter._makeDefaultReporter()
     if args:
         warnings = checkRecursive(args, reporter)
