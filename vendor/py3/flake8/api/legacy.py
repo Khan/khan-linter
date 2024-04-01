@@ -3,17 +3,19 @@
 Previously, users would import :func:`get_style_guide` from ``flake8.engine``.
 In 3.0 we no longer have an "engine" module but we maintain the API from it.
 """
+import argparse
 import logging
 import os.path
 
 import flake8
 from flake8.formatting import base as formatter
 from flake8.main import application as app
+from flake8.options import config
 
 LOG = logging.getLogger(__name__)
 
 
-__all__ = ('get_style_guide',)
+__all__ = ("get_style_guide",)
 
 
 def get_style_guide(**kwargs):
@@ -27,13 +29,21 @@ def get_style_guide(**kwargs):
         :class:`StyleGuide`
     """
     application = app.Application()
-    application.parse_preliminary_options_and_args([])
-    flake8.configure_logging(
-        application.prelim_opts.verbose, application.prelim_opts.output_file)
-    application.make_config_finder()
-    application.find_plugins()
+    prelim_opts, remaining_args = application.parse_preliminary_options([])
+    flake8.configure_logging(prelim_opts.verbose, prelim_opts.output_file)
+    config_finder = config.ConfigFileFinder(
+        application.program,
+        prelim_opts.append_config,
+        config_file=prelim_opts.config,
+        ignore_config_files=prelim_opts.isolated,
+    )
+
+    application.find_plugins(config_finder)
     application.register_plugin_options()
-    application.parse_configuration_and_cli([])
+    application.parse_configuration_and_cli(
+        config_finder,
+        remaining_args,
+    )
     # We basically want application.initialize to be called but with these
     # options set instead before we make our formatter, notifier, internal
     # style guide and file checker manager.
@@ -45,7 +55,6 @@ def get_style_guide(**kwargs):
         except AttributeError:
             LOG.error('Could not update option "%s"', key)
     application.make_formatter()
-    application.make_notifier()
     application.make_guide()
     application.make_file_checker_manager()
     return StyleGuide(application)
@@ -72,10 +81,10 @@ class StyleGuide(object):
         self._file_checker_manager = application.file_checker_manager
 
     @property
-    def options(self):
+    def options(self):  # type: () -> argparse.Namespace
         """Return application's options.
 
-        An instance of :class:`optparse.Values` containing parsed options.
+        An instance of :class:`argparse.Namespace` containing parsed options.
         """
         return self._application.options
 
@@ -113,18 +122,22 @@ class StyleGuide(object):
         :rtype:
             bool
         """
-        return (self._file_checker_manager.is_path_excluded(filename) or
-                (parent and
-                    self._file_checker_manager.is_path_excluded(
-                        os.path.join(parent, filename))))
+        return self._file_checker_manager.is_path_excluded(filename) or (
+            parent
+            and self._file_checker_manager.is_path_excluded(
+                os.path.join(parent, filename)
+            )
+        )
 
     def init_report(self, reporter=None):
         """Set up a formatter for this run of Flake8."""
         if reporter is None:
             return
         if not issubclass(reporter, formatter.BaseFormatter):
-            raise ValueError("Report should be subclass of "
-                             "flake8.formatter.BaseFormatter.")
+            raise ValueError(
+                "Report should be subclass of "
+                "flake8.formatter.BaseFormatter."
+            )
         self._application.formatter = None
         self._application.make_formatter(reporter)
         self._application.guide = None
@@ -197,6 +210,6 @@ class Report(object):
             list
         """
         return [
-            '{} {} {}'.format(s.count, s.error_code, s.message)
+            "{} {} {}".format(s.count, s.error_code, s.message)
             for s in self._stats.statistics_for(violation)
         ]

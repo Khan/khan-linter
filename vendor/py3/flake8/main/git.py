@@ -16,7 +16,7 @@ import tempfile
 from flake8 import defaults
 from flake8 import exceptions
 
-__all__ = ('hook', 'install')
+__all__ = ("hook", "install")
 
 
 def hook(lazy=False, strict=False):
@@ -39,10 +39,11 @@ def hook(lazy=False, strict=False):
     """
     # NOTE(sigmavirus24): Delay import of application until we need it.
     from flake8.main import application
+
     app = application.Application()
     with make_temporary_directory() as tempdir:
         filepaths = list(copy_indexed_files_to(tempdir, lazy))
-        app.initialize(['.'])
+        app.initialize(["."])
         app.options.exclude = update_excludes(app.options.exclude, tempdir)
         app.options._running_from_vcs = True
         # Apparently there are times when there are no files to check (e.g.,
@@ -81,22 +82,19 @@ def install():
     if git_directory is None or not os.path.exists(git_directory):
         return False
 
-    hooks_directory = os.path.join(git_directory, 'hooks')
+    hooks_directory = os.path.join(git_directory, "hooks")
     if not os.path.exists(hooks_directory):
         os.mkdir(hooks_directory)
 
     pre_commit_file = os.path.abspath(
-        os.path.join(hooks_directory, 'pre-commit')
+        os.path.join(hooks_directory, "pre-commit")
     )
     if os.path.exists(pre_commit_file):
-        raise exceptions.GitHookAlreadyExists(
-            'File already exists',
-            path=pre_commit_file,
-        )
+        raise exceptions.GitHookAlreadyExists(path=pre_commit_file)
 
     executable = get_executable()
 
-    with open(pre_commit_file, 'w') as fd:
+    with open(pre_commit_file, "w") as fd:
         fd.write(_HOOK_TEMPLATE.format(executable=executable))
 
     # NOTE(sigmavirus24): The following sets:
@@ -108,8 +106,8 @@ def install():
     pre_commit_permissions = stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH
     os.chmod(pre_commit_file, pre_commit_permissions)
 
-    print('git pre-commit hook installed, for configuration options see')
-    print('http://flake8.pycqa.org/en/latest/user/using-hooks.html')
+    print("git pre-commit hook installed, for configuration options see")
+    print("http://flake8.pycqa.org/en/latest/user/using-hooks.html")
 
     return True
 
@@ -117,11 +115,11 @@ def install():
 def get_executable():
     if sys.executable is not None:
         return sys.executable
-    return '/usr/bin/env python'
+    return "/usr/bin/env python"
 
 
 def find_git_directory():
-    rev_parse = piped_process(['git', 'rev-parse', '--git-dir'])
+    rev_parse = piped_process(["git", "rev-parse", "--git-dir"])
 
     (stdout, _) = rev_parse.communicate()
     stdout = to_text(stdout)
@@ -132,6 +130,12 @@ def find_git_directory():
 
 
 def copy_indexed_files_to(temporary_directory, lazy):
+    # some plugins (e.g. flake8-isort) need these files to run their checks
+    setup_cfgs = find_setup_cfgs(lazy)
+    for filename in setup_cfgs:
+        contents = get_staged_contents_from(filename)
+        copy_file_to(temporary_directory, filename, contents)
+
     modified_files = find_modified_files(lazy)
     for filename in modified_files:
         contents = get_staged_contents_from(filename)
@@ -140,12 +144,13 @@ def copy_indexed_files_to(temporary_directory, lazy):
 
 def copy_file_to(destination_directory, filepath, contents):
     directory, filename = os.path.split(os.path.abspath(filepath))
-    temporary_directory = make_temporary_directory_from(destination_directory,
-                                                        directory)
+    temporary_directory = make_temporary_directory_from(
+        destination_directory, directory
+    )
     if not os.path.exists(temporary_directory):
         os.makedirs(temporary_directory)
     temporary_filepath = os.path.join(temporary_directory, filename)
-    with open(temporary_filepath, 'wb') as fd:
+    with open(temporary_filepath, "wb") as fd:
         fd.write(contents)
     return temporary_filepath
 
@@ -158,11 +163,15 @@ def make_temporary_directory_from(destination, directory):
 
 def find_modified_files(lazy):
     diff_index_cmd = [
-        'git', 'diff-index', '--cached', '--name-only',
-        '--diff-filter=ACMRTUXB', 'HEAD'
+        "git",
+        "diff-index",
+        "--cached",
+        "--name-only",
+        "--diff-filter=ACMRTUXB",
+        "HEAD",
     ]
     if lazy:
-        diff_index_cmd.remove('--cached')
+        diff_index_cmd.remove("--cached")
 
     diff_index = piped_process(diff_index_cmd)
     (stdout, _) = diff_index.communicate()
@@ -170,8 +179,18 @@ def find_modified_files(lazy):
     return stdout.splitlines()
 
 
+def find_setup_cfgs(lazy):
+    setup_cfg_cmd = ["git", "ls-files", "--cached", "*setup.cfg"]
+    if lazy:
+        setup_cfg_cmd.remove("--cached")
+    extra_files = piped_process(setup_cfg_cmd)
+    (stdout, _) = extra_files.communicate()
+    stdout = to_text(stdout)
+    return stdout.splitlines()
+
+
 def get_staged_contents_from(filename):
-    git_show = piped_process(['git', 'show', ':{0}'.format(filename)])
+    git_show = piped_process(["git", "show", ":{0}".format(filename)])
     (stdout, _) = git_show.communicate()
     return stdout
 
@@ -185,28 +204,26 @@ def make_temporary_directory():
 
 def to_text(string):
     """Ensure that the string is text."""
-    if callable(getattr(string, 'decode', None)):
-        return string.decode('utf-8')
+    if callable(getattr(string, "decode", None)):
+        return string.decode("utf-8")
     return string
 
 
 def piped_process(command):
     return subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
 
 
 def git_config_for(parameter):
-    config = piped_process(['git', 'config', '--get', '--bool', parameter])
+    config = piped_process(["git", "config", "--get", "--bool", parameter])
     (stdout, _) = config.communicate()
     return to_text(stdout).strip()
 
 
 def config_for(parameter):
-    environment_variable = 'flake8_{0}'.format(parameter).upper()
-    git_variable = 'flake8.{0}'.format(parameter)
+    environment_variable = "flake8_{0}".format(parameter).upper()
+    git_variable = "flake8.{0}".format(parameter)
     value = os.environ.get(environment_variable, git_config_for(git_variable))
     return value.lower() in defaults.TRUTHY_VALUES
 
@@ -214,7 +231,8 @@ def config_for(parameter):
 def update_excludes(exclude_list, temporary_directory_path):
     return [
         (temporary_directory_path + pattern)
-        if os.path.isabs(pattern) else pattern
+        if os.path.isabs(pattern)
+        else pattern
         for pattern in exclude_list
     ]
 
