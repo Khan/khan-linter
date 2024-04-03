@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+
 """Hooks for git that perform linting.
 
 This file contains two git hooks:
@@ -37,8 +38,6 @@ import os
 import subprocess
 import sys
 
-import six
-
 import hook_lib
 
 
@@ -60,7 +59,7 @@ def commit_msg_hook(commit_message_file):
 
     # If the commit message is empty or unchanged from the template, abort.
     if not commit_message:
-        six.print_("Aborting commit, empty commit message")
+        print("Aborting commit, empty commit message")
         return 1
 
     try:
@@ -70,7 +69,7 @@ def commit_msg_hook(commit_message_file):
         pass
     else:
         if commit_message == _normalized_commit_message(template):
-            six.print_("Aborting commit, commit message unchanged")
+            print("Aborting commit, commit message unchanged")
             return 1
 
     # If we're a merge, don't try to do a lint-check.
@@ -181,21 +180,21 @@ def pre_push_hook(_unused_arg_remote_name, _unused_arg_remote_location):
         # Lint the files, if any. If there are any errors, print a helpful
         # message, and return a nonzero status code to abort the push.
         if files_to_lint:
-            six.print_("khan-linter: linting {} files with unpushed "
-                       "changes...".format(len(files_to_lint)))
+            print("khan-linter: linting {} files with unpushed "
+                  "changes...".format(len(files_to_lint)))
             num_errors = hook_lib.lint_files(files_to_lint)
             if num_errors > 0:
-                six.print_(
+                print(
                     '\n--- %s lint errors. Push aborted. ---' % num_errors,
                     file=sys.stderr)
-                six.print_(
+                print(
                     'Running `make fixc` may help to autofix the errors.',
                     file=sys.stderr)
                 return 1
 
     # Yay, everything went okay! Return a zero status code, in order to
     # allow the push.
-    six.print_('khan-linter: all lint checks passed', file=sys.stderr)
+    print('khan-linter: all lint checks passed', file=sys.stderr)
     return 0
 
 

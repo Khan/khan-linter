@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Fix all references to static content in .html files to use |static_url.
 
@@ -42,7 +42,6 @@ import os
 import re
 import sys
 
-import six
 
 _DEFAULT_DIRS = ['templates/']
 
@@ -102,7 +101,7 @@ def lint_one_file(filename, file_contents=None):
             # _CANDIDATE_STATIC_RE has lots of parens, so m has lots
             # of groups.  Only one of them will have content in it at
             # any one time, though.  Let's find it.
-            url_groupnum = [i for i in xrange(1, len(m.groups()) + 1)
+            url_groupnum = [i for i in range(1, len(m.groups()) + 1)
                             if m.group(i) is not None][0]
             if _STATIC_RE.match(m.group(url_groupnum)):
                 retval.append((filename, linenum_minus_one + 1,
@@ -136,8 +135,8 @@ def fix(errors):
         errors_by_file.setdefault(filename, []).append((linenum,
                                                         colnum, endcol))
 
-    for (filename, errors) in errors_by_file.iteritems():
-        six.print_('FIXING %s errors in %s' % (len(errors), filename))
+    for (filename, errors) in errors_by_file.items():
+        print('FIXING %s errors in %s' % (len(errors), filename))
         with open(filename) as f:
             lines = f.read().splitlines(True)
         # Since we change the line-length every time we munge a line,
@@ -159,10 +158,10 @@ def main(file_or_directory_names, should_fix):
     errors = lint(file_or_directory_names)
 
     for (filename, linenum, colnum, unused_endcol, error) in errors:
-        six.print_('%s:%s:%s: %s' % (filename, linenum, colnum, error))
+        print('%s:%s:%s: %s' % (filename, linenum, colnum, error))
 
     if should_fix:
-        six.print_()
+        print()
         fix(errors)
 
     return len(errors)
