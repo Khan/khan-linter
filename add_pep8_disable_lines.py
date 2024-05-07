@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 """A script to add linter ignore lines to python files within webapp.
 
 Use this when upgrading the linter so that you don't have to fix all the
@@ -35,9 +35,10 @@ def lint_with_todo_target(files, todo_target):
                 [os.path.join(os.path.dirname(__file__), 'runlint.py'),
                  '--extra-linter=',
                  file],
-                stderr=subprocess.STDOUT)
+                stderr=subprocess.STDOUT,
+            ).decode('utf-8')
         except subprocess.CalledProcessError as e:
-            lint = e.output
+            lint = e.output.decode('utf-8')
         rules_violated = ','.join(sorted(set(
             lint_violation_re.findall(lint))))
         if rules_violated:
@@ -56,9 +57,9 @@ def lint_with_todo_target(files, todo_target):
                 contents = lint_disable_lines + contents
             with open(file, 'w') as f:
                 f.writelines(contents)
-            print 'Added lint ignore line to %s' % file
+            print('Added lint ignore line to %s' % file)
         else:
-            print 'No lint problems in %s' % file
+            print('No lint problems in %s' % file)
 
 
 def main():
