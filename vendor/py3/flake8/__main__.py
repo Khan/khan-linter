@@ -1,4 +1,7 @@
 """Module allowing for ``python -m flake8 ...``."""
-from flake8.main import cli
+from __future__ import annotations
 
-cli.main()
+from flake8.main.cli import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())

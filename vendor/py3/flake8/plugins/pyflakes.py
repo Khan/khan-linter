@@ -1,22 +1,19 @@
 """Plugin built-in to Flake8 to treat pyflakes as a plugin."""
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import
+from __future__ import annotations
 
-try:
-    # The 'demandimport' breaks pyflakes and flake8.plugins.pyflakes
-    from mercurial import demandimport
-except ImportError:
-    pass
-else:
-    demandimport.disable()
+import argparse
+import ast
+import logging
 import os
-from typing import List
+from typing import Any
+from typing import Generator
 
-import pyflakes
 import pyflakes.checker
 
 from flake8 import utils
+from flake8.options.manager import OptionManager
 
+LOG = logging.getLogger(__name__)
 
 FLAKE8_PYFLAKES_CODES = {
     "UnusedImport": "F401",
@@ -51,21 +48,18 @@ FLAKE8_PYFLAKES_CODES = {
     "IfTuple": "F634",
     "BreakOutsideLoop": "F701",
     "ContinueOutsideLoop": "F702",
-    "ContinueInFinally": "F703",
     "YieldOutsideFunction": "F704",
-    "ReturnWithArgsInsideGenerator": "F705",
     "ReturnOutsideFunction": "F706",
     "DefaultExceptNotLast": "F707",
     "DoctestSyntaxError": "F721",
     "ForwardAnnotationSyntaxError": "F722",
-    "CommentAnnotationSyntaxError": "F723",
     "RedefinedWhileUnused": "F811",
-    "RedefinedInListComp": "F812",
     "UndefinedName": "F821",
     "UndefinedExport": "F822",
     "UndefinedLocal": "F823",
     "DuplicateArgument": "F831",
     "UnusedVariable": "F841",
+    "UnusedAnnotation": "F842",
     "RaiseNotImplemented": "F901",
 }
 
@@ -73,13 +67,11 @@ FLAKE8_PYFLAKES_CODES = {
 class FlakesChecker(pyflakes.checker.Checker):
     """Subclass the Pyflakes checker to conform with the flake8 API."""
 
-    name = "pyflakes"
-    version = pyflakes.__version__
     with_doctest = False
-    include_in_doctest = []  # type: List[str]
-    exclude_from_doctest = []  # type: List[str]
+    include_in_doctest: list[str] = []
+    exclude_from_doctest: list[str] = []
 
-    def __init__(self, tree, file_tokens, filename):
+    def __init__(self, tree: ast.AST, filename: str) -> None:
         """Initialize the PyFlakes plugin with an AST tree and filename."""
         filename = utils.normalize_path(filename)
         with_doctest = self.with_doctest
@@ -94,24 +86,19 @@ class FlakesChecker(pyflakes.checker.Checker):
         for exclude in self.exclude_from_doctest:
             if exclude != "" and filename.startswith(exclude):
                 with_doctest = False
-                overlaped_by = [
+                overlapped_by = [
                     include
                     for include in included_by
                     if include.startswith(exclude)
                 ]
 
-                if overlaped_by:
+                if overlapped_by:
                     with_doctest = True
 
-        super(FlakesChecker, self).__init__(
-            tree,
-            filename=filename,
-            withDoctest=with_doctest,
-            file_tokens=file_tokens,
-        )
+        super().__init__(tree, filename=filename, withDoctest=with_doctest)
 
     @classmethod
-    def add_options(cls, parser):
+    def add_options(cls, parser: OptionManager) -> None:
         """Register options for PyFlakes on the Flake8 OptionManager."""
         parser.add_option(
             "--builtins",
@@ -146,18 +133,24 @@ class FlakesChecker(pyflakes.checker.Checker):
         )
 
     @classmethod
-    def parse_options(cls, options):
+    def parse_options(cls, options: argparse.Namespace) -> None:
         """Parse option values from Flake8's OptionManager."""
         if options.builtins:
             cls.builtIns = cls.builtIns.union(options.builtins)
         cls.with_doctest = options.doctests
+
+        if options.include_in_doctest or options.exclude_from_doctest:
+            LOG.warning(
+                "--include-in-doctest / --exclude-from-doctest will be "
+                "removed in a future version.  see PyCQA/flake8#1747"
+            )
 
         included_files = []
         for included_file in options.include_in_doctest:
             if included_file == "":
                 continue
             if not included_file.startswith((os.sep, "./", "~/")):
-                included_files.append("./" + included_file)
+                included_files.append(f"./{included_file}")
             else:
                 included_files.append(included_file)
         cls.include_in_doctest = utils.normalize_paths(included_files)
@@ -167,7 +160,7 @@ class FlakesChecker(pyflakes.checker.Checker):
             if excluded_file == "":
                 continue
             if not excluded_file.startswith((os.sep, "./", "~/")):
-                excluded_files.append("./" + excluded_file)
+                excluded_files.append(f"./{excluded_file}")
             else:
                 excluded_files.append(excluded_file)
         cls.exclude_from_doctest = utils.normalize_paths(excluded_files)
@@ -177,13 +170,13 @@ class FlakesChecker(pyflakes.checker.Checker):
         )
         if inc_exc:
             raise ValueError(
-                '"%s" was specified in both the '
-                "include-in-doctest and exclude-from-doctest "
-                "options. You are not allowed to specify it in "
-                "both for doctesting." % inc_exc
+                f"{inc_exc!r} was specified in both the "
+                f"include-in-doctest and exclude-from-doctest "
+                f"options. You are not allowed to specify it in "
+                f"both for doctesting."
             )
 
-    def run(self):
+    def run(self) -> Generator[tuple[int, int, str, type[Any]], None, None]:
         """Run the plugin."""
         for message in self.messages:
             col = getattr(message, "col", 0)

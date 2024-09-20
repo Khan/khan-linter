@@ -1,14 +1,13 @@
 """Contains the logic for all of the default options for Flake8."""
+from __future__ import annotations
+
 import argparse
-import functools
 
 from flake8 import defaults
-from flake8.main import debug
-from flake8.main import vcs
+from flake8.options.manager import OptionManager
 
 
-def register_preliminary_options(parser):
-    # type: (argparse.ArgumentParser) -> None
+def stage1_arg_parser() -> argparse.ArgumentParser:
     """Register the preliminary options on our OptionManager.
 
     The preliminary options include:
@@ -18,35 +17,37 @@ def register_preliminary_options(parser):
     - ``--append-config``
     - ``--config``
     - ``--isolated``
+    - ``--enable-extensions``
     """
-    add_argument = parser.add_argument
+    parser = argparse.ArgumentParser(add_help=False)
 
-    add_argument(
+    parser.add_argument(
         "-v",
         "--verbose",
         default=0,
         action="count",
-        help="Print more information about what is happening in flake8."
-        " This option is repeatable and will increase verbosity each "
+        help="Print more information about what is happening in flake8. "
+        "This option is repeatable and will increase verbosity each "
         "time it is repeated.",
     )
 
-    add_argument(
+    parser.add_argument(
         "--output-file", default=None, help="Redirect report to a file."
     )
 
     # Config file options
 
-    add_argument(
+    parser.add_argument(
         "--append-config",
         action="append",
+        default=[],
         help="Provide extra config files to parse in addition to the files "
         "found by Flake8 by default. These files are the last ones read "
         "and so they take the highest precedence when multiple files "
         "provide the same option.",
     )
 
-    add_argument(
+    parser.add_argument(
         "--config",
         default=None,
         help="Path to the config file that will be the authoritative config "
@@ -54,22 +55,36 @@ def register_preliminary_options(parser):
         "configuration files.",
     )
 
-    add_argument(
+    parser.add_argument(
         "--isolated",
         default=False,
         action="store_true",
         help="Ignore all configuration files.",
     )
 
+    # Plugin enablement options
+
+    parser.add_argument(
+        "--enable-extensions",
+        help="Enable plugins and extensions that are otherwise disabled "
+        "by default",
+    )
+
+    parser.add_argument(
+        "--require-plugins",
+        help="Require specific plugins to be installed before running",
+    )
+
+    return parser
+
 
 class JobsArgument:
     """Type callback for the --jobs argument."""
 
-    def __init__(self, arg):  # type: (str) -> None
+    def __init__(self, arg: str) -> None:
         """Parse and validate the --jobs argument.
 
-        :param str arg:
-            The argument passed by argparse for validation
+        :param arg: The argument passed by argparse for validation
         """
         self.is_auto = False
         self.n_jobs = -1
@@ -79,22 +94,26 @@ class JobsArgument:
             self.n_jobs = int(arg)
         else:
             raise argparse.ArgumentTypeError(
-                "{!r} must be 'auto' or an integer.".format(arg),
+                f"{arg!r} must be 'auto' or an integer.",
             )
 
-    def __str__(self):
+    def __repr__(self) -> str:
+        """Representation for debugging."""
+        return f"{type(self).__name__}({str(self)!r})"
+
+    def __str__(self) -> str:
         """Format our JobsArgument class."""
         return "auto" if self.is_auto else str(self.n_jobs)
 
 
-def register_default_options(option_manager):
+def register_default_options(option_manager: OptionManager) -> None:
     """Register the default options on our OptionManager.
 
     The default options include:
 
     - ``-q``/``--quiet``
+    - ``--color``
     - ``--count``
-    - ``--diff``
     - ``--exclude``
     - ``--extend-exclude``
     - ``--filename``
@@ -107,10 +126,10 @@ def register_default_options(option_manager):
     - ``--max-doc-length``
     - ``--indent-size``
     - ``--select``
+    - ``--extend-select``
     - ``--disable-noqa``
     - ``--show-source``
     - ``--statistics``
-    - ``--enable-extensions``
     - ``--exit-zero``
     - ``-j``/``--jobs``
     - ``--tee``
@@ -119,7 +138,6 @@ def register_default_options(option_manager):
     """
     add_option = option_manager.add_option
 
-    # pep8 options
     add_option(
         "-q",
         "--quiet",
@@ -130,18 +148,18 @@ def register_default_options(option_manager):
     )
 
     add_option(
-        "--count",
-        action="store_true",
-        parse_from_config=True,
-        help="Print total number of errors and warnings to standard error and"
-        " set the exit code to 1 if total is not empty.",
+        "--color",
+        choices=("auto", "always", "never"),
+        default="auto",
+        help="Whether to use color in output.  Defaults to `%(default)s`.",
     )
 
     add_option(
-        "--diff",
+        "--count",
         action="store_true",
-        help="Report changes only within line number ranges in the unified "
-        "diff provided on standard in by the user.",
+        parse_from_config=True,
+        help="Print total number of errors to standard output after "
+        "all other output.",
     )
 
     add_option(
@@ -151,8 +169,8 @@ def register_default_options(option_manager):
         comma_separated_list=True,
         parse_from_config=True,
         normalize_paths=True,
-        help="Comma-separated list of files or directories to exclude."
-        " (Default: %(default)s)",
+        help="Comma-separated list of files or directories to exclude. "
+        "(Default: %(default)s)",
     )
 
     add_option(
@@ -162,8 +180,8 @@ def register_default_options(option_manager):
         parse_from_config=True,
         comma_separated_list=True,
         normalize_paths=True,
-        help="Comma-separated list of files or directories to add to the list"
-        " of excluded ones.",
+        help="Comma-separated list of files or directories to add to the list "
+        "of excluded ones.",
     )
 
     add_option(
@@ -179,9 +197,9 @@ def register_default_options(option_manager):
     add_option(
         "--stdin-display-name",
         default="stdin",
-        help="The name used when reporting errors from code passed via stdin."
-        " This is useful for editors piping the file contents to flake8."
-        " (Default: %(default)s)",
+        help="The name used when reporting errors from code passed via stdin. "
+        "This is useful for editors piping the file contents to flake8. "
+        "(Default: %(default)s)",
     )
 
     # TODO(sigmavirus24): Figure out --first/--repeat
@@ -194,35 +212,44 @@ def register_default_options(option_manager):
         metavar="format",
         default="default",
         parse_from_config=True,
-        help="Format errors according to the chosen formatter.",
+        help=(
+            f"Format errors according to the chosen formatter "
+            f"({', '.join(sorted(option_manager.formatter_names))}) "
+            f"or a format string containing %%-style "
+            f"mapping keys (code, col, path, row, text). "
+            f"For example, "
+            f"``--format=pylint`` or ``--format='%%(path)s %%(code)s'``. "
+            f"(Default: %(default)s)"
+        ),
     )
 
     add_option(
         "--hang-closing",
         action="store_true",
         parse_from_config=True,
-        help="Hang closing bracket instead of matching indentation of opening"
-        " bracket's line.",
+        help="Hang closing bracket instead of matching indentation of opening "
+        "bracket's line.",
     )
 
     add_option(
         "--ignore",
         metavar="errors",
-        default=",".join(defaults.IGNORE),
         parse_from_config=True,
         comma_separated_list=True,
-        help="Comma-separated list of errors and warnings to ignore (or skip)."
-        " For example, ``--ignore=E4,E51,W234``. (Default: %(default)s)",
+        help=(
+            f"Comma-separated list of error codes to ignore (or skip). "
+            f"For example, ``--ignore=E4,E51,W234``. "
+            f"(Default: {','.join(defaults.IGNORE)})"
+        ),
     )
 
     add_option(
         "--extend-ignore",
         metavar="errors",
-        default="",
         parse_from_config=True,
         comma_separated_list=True,
-        help="Comma-separated list of errors and warnings to add to the list"
-        " of ignored ones. For example, ``--extend-ignore=E4,E51,W234``.",
+        help="Comma-separated list of error codes to add to the list of "
+        "ignored ones. For example, ``--extend-ignore=E4,E51,W234``.",
     )
 
     add_option(
@@ -261,17 +288,34 @@ def register_default_options(option_manager):
         metavar="n",
         default=defaults.INDENT_SIZE,
         parse_from_config=True,
-        help="Number of spaces used for indentation (Default: %default)",
+        help="Number of spaces used for indentation (Default: %(default)s)",
     )
 
     add_option(
         "--select",
         metavar="errors",
-        default=",".join(defaults.SELECT),
         parse_from_config=True,
         comma_separated_list=True,
-        help="Comma-separated list of errors and warnings to enable."
-        " For example, ``--select=E4,E51,W234``. (Default: %(default)s)",
+        help=(
+            "Limit the reported error codes to codes prefix-matched by this "
+            "list.  "
+            "You usually do not need to specify this option as the default "
+            "includes all installed plugin codes.  "
+            "For example, ``--select=E4,E51,W234``."
+        ),
+    )
+
+    add_option(
+        "--extend-select",
+        metavar="errors",
+        parse_from_config=True,
+        comma_separated_list=True,
+        help=(
+            "Add additional error codes to the default ``--select``.  "
+            "You usually do not need to specify this option as the default "
+            "includes all installed plugin codes.  "
+            "For example, ``--extend-select=E4,E51,W234``."
+        ),
     )
 
     add_option(
@@ -303,31 +347,15 @@ def register_default_options(option_manager):
         "--statistics",
         action="store_true",
         parse_from_config=True,
-        help="Count errors and warnings.",
+        help="Count errors.",
     )
 
     # Flake8 options
-    add_option(
-        "--enable-extensions",
-        default="",
-        parse_from_config=True,
-        comma_separated_list=True,
-        help="Enable plugins and extensions that are otherwise disabled "
-        "by default",
-    )
 
     add_option(
         "--exit-zero",
         action="store_true",
         help='Exit with status code "0" even if there are errors.',
-    )
-
-    add_option(
-        "--install-hook",
-        action=vcs.InstallAction,
-        choices=vcs.choices(),
-        help="Install a hook that is run prior to a commit for the supported "
-        "version control system.",
     )
 
     add_option(
@@ -338,8 +366,8 @@ def register_default_options(option_manager):
         type=JobsArgument,
         help="Number of subprocesses to use to run checks in parallel. "
         'This is ignored on Windows. The default, "auto", will '
-        "auto-detect the number of processors available to use."
-        " (Default: %(default)s)",
+        "auto-detect the number of processors available to use. "
+        "(Default: %(default)s)",
     )
 
     add_option(
@@ -363,9 +391,6 @@ def register_default_options(option_manager):
 
     add_option(
         "--bug-report",
-        action=functools.partial(
-            debug.DebugAction, option_manager=option_manager
-        ),
-        nargs=0,
+        action="store_true",
         help="Print information necessary when preparing a bug report",
     )

@@ -1,44 +1,42 @@
 """Statistic collection logic for Flake8."""
-import collections
-from typing import Dict, Generator, List, Optional
+from __future__ import annotations
 
-if False:  # `typing.TYPE_CHECKING` was introduced in 3.5.2
-    from flake8.style_guide import Violation
+from typing import Generator
+from typing import NamedTuple
+
+from flake8.violation import Violation
 
 
-class Statistics(object):
+class Statistics:
     """Manager of aggregated statistics for a run of Flake8."""
 
-    def __init__(self):  # type: () -> None
+    def __init__(self) -> None:
         """Initialize the underlying dictionary for our statistics."""
-        self._store = {}  # type: Dict[Key, Statistic]
+        self._store: dict[Key, Statistic] = {}
 
-    def error_codes(self):  # type: () -> List[str]
+    def error_codes(self) -> list[str]:
         """Return all unique error codes stored.
 
         :returns:
             Sorted list of error codes.
-        :rtype:
-            list(str)
         """
         return sorted({key.code for key in self._store})
 
-    def record(self, error):  # type: (Violation) -> None
+    def record(self, error: Violation) -> None:
         """Add the fact that the error was seen in the file.
 
         :param error:
             The Violation instance containing the information about the
             violation.
-        :type error:
-            flake8.style_guide.Violation
         """
         key = Key.create_from(error)
         if key not in self._store:
             self._store[key] = Statistic.create_from(error)
         self._store[key].increment()
 
-    def statistics_for(self, prefix, filename=None):
-        # type: (str, Optional[str]) -> Generator[Statistic, None, None]
+    def statistics_for(
+        self, prefix: str, filename: str | None = None
+    ) -> Generator[Statistic, None, None]:
         """Generate statistics for the prefix and filename.
 
         If you have a :class:`Statistics` object that has recorded errors,
@@ -54,9 +52,9 @@ class Statistics(object):
             >>> stats.statistics_for('W')
             <generator ...>
 
-        :param str prefix:
+        :param prefix:
             The error class or specific error code to find statistics for.
-        :param str filename:
+        :param filename:
             (Optional) The filename to further filter results by.
         :returns:
             Generator of instances of :class:`Statistic`
@@ -68,7 +66,7 @@ class Statistics(object):
             yield self._store[error_code]
 
 
-class Key(collections.namedtuple("Key", ["filename", "code"])):
+class Key(NamedTuple):
     """Simple key structure for the Statistics dictionary.
 
     To make things clearer, easier to read, and more understandable, we use a
@@ -76,42 +74,42 @@ class Key(collections.namedtuple("Key", ["filename", "code"])):
     Statistics object.
     """
 
-    __slots__ = ()
+    filename: str
+    code: str
 
     @classmethod
-    def create_from(cls, error):  # type: (Violation) -> Key
-        """Create a Key from :class:`flake8.style_guide.Violation`."""
+    def create_from(cls, error: Violation) -> Key:
+        """Create a Key from :class:`flake8.violation.Violation`."""
         return cls(filename=error.filename, code=error.code)
 
-    def matches(self, prefix, filename):  # type: (str, Optional[str]) -> bool
+    def matches(self, prefix: str, filename: str | None) -> bool:
         """Determine if this key matches some constraints.
 
-        :param str prefix:
+        :param prefix:
             The error code prefix that this key's error code should start with.
-        :param str filename:
+        :param filename:
             The filename that we potentially want to match on. This can be
             None to only match on error prefix.
         :returns:
             True if the Key's code starts with the prefix and either filename
             is None, or the Key's filename matches the value passed in.
-        :rtype:
-            bool
         """
         return self.code.startswith(prefix) and (
             filename is None or self.filename == filename
         )
 
 
-class Statistic(object):
+class Statistic:
     """Simple wrapper around the logic of each statistic.
 
     Instead of maintaining a simple but potentially hard to reason about
-    tuple, we create a namedtuple which has attributes and a couple
+    tuple, we create a class which has attributes and a couple
     convenience methods on it.
     """
 
-    def __init__(self, error_code, filename, message, count):
-        # type: (str, str, str, int) -> None
+    def __init__(
+        self, error_code: str, filename: str, message: str, count: int
+    ) -> None:
         """Initialize our Statistic."""
         self.error_code = error_code
         self.filename = filename
@@ -119,8 +117,8 @@ class Statistic(object):
         self.count = count
 
     @classmethod
-    def create_from(cls, error):  # type: (Violation) -> Statistic
-        """Create a Statistic from a :class:`flake8.style_guide.Violation`."""
+    def create_from(cls, error: Violation) -> Statistic:
+        """Create a Statistic from a :class:`flake8.violation.Violation`."""
         return cls(
             error_code=error.code,
             filename=error.filename,
@@ -128,6 +126,6 @@ class Statistic(object):
             count=0,
         )
 
-    def increment(self):  # type: () -> None
+    def increment(self) -> None:
         """Increment the number of times we've seen this error in this file."""
         self.count += 1

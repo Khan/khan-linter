@@ -1,3 +1,31 @@
+Metadata-Version: 2.1
+Name: mccabe
+Version: 0.7.0
+Summary: McCabe checker, plugin for flake8
+Home-page: https://github.com/pycqa/mccabe
+Author: Tarek Ziade
+Author-email: tarek@ziade.org
+Maintainer: Ian Stapleton Cordasco
+Maintainer-email: graffatcolmingov@gmail.com
+License: Expat license
+Keywords: flake8 mccabe
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Software Development :: Quality Assurance
+Requires-Python: >=3.6
+License-File: LICENSE
+
 McCabe complexity checker
 =========================
 
@@ -9,7 +37,7 @@ This module provides a plugin for ``flake8``, the Python code checker.
 Installation
 ------------
 
-You can install, upgrade, uninstall ``mccabe`` with these commands::
+You can install, upgrade, or uninstall ``mccabe`` with these commands::
 
   $ pip install mccabe
   $ pip install --upgrade mccabe
@@ -33,7 +61,7 @@ The complexity checker can be used directly::
 Plugin for Flake8
 -----------------
 
-When both ``flake8 2.0`` and ``mccabe`` are installed, the plugin is
+When both ``flake8 2+`` and ``mccabe`` are installed, the plugin is
 available in ``flake8``::
 
   $ flake8 --version
@@ -41,14 +69,22 @@ available in ``flake8``::
 
 By default the plugin is disabled.  Use the ``--max-complexity`` switch to
 enable it.  It will emit a warning if the McCabe complexity of a function is
-higher that the value::
+higher than the provided value::
 
     $ flake8 --max-complexity 10 coolproject
     ...
     coolproject/mod.py:1204:1: C901 'CoolFactory.prepare' is too complex (14)
 
-This feature is quite useful to detect over-complex code.  According to McCabe,
+This feature is quite useful for detecting over-complex code.  According to McCabe,
 anything that goes beyond 10 is too complex.
+
+Flake8 has many features that mccabe does not provide. Flake8 allows users to
+ignore violations reported by plugins with ``# noqa``. Read more about this in
+`their documentation
+<http://flake8.pycqa.org/en/latest/user/violations.html#in-line-ignoring-errors>`__.
+To silence violations reported by ``mccabe``, place your ``# noqa: C901`` on
+the function definition line, where the error is reported for (possibly a
+decorator).
 
 
 Links
@@ -56,14 +92,25 @@ Links
 
 * Feedback and ideas: http://mail.python.org/mailman/listinfo/code-quality
 
-* Cyclomatic complexity: http://en.wikipedia.org/wiki/Cyclomatic_complexity.
+* Cyclomatic complexity: http://en.wikipedia.org/wiki/Cyclomatic_complexity
 
 * Ned Batchelder's script:
   http://nedbatchelder.com/blog/200803/python_code_complexity_microtool.html
 
+* McCabe complexity: http://en.wikipedia.org/wiki/Cyclomatic_complexity
+
 
 Changes
 -------
+
+0.7.0 - 2021-01-23
+``````````````````
+
+* Drop support for all versions of Python lower than 3.6
+
+* Add support for Python 3.8, 3.9, and 3.10
+
+* Fix option declaration for Flake8
 
 0.6.1 - 2017-01-26
 ``````````````````

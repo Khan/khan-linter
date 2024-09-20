@@ -1,14 +1,11 @@
-"""Expose backports in a single place."""
+from __future__ import annotations
+
 import sys
+import tokenize
 
-if sys.version_info >= (3,):  # pragma: no cover (PY3+)
-    from functools import lru_cache
-else:  # pragma: no cover (<PY3)
-    from functools32 import lru_cache
-
-if sys.version_info >= (3, 8):  # pragma: no cover (PY38+)
-    import importlib.metadata as importlib_metadata
-else:  # pragma: no cover (<PY38)
-    import importlib_metadata
-
-__all__ = ("lru_cache", "importlib_metadata")
+if sys.version_info >= (3, 12):
+    FSTRING_START = tokenize.FSTRING_START
+    FSTRING_MIDDLE = tokenize.FSTRING_MIDDLE
+    FSTRING_END = tokenize.FSTRING_END
+else:
+    FSTRING_START = FSTRING_MIDDLE = FSTRING_END = -1
