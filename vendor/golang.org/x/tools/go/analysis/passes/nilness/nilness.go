@@ -2,51 +2,28 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package nilness inspects the control-flow graph of an SSA function
-// and reports errors such as nil pointer dereferences and degenerate
-// nil pointer comparisons.
 package nilness
 
 import (
+	_ "embed"
 	"fmt"
 	"go/token"
 	"go/types"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/buildssa"
+	"golang.org/x/tools/go/analysis/passes/internal/analysisutil"
 	"golang.org/x/tools/go/ssa"
+	"golang.org/x/tools/internal/typeparams"
 )
 
-const Doc = `check for redundant or impossible nil comparisons
-
-The nilness checker inspects the control-flow graph of each function in
-a package and reports nil pointer dereferences and degenerate nil
-pointers. A degenerate comparison is of the form x==nil or x!=nil where x
-is statically known to be nil or non-nil. These are often a mistake,
-especially in control flow related to errors.
-
-This check reports conditions such as:
-
-	if f == nil { // impossible condition (f is a function)
-	}
-
-and:
-
-	p := &v
-	...
-	if p != nil { // tautological condition
-	}
-
-and:
-
-	if p == nil {
-		print(*p) // nil dereference
-	}
-`
+//go:embed doc.go
+var doc string
 
 var Analyzer = &analysis.Analyzer{
 	Name:     "nilness",
-	Doc:      Doc,
+	Doc:      analysisutil.MustExtractDoc(doc, "nilness"),
+	URL:      "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/nilness",
 	Run:      run,
 	Requires: []*analysis.Analyzer{buildssa.Analyzer},
 }
@@ -61,17 +38,21 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 func runFunc(pass *analysis.Pass, fn *ssa.Function) {
 	reportf := func(category string, pos token.Pos, format string, args ...interface{}) {
-		pass.Report(analysis.Diagnostic{
-			Pos:      pos,
-			Category: category,
-			Message:  fmt.Sprintf(format, args...),
-		})
+		// We ignore nil-checking ssa.Instructions
+		// that don't correspond to syntax.
+		if pos.IsValid() {
+			pass.Report(analysis.Diagnostic{
+				Pos:      pos,
+				Category: category,
+				Message:  fmt.Sprintf(format, args...),
+			})
+		}
 	}
 
 	// notNil reports an error if v is provably nil.
 	notNil := func(stack []fact, instr ssa.Instruction, v ssa.Value, descr string) {
 		if nilnessOf(stack, v) == isnil {
-			reportf("nilderef", instr.Pos(), "nil dereference in "+descr)
+			reportf("nilderef", instr.Pos(), descr)
 		}
 	}
 
@@ -93,26 +74,67 @@ func runFunc(pass *analysis.Pass, fn *ssa.Function) {
 		for _, instr := range b.Instrs {
 			switch instr := instr.(type) {
 			case ssa.CallInstruction:
-				notNil(stack, instr, instr.Common().Value,
-					instr.Common().Description())
+				// A nil receiver may be okay for type params.
+				cc := instr.Common()
+				if !(cc.IsInvoke() && typeparams.IsTypeParam(cc.Value.Type())) {
+					notNil(stack, instr, cc.Value, "nil dereference in "+cc.Description())
+				}
 			case *ssa.FieldAddr:
-				notNil(stack, instr, instr.X, "field selection")
+				notNil(stack, instr, instr.X, "nil dereference in field selection")
 			case *ssa.IndexAddr:
-				notNil(stack, instr, instr.X, "index operation")
+				switch typeparams.CoreType(instr.X.Type()).(type) {
+				case *types.Pointer: // *array
+					notNil(stack, instr, instr.X, "nil dereference in array index operation")
+				case *types.Slice:
+					// This is not necessarily a runtime error, because
+					// it is usually dominated by a bounds check.
+					if isRangeIndex(instr) {
+						notNil(stack, instr, instr.X, "range of nil slice")
+					} else {
+						notNil(stack, instr, instr.X, "index of nil slice")
+					}
+				}
 			case *ssa.MapUpdate:
-				notNil(stack, instr, instr.Map, "map update")
+				notNil(stack, instr, instr.Map, "nil dereference in map update")
+			case *ssa.Range:
+				// (Not a runtime error, but a likely mistake.)
+				notNil(stack, instr, instr.X, "range over nil map")
 			case *ssa.Slice:
 				// A nilcheck occurs in ptr[:] iff ptr is a pointer to an array.
-				if _, ok := instr.X.Type().Underlying().(*types.Pointer); ok {
-					notNil(stack, instr, instr.X, "slice operation")
+				if is[*types.Pointer](instr.X.Type().Underlying()) {
+					notNil(stack, instr, instr.X, "nil dereference in slice operation")
 				}
 			case *ssa.Store:
-				notNil(stack, instr, instr.Addr, "store")
+				notNil(stack, instr, instr.Addr, "nil dereference in store")
 			case *ssa.TypeAssert:
-				notNil(stack, instr, instr.X, "type assertion")
+				if !instr.CommaOk {
+					notNil(stack, instr, instr.X, "nil dereference in type assertion")
+				}
 			case *ssa.UnOp:
-				if instr.Op == token.MUL { // *X
-					notNil(stack, instr, instr.X, "load")
+				switch instr.Op {
+				case token.MUL: // *X
+					notNil(stack, instr, instr.X, "nil dereference in load")
+				case token.ARROW: // <-ch
+					// (Not a runtime error, but a likely mistake.)
+					notNil(stack, instr, instr.X, "receive from nil channel")
+				}
+			case *ssa.Send:
+				// (Not a runtime error, but a likely mistake.)
+				notNil(stack, instr, instr.Chan, "send to nil channel")
+			}
+		}
+
+		// Look for panics with nil value
+		for _, instr := range b.Instrs {
+			switch instr := instr.(type) {
+			case *ssa.Panic:
+				if nilnessOf(stack, instr.X) == isnil {
+					reportf("nilpanic", instr.Pos(), "panic with nil value")
+				}
+			case *ssa.SliceToArrayPointer:
+				nn := nilnessOf(stack, instr.X)
+				if nn == isnil && slice2ArrayPtrLen(instr) > 0 {
+					reportf("conversionpanic", instr.Pos(), "nil slice being cast to an array of len > 0 will always panic")
 				}
 			}
 		}
@@ -158,15 +180,15 @@ func runFunc(pass *analysis.Pass, fn *ssa.Function) {
 
 			// "if x == nil" or "if nil == y" condition; x, y are unknown.
 			if xnil == isnil || ynil == isnil {
-				var f fact
+				var newFacts facts
 				if xnil == isnil {
 					// x is nil, y is unknown:
 					// t successor learns y is nil.
-					f = fact{binop.Y, isnil}
+					newFacts = expandFacts(fact{binop.Y, isnil})
 				} else {
 					// x is nil, y is unknown:
 					// t successor learns x is nil.
-					f = fact{binop.X, isnil}
+					newFacts = expandFacts(fact{binop.X, isnil})
 				}
 
 				for _, d := range b.Dominees() {
@@ -177,14 +199,50 @@ func runFunc(pass *analysis.Pass, fn *ssa.Function) {
 					s := stack
 					if len(d.Preds) == 1 {
 						if d == tsucc {
-							s = append(s, f)
+							s = append(s, newFacts...)
 						} else if d == fsucc {
-							s = append(s, f.negate())
+							s = append(s, newFacts.negate()...)
 						}
 					}
 					visit(d, s)
 				}
 				return
+			}
+		}
+
+		// In code of the form:
+		//
+		// 	if ptr, ok := x.(*T); ok { ... } else { fsucc }
+		//
+		// the fsucc block learns that ptr == nil,
+		// since that's its zero value.
+		if If, ok := b.Instrs[len(b.Instrs)-1].(*ssa.If); ok {
+			// Handle "if ok" and "if !ok" variants.
+			cond, fsucc := If.Cond, b.Succs[1]
+			if unop, ok := cond.(*ssa.UnOp); ok && unop.Op == token.NOT {
+				cond, fsucc = unop.X, b.Succs[0]
+			}
+
+			// Match pattern:
+			//   t0 = typeassert (pointerlike)
+			//   t1 = extract t0 #0  // ptr
+			//   t2 = extract t0 #1  // ok
+			//   if t2 goto tsucc, fsucc
+			if extract1, ok := cond.(*ssa.Extract); ok && extract1.Index == 1 {
+				if assert, ok := extract1.Tuple.(*ssa.TypeAssert); ok &&
+					isNillable(assert.AssertedType) {
+					for _, pinstr := range *assert.Referrers() {
+						if extract0, ok := pinstr.(*ssa.Extract); ok &&
+							extract0.Index == 0 &&
+							extract0.Tuple == extract1.Tuple {
+							for _, d := range b.Dominees() {
+								if len(d.Preds) == 1 && d == fsucc {
+									visit(d, append(stack, fact{extract0, isnil}))
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -223,6 +281,47 @@ func (n nilness) String() string { return nilnessStrings[n+1] }
 // nilnessOf reports whether v is definitely nil, definitely not nil,
 // or unknown given the dominating stack of facts.
 func nilnessOf(stack []fact, v ssa.Value) nilness {
+	switch v := v.(type) {
+	// unwrap ChangeInterface and Slice values recursively, to detect if underlying
+	// values have any facts recorded or are otherwise known with regard to nilness.
+	//
+	// This work must be in addition to expanding facts about
+	// ChangeInterfaces during inference/fact gathering because this covers
+	// cases where the nilness of a value is intrinsic, rather than based
+	// on inferred facts, such as a zero value interface variable. That
+	// said, this work alone would only inform us when facts are about
+	// underlying values, rather than outer values, when the analysis is
+	// transitive in both directions.
+	case *ssa.ChangeInterface:
+		if underlying := nilnessOf(stack, v.X); underlying != unknown {
+			return underlying
+		}
+	case *ssa.Slice:
+		if underlying := nilnessOf(stack, v.X); underlying != unknown {
+			return underlying
+		}
+	case *ssa.SliceToArrayPointer:
+		nn := nilnessOf(stack, v.X)
+		if slice2ArrayPtrLen(v) > 0 {
+			if nn == isnil {
+				// We know that *(*[1]byte)(nil) is going to panic because of the
+				// conversion. So return unknown to the caller, prevent useless
+				// nil deference reporting due to * operator.
+				return unknown
+			}
+			// Otherwise, the conversion will yield a non-nil pointer to array.
+			// Note that the instruction can still panic if array length greater
+			// than slice length. If the value is used by another instruction,
+			// that instruction can assume the panic did not happen when that
+			// instruction is reached.
+			return isnonnil
+		}
+		// In case array length is zero, the conversion result depends on nilness of the slice.
+		if nn != unknown {
+			return nn
+		}
+	}
+
 	// Is value intrinsically nil or non-nil?
 	switch v := v.(type) {
 	case *ssa.Alloc,
@@ -239,9 +338,9 @@ func nilnessOf(stack []fact, v ssa.Value) nilness {
 		return isnonnil
 	case *ssa.Const:
 		if v.IsNil() {
-			return isnil
+			return isnil // nil or zero value of a pointer-like type
 		} else {
-			return isnonnil
+			return unknown // non-pointer
 		}
 	}
 
@@ -252,6 +351,10 @@ func nilnessOf(stack []fact, v ssa.Value) nilness {
 		}
 	}
 	return unknown
+}
+
+func slice2ArrayPtrLen(v *ssa.SliceToArrayPointer) int64 {
+	return v.Type().(*types.Pointer).Elem().Underlying().(*types.Array).Len()
 }
 
 // If b ends with an equality comparison, eq returns the operation and
@@ -268,4 +371,105 @@ func eq(b *ssa.BasicBlock) (op *ssa.BinOp, tsucc, fsucc *ssa.BasicBlock) {
 		}
 	}
 	return nil, nil, nil
+}
+
+// expandFacts takes a single fact and returns the set of facts that can be
+// known about it or any of its related values. Some operations, like
+// ChangeInterface, have transitive nilness, such that if you know the
+// underlying value is nil, you also know the value itself is nil, and vice
+// versa. This operation allows callers to match on any of the related values
+// in analyses, rather than just the one form of the value that happened to
+// appear in a comparison.
+//
+// This work must be in addition to unwrapping values within nilnessOf because
+// while this work helps give facts about transitively known values based on
+// inferred facts, the recursive check within nilnessOf covers cases where
+// nilness facts are intrinsic to the underlying value, such as a zero value
+// interface variables.
+//
+// ChangeInterface is the only expansion currently supported, but others, like
+// Slice, could be added. At this time, this tool does not check slice
+// operations in a way this expansion could help. See
+// https://play.golang.org/p/mGqXEp7w4fR for an example.
+func expandFacts(f fact) []fact {
+	ff := []fact{f}
+
+Loop:
+	for {
+		switch v := f.value.(type) {
+		case *ssa.ChangeInterface:
+			f = fact{v.X, f.nilness}
+			ff = append(ff, f)
+		default:
+			break Loop
+		}
+	}
+
+	return ff
+}
+
+type facts []fact
+
+func (ff facts) negate() facts {
+	nn := make([]fact, len(ff))
+	for i, f := range ff {
+		nn[i] = f.negate()
+	}
+	return nn
+}
+
+func is[T any](x any) bool {
+	_, ok := x.(T)
+	return ok
+}
+
+func isNillable(t types.Type) bool {
+	switch t := typeparams.CoreType(t).(type) {
+	case *types.Pointer,
+		*types.Map,
+		*types.Signature,
+		*types.Chan,
+		*types.Interface,
+		*types.Slice:
+		return true
+	case *types.Basic:
+		return t == types.Typ[types.UnsafePointer]
+	}
+	return false
+}
+
+// isRangeIndex reports whether the instruction is a slice indexing
+// operation slice[i] within a "for range slice" loop. The operation
+// could be explicit, such as slice[i] within (or even after) the
+// loop, or it could be implicit, such as "for i, v := range slice {}".
+// (These cannot be reliably distinguished.)
+func isRangeIndex(instr *ssa.IndexAddr) bool {
+	// Here we reverse-engineer the go/ssa lowering of range-over-slice:
+	//
+	//      n = len(x)
+	//      jump loop
+	// loop:                                                "rangeindex.loop"
+	//      phi = φ(-1, incr) #rangeindex
+	//      incr = phi + 1
+	//      cond = incr < n
+	//      if cond goto body else done
+	// body:                                                "rangeindex.body"
+	//      instr = &x[incr]
+	//      ...
+	// done:
+	if incr, ok := instr.Index.(*ssa.BinOp); ok && incr.Op == token.ADD {
+		if b := incr.Block(); b.Comment == "rangeindex.loop" {
+			if If, ok := b.Instrs[len(b.Instrs)-1].(*ssa.If); ok {
+				if cond := If.Cond.(*ssa.BinOp); cond.X == incr && cond.Op == token.LSS {
+					if call, ok := cond.Y.(*ssa.Call); ok {
+						common := call.Common()
+						if blt, ok := common.Value.(*ssa.Builtin); ok && blt.Name() == "len" {
+							return common.Args[0] == instr.X
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
 }

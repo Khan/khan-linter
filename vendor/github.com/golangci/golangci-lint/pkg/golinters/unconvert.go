@@ -3,51 +3,60 @@ package golinters
 import (
 	"sync"
 
-	unconvertAPI "github.com/golangci/unconvert"
+	"github.com/golangci/unconvert"
 	"golang.org/x/tools/go/analysis"
 
-	"github.com/golangci/golangci-lint/pkg/golinters/goanalysis"
+	"github.com/golangci/golangci-lint/pkg/config"
+	"github.com/golangci/golangci-lint/pkg/goanalysis"
 	"github.com/golangci/golangci-lint/pkg/lint/linter"
 	"github.com/golangci/golangci-lint/pkg/result"
 )
 
-func NewUnconvert() *goanalysis.Linter {
-	const linterName = "unconvert"
-	var mu sync.Mutex
-	var res []goanalysis.Issue
-	analyzer := &analysis.Analyzer{
-		Name: linterName,
-		Doc:  goanalysis.TheOnlyanalyzerDoc,
-	}
-	return goanalysis.NewLinter(
-		linterName,
-		"Remove unnecessary type conversions",
-		[]*analysis.Analyzer{analyzer},
-		nil,
-	).WithContextSetter(func(lintCtx *linter.Context) {
-		analyzer.Run = func(pass *analysis.Pass) (interface{}, error) {
-			prog := goanalysis.MakeFakeLoaderProgram(pass)
+const unconvertName = "unconvert"
 
-			positions := unconvertAPI.Run(prog)
-			if len(positions) == 0 {
+func NewUnconvert(settings *config.UnconvertSettings) *goanalysis.Linter {
+	var mu sync.Mutex
+	var resIssues []goanalysis.Issue
+
+	analyzer := &analysis.Analyzer{
+		Name: unconvertName,
+		Doc:  goanalysis.TheOnlyanalyzerDoc,
+		Run: func(pass *analysis.Pass) (any, error) {
+			issues := runUnconvert(pass, settings)
+
+			if len(issues) == 0 {
 				return nil, nil
 			}
 
-			issues := make([]goanalysis.Issue, 0, len(positions))
-			for _, pos := range positions {
-				issues = append(issues, goanalysis.NewIssue(&result.Issue{ //nolint:scopelint
-					Pos:        pos,
-					Text:       "unnecessary conversion",
-					FromLinter: linterName,
-				}, pass))
-			}
-
 			mu.Lock()
-			res = append(res, issues...)
+			resIssues = append(resIssues, issues...)
 			mu.Unlock()
+
 			return nil, nil
-		}
-	}).WithIssuesReporter(func(*linter.Context) []goanalysis.Issue {
-		return res
+		},
+	}
+
+	return goanalysis.NewLinter(
+		unconvertName,
+		"Remove unnecessary type conversions",
+		[]*analysis.Analyzer{analyzer},
+		nil,
+	).WithIssuesReporter(func(*linter.Context) []goanalysis.Issue {
+		return resIssues
 	}).WithLoadMode(goanalysis.LoadModeTypesInfo)
+}
+
+func runUnconvert(pass *analysis.Pass, settings *config.UnconvertSettings) []goanalysis.Issue {
+	positions := unconvert.Run(pass, settings.FastMath, settings.Safe)
+
+	var issues []goanalysis.Issue
+	for _, position := range positions {
+		issues = append(issues, goanalysis.NewIssue(&result.Issue{
+			Pos:        position,
+			Text:       "unnecessary conversion",
+			FromLinter: unconvertName,
+		}, pass))
+	}
+
+	return issues
 }

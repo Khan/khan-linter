@@ -4,14 +4,16 @@ import (
 	"github.com/jirfag/go-printf-func-name/pkg/analyzer"
 	"golang.org/x/tools/go/analysis"
 
-	"github.com/golangci/golangci-lint/pkg/golinters/goanalysis"
+	"github.com/golangci/golangci-lint/pkg/goanalysis"
 )
 
 func NewGoPrintfFuncName() *goanalysis.Linter {
+	a := analyzer.Analyzer
+
 	return goanalysis.NewLinter(
-		"goprintffuncname",
-		"Checks that printf-like functions are named with `f` at the end",
-		[]*analysis.Analyzer{analyzer.Analyzer},
+		a.Name,
+		a.Doc,
+		[]*analysis.Analyzer{a},
 		nil,
 	).WithLoadMode(goanalysis.LoadModeSyntax)
 }

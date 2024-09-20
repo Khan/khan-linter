@@ -1,3 +1,7 @@
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package analysis
 
 import (
@@ -19,6 +23,10 @@ type Analyzer struct {
 	// The part before the first "\n\n" is the title
 	// (no capital or period, max ~60 letters).
 	Doc string
+
+	// URL holds an optional link to a web page with additional
+	// documentation for this analyzer.
+	URL string
 
 	// Flags defines any flags accepted by the analyzer.
 	// The manner in which these flags are exposed to the user
@@ -42,6 +50,7 @@ type Analyzer struct {
 	// RunDespiteErrors allows the driver to invoke
 	// the Run method of this analyzer even on a
 	// package that contains parse or type errors.
+	// The Pass.TypeErrors field may consequently be non-empty.
 	RunDespiteErrors bool
 
 	// Requires is a set of analyzers that must run successfully
@@ -82,12 +91,14 @@ type Pass struct {
 	Analyzer *Analyzer // the identity of the current analyzer
 
 	// syntax and type information
-	Fset       *token.FileSet // file position information
-	Files      []*ast.File    // the abstract syntax tree of each file
-	OtherFiles []string       // names of non-Go files of this package
-	Pkg        *types.Package // type information about the package
-	TypesInfo  *types.Info    // type information about the syntax trees
-	TypesSizes types.Sizes    // function for computing sizes of types
+	Fset         *token.FileSet // file position information
+	Files        []*ast.File    // the abstract syntax tree of each file
+	OtherFiles   []string       // names of non-Go files of this package
+	IgnoredFiles []string       // names of ignored source files in this package
+	Pkg          *types.Package // type information about the package
+	TypesInfo    *types.Info    // type information about the syntax trees
+	TypesSizes   types.Sizes    // function for computing sizes of types
+	TypeErrors   []types.Error  // type errors (only if Analyzer.RunDespiteErrors)
 
 	// Report reports a Diagnostic, a finding about a specific location
 	// in the analyzed source code such as a potential mistake.
@@ -128,29 +139,24 @@ type Pass struct {
 	// See comments for ExportObjectFact.
 	ExportPackageFact func(fact Fact)
 
-	// AllPackageFacts returns a new slice containing all package facts of the analysis's FactTypes
-	// in unspecified order.
-	// WARNING: This is an experimental API and may change in the future.
+	// AllPackageFacts returns a new slice containing all package
+	// facts of the analysis's FactTypes in unspecified order.
 	AllPackageFacts func() []PackageFact
 
-	// AllObjectFacts returns a new slice containing all object facts of the analysis's FactTypes
-	// in unspecified order.
-	// WARNING: This is an experimental API and may change in the future.
+	// AllObjectFacts returns a new slice containing all object
+	// facts of the analysis's FactTypes in unspecified order.
 	AllObjectFacts func() []ObjectFact
 
 	/* Further fields may be added in future. */
-	// For example, suggested or applied refactorings.
 }
 
 // PackageFact is a package together with an associated fact.
-// WARNING: This is an experimental API and may change in the future.
 type PackageFact struct {
 	Package *types.Package
 	Fact    Fact
 }
 
 // ObjectFact is an object together with an associated fact.
-// WARNING: This is an experimental API and may change in the future.
 type ObjectFact struct {
 	Object types.Object
 	Fact   Fact
@@ -163,13 +169,19 @@ func (pass *Pass) Reportf(pos token.Pos, format string, args ...interface{}) {
 	pass.Report(Diagnostic{Pos: pos, Message: msg})
 }
 
-// reportNodef is a helper function that reports a Diagnostic using the
-// range denoted by the AST node.
-//
-// WARNING: This is an experimental API and may change in the future.
-func (pass *Pass) reportNodef(node ast.Node, format string, args ...interface{}) {
+// The Range interface provides a range. It's equivalent to and satisfied by
+// ast.Node.
+type Range interface {
+	Pos() token.Pos // position of first character belonging to the node
+	End() token.Pos // position of first character immediately after the node
+}
+
+// ReportRangef is a helper function that reports a Diagnostic using the
+// range provided. ast.Node values can be passed in as the range because
+// they satisfy the Range interface.
+func (pass *Pass) ReportRangef(rng Range, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	pass.Report(Diagnostic{Pos: node.Pos(), End: node.End(), Message: msg})
+	pass.Report(Diagnostic{Pos: rng.Pos(), End: rng.End(), Message: msg})
 }
 
 func (pass *Pass) String() string {
