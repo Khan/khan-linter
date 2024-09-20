@@ -1241,7 +1241,8 @@ class GoLint(Linter):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        stdout, stderr = process.communicate(input='\0'.join(dirs))
+        stdout, stderr = process.communicate(
+            input='\0'.join(dirs).encode('utf-8'))
         stdout, stderr = stdout.decode('utf-8'), stderr.decode('utf-8')
 
         # golangci-lint seems to exit 123 on errors, even if you tell it not to
