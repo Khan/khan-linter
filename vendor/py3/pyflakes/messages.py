@@ -3,18 +3,18 @@ Provide the class Message and its subclasses.
 """
 
 
-class Message(object):
+class Message:
     message = ''
     message_args = ()
 
     def __init__(self, filename, loc):
         self.filename = filename
         self.lineno = loc.lineno
-        self.col = getattr(loc, 'col_offset', 0)
+        self.col = loc.col_offset
 
     def __str__(self):
-        return '%s:%s:%s %s' % (self.filename, self.lineno, self.col+1,
-                                self.message % self.message_args)
+        return '{}:{}:{}: {}'.format(self.filename, self.lineno, self.col+1,
+                                     self.message % self.message_args)
 
 
 class UnusedImport(Message):
@@ -27,14 +27,6 @@ class UnusedImport(Message):
 
 class RedefinedWhileUnused(Message):
     message = 'redefinition of unused %r from line %r'
-
-    def __init__(self, filename, loc, name, orig_loc):
-        Message.__init__(self, filename, loc)
-        self.message_args = (name, orig_loc.lineno)
-
-
-class RedefinedInListComp(Message):
-    message = 'list comprehension redefines %r from line %r'
 
     def __init__(self, filename, loc, name, orig_loc):
         Message.__init__(self, filename, loc)
@@ -142,10 +134,6 @@ class MultiValueRepeatedKeyVariable(Message):
 class LateFutureImport(Message):
     message = 'from __future__ imports must occur at the beginning of the file'
 
-    def __init__(self, filename, loc, names):
-        Message.__init__(self, filename, loc)
-        self.message_args = ()
-
 
 class FutureFeatureNotDefined(Message):
     """An undefined __future__ feature name was imported."""
@@ -168,11 +156,16 @@ class UnusedVariable(Message):
         self.message_args = (names,)
 
 
-class ReturnWithArgsInsideGenerator(Message):
+class UnusedAnnotation(Message):
     """
-    Indicates a return statement with arguments inside a generator.
+    Indicates that a variable has been explicitly annotated to but not actually
+    used.
     """
-    message = '\'return\' with argument inside generator'
+    message = 'local variable %r is annotated but never used'
+
+    def __init__(self, filename, loc, names):
+        Message.__init__(self, filename, loc)
+        self.message_args = (names,)
 
 
 class ReturnOutsideFunction(Message):
@@ -203,13 +196,6 @@ class BreakOutsideLoop(Message):
     Indicates a break statement outside of a while or for loop.
     """
     message = '\'break\' outside loop'
-
-
-class ContinueInFinally(Message):
-    """
-    Indicates a continue statement in a finally block in a while or for loop.
-    """
-    message = '\'continue\' not supported inside \'finally\' clause'
 
 
 class DefaultExceptNotLast(Message):
@@ -249,14 +235,6 @@ class AssertTuple(Message):
 
 class ForwardAnnotationSyntaxError(Message):
     message = 'syntax error in forward annotation %r'
-
-    def __init__(self, filename, loc, annotation):
-        Message.__init__(self, filename, loc)
-        self.message_args = (annotation,)
-
-
-class CommentAnnotationSyntaxError(Message):
-    message = 'syntax error in type comment %r'
 
     def __init__(self, filename, loc, annotation):
         Message.__init__(self, filename, loc)

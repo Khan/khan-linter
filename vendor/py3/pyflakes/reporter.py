@@ -6,7 +6,7 @@ import re
 import sys
 
 
-class Reporter(object):
+class Reporter:
     """
     Formats the results of pyflakes checks to users.
     """
@@ -34,7 +34,7 @@ class Reporter(object):
         @param msg: A message explaining the problem.
         @ptype msg: C{unicode}
         """
-        self._stderr.write("%s: %s\n" % (filename, msg))
+        self._stderr.write(f"{filename}: {msg}\n")
 
     def syntaxError(self, filename, msg, lineno, offset, text):
         """
@@ -51,19 +51,29 @@ class Reporter(object):
         @param text: The source code containing the syntax error.
         @ptype text: C{unicode}
         """
-        line = text.splitlines()[-1]
+        if text is None:
+            line = None
+        else:
+            line = text.splitlines()[-1]
+
+        # lineno might be None if the error was during tokenization
+        # lineno might be 0 if the error came from stdin
+        lineno = max(lineno or 0, 1)
+
         if offset is not None:
-            if sys.version_info < (3, 8):
-                offset = offset - (len(text) - len(line)) + 1
+            # some versions of python emit an offset of -1 for certain encoding errors
+            offset = max(offset, 1)
             self._stderr.write('%s:%d:%d: %s\n' %
                                (filename, lineno, offset, msg))
         else:
             self._stderr.write('%s:%d: %s\n' % (filename, lineno, msg))
-        self._stderr.write(line)
-        self._stderr.write('\n')
-        if offset is not None:
-            self._stderr.write(re.sub(r'\S', ' ', line[:offset - 1]) +
-                               "^\n")
+
+        if line is not None:
+            self._stderr.write(line)
+            self._stderr.write('\n')
+            if offset is not None:
+                self._stderr.write(re.sub(r'\S', ' ', line[:offset - 1]) +
+                                   "^\n")
 
     def flake(self, message):
         """

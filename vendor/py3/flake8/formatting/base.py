@@ -1,15 +1,17 @@
 """The base class and interface for all formatting plugins."""
-from __future__ import print_function
+from __future__ import annotations
 
 import argparse
-from typing import IO, List, Optional, Tuple
+import os
+import sys
+from typing import IO
 
-if False:  # `typing.TYPE_CHECKING` was introduced in 3.5.2
-    from flake8.statistics import Statistics
-    from flake8.style_guide import Violation
+from flake8.formatting import _windows_color
+from flake8.statistics import Statistics
+from flake8.violation import Violation
 
 
-class BaseFormatter(object):
+class BaseFormatter:
     """Class defining the formatter interface.
 
     .. attribute:: options
@@ -31,8 +33,7 @@ class BaseFormatter(object):
         output filename has been specified.
     """
 
-    def __init__(self, options):
-        # type: (argparse.Namespace) -> None
+    def __init__(self, options: argparse.Namespace) -> None:
         """Initialize with the options parsed from config and cli.
 
         This also calls a hook, :meth:`after_init`, so subclasses do not need
@@ -41,43 +42,48 @@ class BaseFormatter(object):
         :param options:
             User specified configuration parsed from both configuration files
             and the command-line interface.
-        :type options:
-            :class:`argparse.Namespace`
         """
         self.options = options
         self.filename = options.output_file
-        self.output_fd = None  # type: Optional[IO[str]]
+        self.output_fd: IO[str] | None = None
         self.newline = "\n"
+        self.color = options.color == "always" or (
+            options.color == "auto"
+            and sys.stdout.isatty()
+            and _windows_color.terminal_supports_color
+        )
         self.after_init()
 
-    def after_init(self):  # type: () -> None
+    def after_init(self) -> None:
         """Initialize the formatter further."""
 
-    def beginning(self, filename):  # type: (str) -> None
+    def beginning(self, filename: str) -> None:
         """Notify the formatter that we're starting to process a file.
 
-        :param str filename:
+        :param filename:
             The name of the file that Flake8 is beginning to report results
             from.
         """
 
-    def finished(self, filename):  # type: (str) -> None
+    def finished(self, filename: str) -> None:
         """Notify the formatter that we've finished processing a file.
 
-        :param str filename:
+        :param filename:
             The name of the file that Flake8 has finished reporting results
             from.
         """
 
-    def start(self):  # type: () -> None
+    def start(self) -> None:
         """Prepare the formatter to receive input.
 
         This defaults to initializing :attr:`output_fd` if :attr:`filename`
         """
         if self.filename:
+            dirname = os.path.dirname(os.path.abspath(self.filename))
+            os.makedirs(dirname, exist_ok=True)
             self.output_fd = open(self.filename, "a")
 
-    def handle(self, error):  # type: (Violation) -> None
+    def handle(self, error: Violation) -> None:
         """Handle an error reported by Flake8.
 
         This defaults to calling :meth:`format`, :meth:`show_source`, and
@@ -86,50 +92,37 @@ class BaseFormatter(object):
 
         :param error:
             This will be an instance of
-            :class:`~flake8.style_guide.Violation`.
-        :type error:
-            flake8.style_guide.Violation
+            :class:`~flake8.violation.Violation`.
         """
         line = self.format(error)
         source = self.show_source(error)
         self.write(line, source)
 
-    def format(self, error):  # type: (Violation) -> Optional[str]
+    def format(self, error: Violation) -> str | None:
         """Format an error reported by Flake8.
 
         This method **must** be implemented by subclasses.
 
         :param error:
             This will be an instance of
-            :class:`~flake8.style_guide.Violation`.
-        :type error:
-            flake8.style_guide.Violation
+            :class:`~flake8.violation.Violation`.
         :returns:
             The formatted error string.
-        :rtype:
-            str
         """
         raise NotImplementedError(
             "Subclass of BaseFormatter did not implement" " format."
         )
 
-    def show_statistics(self, statistics):  # type: (Statistics) -> None
+    def show_statistics(self, statistics: Statistics) -> None:
         """Format and print the statistics."""
         for error_code in statistics.error_codes():
             stats_for_error_code = statistics.statistics_for(error_code)
             statistic = next(stats_for_error_code)
             count = statistic.count
             count += sum(stat.count for stat in stats_for_error_code)
-            self._write(
-                "{count:<5} {error_code} {message}".format(
-                    count=count,
-                    error_code=error_code,
-                    message=statistic.message,
-                )
-            )
+            self._write(f"{count:<5} {error_code} {statistic.message}")
 
-    def show_benchmarks(self, benchmarks):
-        # type: (List[Tuple[str, float]]) -> None
+    def show_benchmarks(self, benchmarks: list[tuple[str, float]]) -> None:
         """Format and print the benchmarks."""
         # NOTE(sigmavirus24): The format strings are a little confusing, even
         # to me, so here's a quick explanation:
@@ -150,7 +143,7 @@ class BaseFormatter(object):
                 benchmark = float_format(statistic=statistic, value=value)
             self._write(benchmark)
 
-    def show_source(self, error):  # type: (Violation) -> Optional[str]
+    def show_source(self, error: Violation) -> str | None:
         """Show the physical line generating the error.
 
         This also adds an indicator for the particular part of the line that
@@ -158,15 +151,11 @@ class BaseFormatter(object):
 
         :param error:
             This will be an instance of
-            :class:`~flake8.style_guide.Violation`.
-        :type error:
-            flake8.style_guide.Violation
+            :class:`~flake8.violation.Violation`.
         :returns:
             The formatted error string if the user wants to show the source.
             If the user does not want to show the source, this will return
             ``None``.
-        :rtype:
-            str
         """
         if not self.options.show_source or error.physical_line is None:
             return ""
@@ -179,26 +168,25 @@ class BaseFormatter(object):
         )
         # Physical lines have a newline at the end, no need to add an extra
         # one
-        return "{}{}^".format(error.physical_line, indent)
+        return f"{error.physical_line}{indent}^"
 
-    def _write(self, output):  # type: (str) -> None
+    def _write(self, output: str) -> None:
         """Handle logic of whether to use an output file or print()."""
         if self.output_fd is not None:
             self.output_fd.write(output + self.newline)
         if self.output_fd is None or self.options.tee:
-            print(output, end=self.newline)
+            sys.stdout.buffer.write(output.encode() + self.newline.encode())
 
-    def write(self, line, source):
-        # type: (Optional[str], Optional[str]) -> None
+    def write(self, line: str | None, source: str | None) -> None:
         """Write the line either to the output file or stdout.
 
         This handles deciding whether to write to a file or print to standard
         out for subclasses. Override this if you want behaviour that differs
         from the default.
 
-        :param str line:
+        :param line:
             The formatted string to print or write.
-        :param str source:
+        :param source:
             The source code that has been formatted and associated with the
             line of output.
         """
@@ -207,7 +195,7 @@ class BaseFormatter(object):
         if source:
             self._write(source)
 
-    def stop(self):  # type: () -> None
+    def stop(self) -> None:
         """Clean up after reporting is finished."""
         if self.output_fd is not None:
             self.output_fd.close()

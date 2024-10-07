@@ -1,8 +1,8 @@
-import sys
 import textwrap
 
 from pyflakes import messages as m
 from pyflakes.checker import (
+    PYPY,
     DoctestScope,
     FunctionScope,
     ModuleScope,
@@ -12,14 +12,8 @@ from pyflakes.test.test_imports import Test as TestImports
 from pyflakes.test.test_undefined_names import Test as TestUndefinedNames
 from pyflakes.test.harness import TestCase, skip
 
-try:
-    sys.pypy_version_info
-    PYPY = True
-except AttributeError:
-    PYPY = False
 
-
-class _DoctestMixin(object):
+class _DoctestMixin:
 
     withDoctest = True
 
@@ -48,7 +42,7 @@ class _DoctestMixin(object):
         return doctestificator % "\n       ".join(lines)
 
     def flakes(self, input, *args, **kw):
-        return super(_DoctestMixin, self).flakes(self.doctestify(input), *args, **kw)
+        return super().flakes(self.doctestify(input), *args, **kw)
 
 
 class Test(TestCase):
@@ -328,9 +322,7 @@ class Test(TestCase):
             m.DoctestSyntaxError).messages
         exc = exceptions[0]
         self.assertEqual(exc.lineno, 4)
-        if PYPY:
-            self.assertEqual(exc.col, 27)
-        elif sys.version_info >= (3, 8):
+        if not PYPY:
             self.assertEqual(exc.col, 18)
         else:
             self.assertEqual(exc.col, 26)
@@ -341,17 +333,12 @@ class Test(TestCase):
         exc = exceptions[1]
         self.assertEqual(exc.lineno, 5)
         if PYPY:
-            self.assertEqual(exc.col, 14)
+            self.assertEqual(exc.col, 13)
         else:
             self.assertEqual(exc.col, 16)
         exc = exceptions[2]
         self.assertEqual(exc.lineno, 6)
-        if PYPY:
-            self.assertEqual(exc.col, 14)
-        elif sys.version_info >= (3, 8):
-            self.assertEqual(exc.col, 13)
-        else:
-            self.assertEqual(exc.col, 18)
+        self.assertEqual(exc.col, 13)
 
     def test_indentationErrorInDoctest(self):
         exc = self.flakes('''
@@ -362,12 +349,7 @@ class Test(TestCase):
             """
         ''', m.DoctestSyntaxError).messages[0]
         self.assertEqual(exc.lineno, 5)
-        if PYPY:
-            self.assertEqual(exc.col, 14)
-        elif sys.version_info >= (3, 8):
-            self.assertEqual(exc.col, 13)
-        else:
-            self.assertEqual(exc.col, 16)
+        self.assertEqual(exc.col, 13)
 
     def test_offsetWithMultiLineArgs(self):
         (exc1, exc2) = self.flakes(
@@ -383,10 +365,7 @@ class Test(TestCase):
             m.DoctestSyntaxError,
             m.UndefinedName).messages
         self.assertEqual(exc1.lineno, 6)
-        if PYPY:
-            self.assertEqual(exc1.col, 20)
-        else:
-            self.assertEqual(exc1.col, 19)
+        self.assertEqual(exc1.col, 19)
         self.assertEqual(exc2.lineno, 7)
         self.assertEqual(exc2.col, 12)
 

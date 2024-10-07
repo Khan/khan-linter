@@ -1,12 +1,14 @@
 package linter
 
 import (
+	"go/ast"
+
 	"golang.org/x/tools/go/packages"
 
 	"github.com/golangci/golangci-lint/internal/pkgcache"
 	"github.com/golangci/golangci-lint/pkg/config"
 	"github.com/golangci/golangci-lint/pkg/fsutils"
-	"github.com/golangci/golangci-lint/pkg/golinters/goanalysis/load"
+	"github.com/golangci/golangci-lint/pkg/goanalysis/load"
 	"github.com/golangci/golangci-lint/pkg/logutils"
 )
 
@@ -20,7 +22,6 @@ type Context struct {
 
 	Cfg       *config.Config
 	FileCache *fsutils.FileCache
-	LineCache *fsutils.LineCache
 	Log       logutils.Log
 
 	PkgCache  *pkgcache.Cache
@@ -29,4 +30,19 @@ type Context struct {
 
 func (c *Context) Settings() *config.LintersSettings {
 	return &c.Cfg.LintersSettings
+}
+
+func (c *Context) ClearTypesInPackages() {
+	for _, p := range c.Packages {
+		clearTypes(p)
+	}
+	for _, p := range c.OriginalPackages {
+		clearTypes(p)
+	}
+}
+
+func clearTypes(p *packages.Package) {
+	p.Types = nil
+	p.TypesInfo = nil
+	p.Syntax = []*ast.File{}
 }

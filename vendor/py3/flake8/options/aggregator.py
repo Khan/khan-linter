@@ -3,9 +3,12 @@
 This holds the logic that uses the collected and merged config files and
 applies the user-specified command-line configuration on top of it.
 """
+from __future__ import annotations
+
 import argparse
+import configparser
 import logging
-from typing import List, Tuple
+from typing import Sequence
 
 from flake8.options import config
 from flake8.options.manager import OptionManager
@@ -14,55 +17,21 @@ LOG = logging.getLogger(__name__)
 
 
 def aggregate_options(
-    manager,  # type: OptionManager
-    config_finder,  # type: config.ConfigFileFinder
-    argv,  # type: List[str]
-):  # type: (...) -> Tuple[argparse.Namespace, List[str]]
-    """Aggregate and merge CLI and config file options.
-
-    :param flake8.options.manager.OptionManager manager:
-        The instance of the OptionManager that we're presently using.
-    :param flake8.options.config.ConfigFileFinder config_finder:
-        The config file finder to use.
-    :param list argv:
-        The list of remaining command-line argumentsthat were unknown during
-        preliminary option parsing to pass to ``manager.parse_args``.
-    :returns:
-        Tuple of the parsed options and extra arguments returned by
-        ``manager.parse_args``.
-    :rtype:
-        tuple(argparse.Namespace, list)
-    """
+    manager: OptionManager,
+    cfg: configparser.RawConfigParser,
+    cfg_dir: str,
+    argv: Sequence[str] | None,
+) -> argparse.Namespace:
+    """Aggregate and merge CLI and config file options."""
     # Get defaults from the option parser
-    default_values, _ = manager.parse_args([])
-
-    # Make our new configuration file mergerator
-    config_parser = config.MergedConfigParser(
-        option_manager=manager, config_finder=config_finder
-    )
+    default_values = manager.parse_args([])
 
     # Get the parsed config
-    parsed_config = config_parser.parse()
+    parsed_config = config.parse_config(manager, cfg, cfg_dir)
 
-    # Extend the default ignore value with the extended default ignore list,
-    # registered by plugins.
-    extended_default_ignore = manager.extended_default_ignore.copy()
-    # Let's store our extended default ignore for use by the decision engine
-    default_values.extended_default_ignore = (
-        manager.extended_default_ignore.copy()
-    )
-    LOG.debug(
-        "Extended default ignore list: %s", list(extended_default_ignore)
-    )
-    extended_default_ignore.update(default_values.ignore)
-    default_values.ignore = list(extended_default_ignore)
-    LOG.debug("Merged default ignore list: %s", default_values.ignore)
-
-    extended_default_select = manager.extended_default_select.copy()
-    LOG.debug(
-        "Extended default select list: %s", list(extended_default_select)
-    )
-    default_values.extended_default_select = extended_default_select
+    # store the plugin-set extended default ignore / select
+    default_values.extended_default_ignore = manager.extended_default_ignore
+    default_values.extended_default_select = manager.extended_default_select
 
     # Merge values parsed from config onto the default values returned
     for config_name, value in parsed_config.items():
@@ -70,7 +39,9 @@ def aggregate_options(
         # If the config name is somehow different from the destination name,
         # fetch the destination name from our Option
         if not hasattr(default_values, config_name):
-            dest_name = config_parser.config_options[config_name].dest
+            dest_val = manager.config_options_dict[config_name].dest
+            assert isinstance(dest_val, str)
+            dest_name = dest_val
 
         LOG.debug(
             'Overriding default value of (%s) for "%s" with (%s)',

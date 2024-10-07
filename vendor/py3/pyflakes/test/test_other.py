@@ -21,37 +21,6 @@ class Test(TestCase):
         f()
         ''', m.UndefinedLocal, m.UnusedVariable)
 
-    @skipIf(version_info >= (3,),
-            'in Python 3 list comprehensions execute in a separate scope')
-    def test_redefinedInListComp(self):
-        """
-        Test that shadowing a variable in a list comprehension raises
-        a warning.
-        """
-        self.flakes('''
-        a = 1
-        [1 for a, b in [(1, 2)]]
-        ''', m.RedefinedInListComp)
-        self.flakes('''
-        class A:
-            a = 1
-            [1 for a, b in [(1, 2)]]
-        ''', m.RedefinedInListComp)
-        self.flakes('''
-        def f():
-            a = 1
-            [1 for a, b in [(1, 2)]]
-        ''', m.RedefinedInListComp)
-        self.flakes('''
-        [1 for a, b in [(1, 2)]]
-        [1 for a, b in [(1, 2)]]
-        ''')
-        self.flakes('''
-        for a, b in [(1, 2)]:
-            pass
-        [1 for a, b in [(1, 2)]]
-        ''')
-
     def test_redefinedInGenerator(self):
         """
         Test that reusing a variable in a generator does not raise
@@ -149,6 +118,12 @@ class Test(TestCase):
         def a(): pass
         ''', m.RedefinedWhileUnused)
 
+    def test_redefined_function_shadows_variable(self):
+        self.flakes('''
+        x = 1
+        def x(): pass
+        ''', m.RedefinedWhileUnused)
+
     def test_redefinedUnderscoreFunction(self):
         """
         Test that shadowing a function definition named with underscore doesn't
@@ -238,21 +213,6 @@ class Test(TestCase):
         else:
             [a for a in '12']
         ''')
-
-    @skipIf(version_info >= (3,),
-            'in Python 3 list comprehensions execute in a separate scope')
-    def test_redefinedElseInListComp(self):
-        """
-        Test that shadowing a variable in a list comprehension in
-        an else (or if) block raises a warning.
-        """
-        self.flakes('''
-        if False:
-            pass
-        else:
-            a = 1
-            [a for a in '12']
-        ''', m.RedefinedInListComp)
 
     def test_functionDecorator(self):
         """
@@ -394,7 +354,6 @@ class Test(TestCase):
         yield
         ''', m.YieldOutsideFunction)
 
-    @skipIf(version_info < (3, 3), "Python >= 3.3 only")
     def test_classWithYieldFrom(self):
         """
         If a yield from is used inside a class, a warning is emitted.
@@ -404,7 +363,6 @@ class Test(TestCase):
             yield from range(10)
         ''', m.YieldOutsideFunction)
 
-    @skipIf(version_info < (3, 3), "Python >= 3.3 only")
     def test_moduleWithYieldFrom(self):
         """
         If a yield from is used at the module level, a warning is emitted.
@@ -492,36 +450,6 @@ class Test(TestCase):
                 while True:
                     continue
         ''')
-
-    @skipIf(version_info > (3, 8), "Python <= 3.8 only")
-    def test_continueInFinally(self):
-        # 'continue' inside 'finally' is a special syntax error
-        # that is removed in 3.8
-        self.flakes('''
-        while True:
-            try:
-                pass
-            finally:
-                continue
-        ''', m.ContinueInFinally)
-
-        self.flakes('''
-        while True:
-            try:
-                pass
-            finally:
-                if 1:
-                    if 2:
-                        continue
-        ''', m.ContinueInFinally)
-
-        # Even when not in a loop, this is the error Python gives
-        self.flakes('''
-        try:
-            pass
-        finally:
-            continue
-        ''', m.ContinueInFinally)
 
     def test_breakOutsideLoop(self):
         self.flakes('''
@@ -903,7 +831,6 @@ class Test(TestCase):
             pass
         ''', m.DefaultExceptNotLast, m.DefaultExceptNotLast)
 
-    @skipIf(version_info < (3,), "Python 3 only")
     def test_starredAssignmentNoError(self):
         """
         Python 3 extended iterable unpacking
@@ -957,7 +884,6 @@ class Test(TestCase):
             ", *rest] = range(1<<8)"
         self.flakes(s)
 
-    @skipIf(version_info < (3, ), "Python 3 only")
     def test_starredAssignmentErrors(self):
         """
         SyntaxErrors (not encoded in the ast) surrounding Python 3 extended
@@ -1185,7 +1111,6 @@ class Test(TestCase):
             pass
         ''')
 
-    @skipIf(version_info < (3, 3), "Python >= 3.3 only")
     def test_function_arguments_python3(self):
         self.flakes('''
         def foo(a, b, c=0, *args, d=0, **kwargs):
@@ -1276,7 +1201,6 @@ class TestUnusedAssignment(TestCase):
             b = 1
         ''')
 
-    @skipIf(version_info < (3,), 'new in Python 3')
     def test_assignToNonlocal(self):
         """
         Assigning to a nonlocal and then not using that binding is perfectly
@@ -1462,7 +1386,6 @@ class TestUnusedAssignment(TestCase):
         statement a name defined beforehand.
         """
         self.flakes('''
-        from __future__ import with_statement
         bar = None
         with open("foo"):
             bar
@@ -1475,7 +1398,6 @@ class TestUnusedAssignment(TestCase):
         within the suite or afterwards.
         """
         self.flakes('''
-        from __future__ import with_statement
         with open('foo') as bar:
             bar
         bar
@@ -1487,7 +1409,6 @@ class TestUnusedAssignment(TestCase):
         C{with} statement.
         """
         self.flakes('''
-        from __future__ import with_statement
         import foo
         with open('foo') as foo.bar:
             pass
@@ -1499,7 +1420,6 @@ class TestUnusedAssignment(TestCase):
         C{with} statement.
         """
         self.flakes('''
-        from __future__ import with_statement
         import foo
         with open('foo') as foo[0]:
             pass
@@ -1511,7 +1431,6 @@ class TestUnusedAssignment(TestCase):
         target of a C{with} statement is not defined.
         """
         self.flakes('''
-        from __future__ import with_statement
         import foo
         with open('foo') as foo[bar]:
             pass
@@ -1523,7 +1442,6 @@ class TestUnusedAssignment(TestCase):
         a C{with} statement within the suite or afterwards.
         """
         self.flakes('''
-        from __future__ import with_statement
         with open('foo') as (bar, baz):
             bar, baz
         bar, baz
@@ -1535,7 +1453,6 @@ class TestUnusedAssignment(TestCase):
         C{with} statement within the suite or afterwards.
         """
         self.flakes('''
-        from __future__ import with_statement
         with open('foo') as [bar, baz]:
             bar, baz
         bar, baz
@@ -1550,7 +1467,6 @@ class TestUnusedAssignment(TestCase):
         created are respected in the suite of the statement and afterwards.
         """
         self.flakes('''
-        from __future__ import with_statement
         c = d = e = g = h = i = None
         with open('foo') as [(a, b), c[d], e.f, g[h:i]]:
             a, b, c, d, e, g, h, i
@@ -1563,7 +1479,6 @@ class TestUnusedAssignment(TestCase):
         C{with} statement is used before the C{with} statement.
         """
         self.flakes('''
-        from __future__ import with_statement
         bar
         with open('foo') as bar:
             pass
@@ -1576,7 +1491,6 @@ class TestUnusedAssignment(TestCase):
         C{with} statement.
         """
         self.flakes('''
-        from __future__ import with_statement
         baz
         with open('foo') as (bar, baz):
             pass
@@ -1588,7 +1502,6 @@ class TestUnusedAssignment(TestCase):
         rebound by the name defined by a C{with} statement.
         """
         self.flakes('''
-        from __future__ import with_statement
         import bar
         with open('foo') as bar:
             pass
@@ -1601,7 +1514,6 @@ class TestUnusedAssignment(TestCase):
         C{with} statement.
         """
         self.flakes('''
-        from __future__ import with_statement
         import bar
         with open('foo') as (bar, baz):
             pass
@@ -1613,7 +1525,6 @@ class TestUnusedAssignment(TestCase):
         body of a C{with} statement without first being bound.
         """
         self.flakes('''
-        from __future__ import with_statement
         with open('foo') as bar:
             baz
         ''', m.UndefinedName)
@@ -1624,7 +1535,6 @@ class TestUnusedAssignment(TestCase):
         the body ends without warning.
         """
         self.flakes('''
-        from __future__ import with_statement
         with open('foo') as bar:
             baz = 10
         baz
@@ -1636,13 +1546,11 @@ class TestUnusedAssignment(TestCase):
         expression of a C{with} statement is undefined.
         """
         self.flakes('''
-        from __future__ import with_statement
         with bar as baz:
             pass
         ''', m.UndefinedName)
 
         self.flakes('''
-        from __future__ import with_statement
         with bar as bar:
             pass
         ''', m.UndefinedName)
@@ -1676,12 +1584,19 @@ class TestUnusedAssignment(TestCase):
             except Exception as e: e
         ''')
 
-    @skipIf(version_info < (3,),
-            "In Python 2 exception names stay bound after the exception handler")
     def test_exceptionUnusedInExcept(self):
         self.flakes('''
         try: pass
         except Exception as e: pass
+        ''', m.UnusedVariable)
+
+    @skipIf(version_info < (3, 11), 'new in Python 3.11')
+    def test_exception_unused_in_except_star(self):
+        self.flakes('''
+            try:
+                pass
+            except* OSError as e:
+                pass
         ''', m.UnusedVariable)
 
     def test_exceptionUnusedInExceptInFunction(self):
@@ -1761,7 +1676,6 @@ class TestUnusedAssignment(TestCase):
         assert 1
         ''')
 
-    @skipIf(version_info < (3, 3), 'new in Python 3.3')
     def test_yieldFromUndefined(self):
         """
         Test C{yield from} statement
@@ -1771,7 +1685,6 @@ class TestUnusedAssignment(TestCase):
             yield from foo()
         ''', m.UndefinedName)
 
-    @skipIf(version_info < (3, 6), 'new in Python 3.6')
     def test_f_string(self):
         """Test PEP 498 f-strings are treated as a usage."""
         self.flakes('''
@@ -1779,7 +1692,6 @@ class TestUnusedAssignment(TestCase):
         print(f'\x7b4*baz\N{RIGHT CURLY BRACKET}')
         ''')
 
-    @skipIf(version_info < (3, 8), 'new in Python 3.8')
     def test_assign_expr(self):
         """Test PEP 572 assignment expressions are treated as usage / write."""
         self.flakes('''
@@ -1788,10 +1700,24 @@ class TestUnusedAssignment(TestCase):
         print(x)
         ''')
 
+    def test_assign_expr_generator_scope(self):
+        """Test assignment expressions in generator expressions."""
+        self.flakes('''
+        if (any((y := x[0]) for x in [[True]])):
+            print(y)
+        ''')
+
+    def test_assign_expr_nested(self):
+        """Test assignment expressions in nested expressions."""
+        self.flakes('''
+        if ([(y:=x) for x in range(4) if [(z:=q) for q in range(4)]]):
+            print(y)
+            print(z)
+        ''')
+
 
 class TestStringFormatting(TestCase):
 
-    @skipIf(version_info < (3, 6), 'new in Python 3.6')
     def test_f_string_without_placeholders(self):
         self.flakes("f'foo'", m.FStringMissingPlaceholders)
         self.flakes('''
@@ -1929,7 +1855,6 @@ class TestStringFormatting(TestCase):
             '%*.*f' % (5, 2, 3.1234)
         ''')
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_ok_percent_format_cannot_determine_element_count(self):
         self.flakes('''
             a = []
@@ -1944,28 +1869,24 @@ class TestStringFormatting(TestCase):
 
 class TestAsyncStatements(TestCase):
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_asyncDef(self):
         self.flakes('''
         async def bar():
             return 42
         ''')
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_asyncDefAwait(self):
         self.flakes('''
         async def read_data(db):
             await db.fetch('SELECT ...')
         ''')
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_asyncDefUndefined(self):
         self.flakes('''
         async def bar():
             return foo()
         ''', m.UndefinedName)
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_asyncFor(self):
         self.flakes('''
         async def read_data(db):
@@ -1975,7 +1896,6 @@ class TestAsyncStatements(TestCase):
             return output
         ''')
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_asyncForUnderscoreLoopVar(self):
         self.flakes('''
         async def coro(it):
@@ -1983,7 +1903,6 @@ class TestAsyncStatements(TestCase):
                 pass
         ''')
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_loopControlInAsyncFor(self):
         self.flakes('''
         async def read_data(db):
@@ -2005,7 +1924,6 @@ class TestAsyncStatements(TestCase):
             return output
         ''')
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_loopControlInAsyncForElse(self):
         self.flakes('''
         async def read_data(db):
@@ -2027,21 +1945,6 @@ class TestAsyncStatements(TestCase):
             return output
         ''', m.BreakOutsideLoop)
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
-    @skipIf(version_info > (3, 8), "Python <= 3.8 only")
-    def test_continueInAsyncForFinally(self):
-        self.flakes('''
-        async def read_data(db):
-            output = []
-            async for row in db.cursor():
-                try:
-                    output.append(row)
-                finally:
-                    continue
-            return output
-        ''', m.ContinueInFinally)
-
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_asyncWith(self):
         self.flakes('''
         async def commit(session, data):
@@ -2049,7 +1952,6 @@ class TestAsyncStatements(TestCase):
                 await session.update(data)
         ''')
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_asyncWithItem(self):
         self.flakes('''
         async def commit(session, data):
@@ -2059,14 +1961,12 @@ class TestAsyncStatements(TestCase):
                 await trans.end()
         ''')
 
-    @skipIf(version_info < (3, 5), 'new in Python 3.5')
     def test_matmul(self):
         self.flakes('''
         def foo(a, b):
             return a @ b
         ''')
 
-    @skipIf(version_info < (3, 6), 'new in Python 3.6')
     def test_formatstring(self):
         self.flakes('''
         hi = 'hi'
@@ -2111,6 +2011,10 @@ class TestIncompatiblePrintOperator(TestCase):
 
         self.assertEqual(exc.lineno, 4)
         self.assertEqual(exc.col, 0)
+
+    def test_print_augmented_assign(self):
+        # nonsense, but shouldn't crash pyflakes
+        self.flakes('print += 1')
 
     def test_print_function_assignment(self):
         """

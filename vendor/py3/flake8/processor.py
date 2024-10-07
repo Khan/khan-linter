@@ -1,32 +1,34 @@
 """Module containing our file processor that tokenizes a file for checks."""
+from __future__ import annotations
+
 import argparse
 import ast
-import contextlib
 import logging
-import sys
 import tokenize
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any
+from typing import Generator
+from typing import List
+from typing import Tuple
 
-import flake8
 from flake8 import defaults
-from flake8 import exceptions
 from flake8 import utils
+from flake8._compat import FSTRING_END
+from flake8._compat import FSTRING_MIDDLE
+from flake8.plugins.finder import LoadedPlugin
 
 LOG = logging.getLogger(__name__)
-PyCF_ONLY_AST = 1024
 NEWLINE = frozenset([tokenize.NL, tokenize.NEWLINE])
 
 SKIP_TOKENS = frozenset(
     [tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT]
 )
 
-_Token = Tuple[int, str, Tuple[int, int], Tuple[int, int], str]
 _LogicalMapping = List[Tuple[int, Tuple[int, int]]]
 _Logical = Tuple[List[str], List[str], _LogicalMapping]
 
 
-class FileProcessor(object):
-    """Processes a file and holdes state.
+class FileProcessor:
+    """Processes a file and holds state.
 
     This processes a file by generating tokens, logical and physical lines,
     and AST trees. This also provides a way of passing state about the file
@@ -56,12 +58,15 @@ class FileProcessor(object):
     #: always ``False``, included for compatibility
     noqa = False
 
-    def __init__(self, filename, options, lines=None):
-        # type: (str, argparse.Namespace, Optional[List[str]]) -> None
-        """Initialice our file processor.
+    def __init__(
+        self,
+        filename: str,
+        options: argparse.Namespace,
+        lines: list[str] | None = None,
+    ) -> None:
+        """Initialize our file processor.
 
-        :param str filename:
-            Name of the file to process
+        :param filename: Name of the file to process
         """
         self.options = options
         self.filename = filename
@@ -74,19 +79,17 @@ class FileProcessor(object):
         #: Number of blank lines
         self.blank_lines = 0
         #: Checker states for each plugin?
-        self._checker_states = {}  # type: Dict[str, Dict[Any, Any]]
+        self._checker_states: dict[str, dict[Any, Any]] = {}
         #: Current checker state
-        self.checker_state = {}  # type: Dict[Any, Any]
+        self.checker_state: dict[Any, Any] = {}
         #: User provided option for hang closing
         self.hang_closing = options.hang_closing
         #: Character used for indentation
-        self.indent_char = None  # type: Optional[str]
+        self.indent_char: str | None = None
         #: Current level of indentation
         self.indent_level = 0
         #: Number of spaces used for indentation
         self.indent_size = options.indent_size
-        #: String representing the space indentation (DEPRECATED)
-        self.indent_size_str = str(self.indent_size)
         #: Line number in the file
         self.line_number = 0
         #: Current logical line
@@ -104,59 +107,64 @@ class FileProcessor(object):
         #: Previous unindented (i.e. top-level) logical line
         self.previous_unindented_logical_line = ""
         #: Current set of tokens
-        self.tokens = []  # type: List[_Token]
+        self.tokens: list[tokenize.TokenInfo] = []
         #: Total number of lines in the file
         self.total_lines = len(self.lines)
         #: Verbosity level of Flake8
         self.verbose = options.verbose
         #: Statistics dictionary
         self.statistics = {"logical lines": 0}
-        self._file_tokens = None  # type: Optional[List[_Token]]
+        self._file_tokens: list[tokenize.TokenInfo] | None = None
         # map from line number to the line we'll search for `noqa` in
-        self._noqa_line_mapping = None  # type: Optional[Dict[int, str]]
+        self._noqa_line_mapping: dict[int, str] | None = None
+        self._fstring_start = -1
 
     @property
-    def file_tokens(self):  # type: () -> List[_Token]
-        """Return the complete set of tokens for a file.
-
-        Accessing this attribute *may* raise an InvalidSyntax exception.
-
-        :raises: flake8.exceptions.InvalidSyntax
-        """
+    def file_tokens(self) -> list[tokenize.TokenInfo]:
+        """Return the complete set of tokens for a file."""
         if self._file_tokens is None:
             line_iter = iter(self.lines)
-            try:
-                self._file_tokens = list(
-                    tokenize.generate_tokens(lambda: next(line_iter))
-                )
-            except (tokenize.TokenError, SyntaxError) as exc:
-                raise exceptions.InvalidSyntax(exception=exc)
+            self._file_tokens = list(
+                tokenize.generate_tokens(lambda: next(line_iter))
+            )
 
         return self._file_tokens
 
-    @contextlib.contextmanager
-    def inside_multiline(self, line_number):
-        # type: (int) -> Generator[None, None, None]
-        """Context-manager to toggle the multiline attribute."""
-        self.line_number = line_number
+    def fstring_start(self, lineno: int) -> None:
+        """Signal the beginning of an fstring."""
+        self._fstring_start = lineno
+
+    def multiline_string(
+        self, token: tokenize.TokenInfo
+    ) -> Generator[str, None, None]:
+        """Iterate through the lines of a multiline string."""
+        if token.type == FSTRING_END:
+            start = self._fstring_start
+        else:
+            start = token.start[0]
+
         self.multiline = True
-        yield
+        self.line_number = start
+        # intentionally don't include the last line, that line will be
+        # terminated later by a future end-of-line
+        for _ in range(start, token.end[0]):
+            yield self.lines[self.line_number - 1]
+            self.line_number += 1
         self.multiline = False
 
-    def reset_blank_before(self):  # type: () -> None
+    def reset_blank_before(self) -> None:
         """Reset the blank_before attribute to zero."""
         self.blank_before = 0
 
-    def delete_first_token(self):  # type: () -> None
+    def delete_first_token(self) -> None:
         """Delete the first token in the list of tokens."""
         del self.tokens[0]
 
-    def visited_new_blank_line(self):  # type: () -> None
+    def visited_new_blank_line(self) -> None:
         """Note that we visited a new blank line."""
         self.blank_lines += 1
 
-    def update_state(self, mapping):
-        # type: (_LogicalMapping) -> None
+    def update_state(self, mapping: _LogicalMapping) -> None:
         """Update the indent level based on the logical line mapping."""
         (start_row, start_col) = mapping[0][1]
         start_line = self.lines[start_row - 1]
@@ -164,15 +172,14 @@ class FileProcessor(object):
         if self.blank_before < self.blank_lines:
             self.blank_before = self.blank_lines
 
-    def update_checker_state_for(self, plugin):
-        # type: (Dict[str, Any]) -> None
+    def update_checker_state_for(self, plugin: LoadedPlugin) -> None:
         """Update the checker_state attribute for the plugin."""
-        if "checker_state" in plugin["parameters"]:
+        if "checker_state" in plugin.parameters:
             self.checker_state = self._checker_states.setdefault(
-                plugin["name"], {}
+                plugin.entry_name, {}
             )
 
-    def next_logical_line(self):  # type: () -> None
+    def next_logical_line(self) -> None:
         """Record the previous logical line.
 
         This also resets the tokens list and the blank_lines count.
@@ -185,11 +192,11 @@ class FileProcessor(object):
         self.blank_lines = 0
         self.tokens = []
 
-    def build_logical_line_tokens(self):  # type: () -> _Logical
+    def build_logical_line_tokens(self) -> _Logical:  # noqa: C901
         """Build the mapping, comments, and logical line lists."""
         logical = []
         comments = []
-        mapping = []  # type: _LogicalMapping
+        mapping: _LogicalMapping = []
         length = 0
         previous_row = previous_column = None
         for token_type, text, start, end, line in self.tokens:
@@ -202,6 +209,8 @@ class FileProcessor(object):
                 continue
             if token_type == tokenize.STRING:
                 text = mutate_string(text)
+            elif token_type == FSTRING_MIDDLE:
+                text = "x" * len(text)
             if previous_row:
                 (start_row, start_column) = start
                 if previous_row != start_row:
@@ -211,7 +220,7 @@ class FileProcessor(object):
                     if previous_text == "," or (
                         previous_text not in "{[(" and text not in "}])"
                     ):
-                        text = " " + text
+                        text = f" {text}"
                 elif previous_column != start_column:
                     text = line[previous_column:start_column] + text
             logical.append(text)
@@ -220,12 +229,11 @@ class FileProcessor(object):
             (previous_row, previous_column) = end
         return comments, logical, mapping
 
-    def build_ast(self):  # type: () -> ast.AST
+    def build_ast(self) -> ast.AST:
         """Build an abstract syntax tree from the list of lines."""
         return ast.parse("".join(self.lines))
 
-    def build_logical_line(self):
-        # type: () -> Tuple[str, str, _LogicalMapping]
+    def build_logical_line(self) -> tuple[str, str, _LogicalMapping]:
         """Build a logical line from the current tokens list."""
         comments, logical, mapping_list = self.build_logical_line_tokens()
         joined_comments = "".join(comments)
@@ -233,29 +241,20 @@ class FileProcessor(object):
         self.statistics["logical lines"] += 1
         return joined_comments, self.logical_line, mapping_list
 
-    def split_line(self, token):
-        # type: (_Token) -> Generator[str, None, None]
-        """Split a physical line's line based on new-lines.
-
-        This also auto-increments the line number for the caller.
-        """
-        for line in token[1].split("\n")[:-1]:
-            yield line
-            self.line_number += 1
-
-    def keyword_arguments_for(self, parameters, arguments=None):
-        # type: (Dict[str, bool], Optional[Dict[str, Any]]) -> Dict[str, Any]
+    def keyword_arguments_for(
+        self,
+        parameters: dict[str, bool],
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
         """Generate the keyword arguments for a list of parameters."""
-        if arguments is None:
-            arguments = {}
+        ret = {}
         for param, required in parameters.items():
             if param in arguments:
                 continue
             try:
-                arguments[param] = getattr(self, param)
-            except AttributeError as exc:
+                ret[param] = getattr(self, param)
+            except AttributeError:
                 if required:
-                    LOG.exception(exc)
                     raise
                 else:
                     LOG.warning(
@@ -263,36 +262,27 @@ class FileProcessor(object):
                         "but this is not an available parameter.",
                         param,
                     )
-        return arguments
+        return ret
 
-    def generate_tokens(self):  # type: () -> Generator[_Token, None, None]
-        """Tokenize the file and yield the tokens.
+    def generate_tokens(self) -> Generator[tokenize.TokenInfo, None, None]:
+        """Tokenize the file and yield the tokens."""
+        for token in tokenize.generate_tokens(self.next_line):
+            if token[2][0] > self.total_lines:
+                break
+            self.tokens.append(token)
+            yield token
 
-        :raises flake8.exceptions.InvalidSyntax:
-            If a :class:`tokenize.TokenError` is raised while generating
-            tokens.
-        """
-        try:
-            for token in tokenize.generate_tokens(self.next_line):
-                if token[2][0] > self.total_lines:
-                    break
-                self.tokens.append(token)
-                yield token
-        except (tokenize.TokenError, SyntaxError) as exc:
-            raise exceptions.InvalidSyntax(exception=exc)
-
-    def _noqa_line_range(self, min_line, max_line):
-        # type: (int, int) -> Dict[int, str]
+    def _noqa_line_range(self, min_line: int, max_line: int) -> dict[int, str]:
         line_range = range(min_line, max_line + 1)
         joined = "".join(self.lines[min_line - 1 : max_line])
         return dict.fromkeys(line_range, joined)
 
-    def noqa_line_for(self, line_number):  # type: (int) -> Optional[str]
+    def noqa_line_for(self, line_number: int) -> str | None:
         """Retrieve the line which will be used to determine noqa."""
         if self._noqa_line_mapping is None:
             try:
                 file_tokens = self.file_tokens
-            except exceptions.InvalidSyntax:
+            except (tokenize.TokenError, SyntaxError):
                 # if we failed to parse the file tokens, we'll always fail in
                 # the future, so set this so the code does not try again
                 self._noqa_line_mapping = {}
@@ -327,7 +317,7 @@ class FileProcessor(object):
         # retrieve a physical line (since none exist).
         return self._noqa_line_mapping.get(line_number)
 
-    def next_line(self):  # type: () -> str
+    def next_line(self) -> str:
         """Get the next line from the list."""
         if self.line_number >= self.total_lines:
             return ""
@@ -337,23 +327,17 @@ class FileProcessor(object):
             self.indent_char = line[0]
         return line
 
-    def read_lines(self):
-        # type: () -> List[str]
+    def read_lines(self) -> list[str]:
         """Read the lines for this file checker."""
-        if self.filename is None or self.filename == "-":
+        if self.filename == "-":
             self.filename = self.options.stdin_display_name or "stdin"
             lines = self.read_lines_from_stdin()
         else:
             lines = self.read_lines_from_filename()
         return lines
 
-    def _readlines_py2(self):
-        # type: () -> List[str]
-        with open(self.filename, "rU") as fd:
-            return fd.readlines()
-
-    def _readlines_py3(self):
-        # type: () -> List[str]
+    def read_lines_from_filename(self) -> list[str]:
+        """Read the lines for a file."""
         try:
             with tokenize.open(self.filename) as fd:
                 return fd.readlines()
@@ -363,29 +347,16 @@ class FileProcessor(object):
             with open(self.filename, encoding="latin-1") as fd:
                 return fd.readlines()
 
-    def read_lines_from_filename(self):
-        # type: () -> List[str]
-        """Read the lines for a file."""
-        if (2, 6) <= sys.version_info < (3, 0):
-            readlines = self._readlines_py2
-        elif (3, 0) <= sys.version_info < (4, 0):
-            readlines = self._readlines_py3
-        return readlines()
-
-    def read_lines_from_stdin(self):
-        # type: () -> List[str]
+    def read_lines_from_stdin(self) -> list[str]:
         """Read the lines from standard in."""
         return utils.stdin_get_lines()
 
-    def should_ignore_file(self):
-        # type: () -> bool
+    def should_ignore_file(self) -> bool:
         """Check if ``flake8: noqa`` is in the file to be ignored.
 
         :returns:
             True if a line matches :attr:`defaults.NOQA_FILE`,
             otherwise False
-        :rtype:
-            bool
         """
         if not self.options.disable_noqa and any(
             defaults.NOQA_FILE.match(line) for line in self.lines
@@ -400,8 +371,7 @@ class FileProcessor(object):
         else:
             return False
 
-    def strip_utf_bom(self):
-        # type: () -> None
+    def strip_utf_bom(self) -> None:
         """Strip the UTF bom from the lines of the file."""
         if not self.lines:
             # If we have nothing to analyze quit early
@@ -418,23 +388,24 @@ class FileProcessor(object):
             self.lines[0] = self.lines[0][3:]
 
 
-def is_eol_token(token):  # type: (_Token) -> bool
+def is_eol_token(token: tokenize.TokenInfo) -> bool:
     """Check if the token is an end-of-line token."""
     return token[0] in NEWLINE or token[4][token[3][1] :].lstrip() == "\\\n"
 
 
-def is_multiline_string(token):  # type: (_Token) -> bool
+def is_multiline_string(token: tokenize.TokenInfo) -> bool:
     """Check if this is a multiline string."""
-    return token[0] == tokenize.STRING and "\n" in token[1]
+    return token.type == FSTRING_END or (
+        token.type == tokenize.STRING and "\n" in token.string
+    )
 
 
-def token_is_newline(token):  # type: (_Token) -> bool
+def token_is_newline(token: tokenize.TokenInfo) -> bool:
     """Check if the token type is a newline token type."""
     return token[0] in NEWLINE
 
 
-def count_parentheses(current_parentheses_count, token_text):
-    # type: (int, str) -> int
+def count_parentheses(current_parentheses_count: int, token_text: str) -> int:
     """Count the number of parentheses."""
     if token_text in "([{":  # nosec
         return current_parentheses_count + 1
@@ -443,22 +414,7 @@ def count_parentheses(current_parentheses_count, token_text):
     return current_parentheses_count
 
 
-def log_token(log, token):  # type: (logging.Logger, _Token) -> None
-    """Log a token to a provided logging object."""
-    if token[2][0] == token[3][0]:
-        pos = "[%s:%s]" % (token[2][1] or "", token[3][1])
-    else:
-        pos = "l.%s" % token[3][0]
-    log.log(
-        flake8._EXTRA_VERBOSE,
-        "l.%s\t%s\t%s\t%r"
-        % (token[2][0], pos, tokenize.tok_name[token[0]], token[1]),
-    )
-
-
-# NOTE(sigmavirus24): This was taken wholesale from
-# https://github.com/PyCQA/pycodestyle
-def expand_indent(line):  # type: (str) -> int
+def expand_indent(line: str) -> int:
     r"""Return the amount of indentation.
 
     Tabs are expanded to the next multiple of 8.
@@ -472,23 +428,13 @@ def expand_indent(line):  # type: (str) -> int
     >>> expand_indent('        \t')
     16
     """
-    if "\t" not in line:
-        return len(line) - len(line.lstrip())
-    result = 0
-    for char in line:
-        if char == "\t":
-            result = result // 8 * 8 + 8
-        elif char == " ":
-            result += 1
-        else:
-            break
-    return result
+    return len(line.expandtabs(8))
 
 
 # NOTE(sigmavirus24): This was taken wholesale from
 # https://github.com/PyCQA/pycodestyle. The in-line comments were edited to be
 # more descriptive.
-def mutate_string(text):  # type: (str) -> str
+def mutate_string(text: str) -> str:
     """Replace contents with 'xxx' to prevent syntax matching.
 
     >>> mutate_string('"abc"')

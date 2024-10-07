@@ -41,9 +41,10 @@ package ssa
 import (
 	"fmt"
 	"go/token"
-	"go/types"
 	"math/big"
 	"os"
+
+	"golang.org/x/tools/internal/typeparams"
 )
 
 // If true, show diagnostic information at each step of lifting.
@@ -61,7 +62,6 @@ const debugLifting = false
 //
 // domFrontier's methods mutate the slice's elements but not its
 // length, so their receivers needn't be pointers.
-//
 type domFrontier [][]*BasicBlock
 
 func (df domFrontier) add(u, v *BasicBlock) {
@@ -105,9 +105,14 @@ func buildDomFrontier(fn *Function) domFrontier {
 }
 
 func removeInstr(refs []Instruction, instr Instruction) []Instruction {
+	return removeInstrsIf(refs, func(i Instruction) bool { return i == instr })
+}
+
+func removeInstrsIf(refs []Instruction, p func(Instruction) bool) []Instruction {
+	// TODO(taking): replace with go1.22 slices.DeleteFunc.
 	i := 0
 	for _, ref := range refs {
-		if ref == instr {
+		if p(ref) {
 			continue
 		}
 		refs[i] = ref
@@ -127,7 +132,6 @@ func removeInstr(refs []Instruction, instr Instruction) []Instruction {
 // - fn has no dead blocks (blockopt has run).
 // - Def/use info (Operands and Referrers) is up-to-date.
 // - The dominator tree is up-to-date.
-//
 func lift(fn *Function) {
 	// TODO(adonovan): opt: lots of little optimizations may be
 	// worthwhile here, especially if they cause us to avoid
@@ -382,15 +386,7 @@ type newPhiMap map[*BasicBlock][]newPhi
 // and returns true.
 //
 // fresh is a source of fresh ids for phi nodes.
-//
 func liftAlloc(df domFrontier, alloc *Alloc, newPhis newPhiMap, fresh *int) bool {
-	// Don't lift aggregates into registers, because we don't have
-	// a way to express their zero-constants.
-	switch deref(alloc.Type()).Underlying().(type) {
-	case *types.Array, *types.Struct:
-		return false
-	}
-
 	// Don't lift named return values in functions that defer
 	// calls that may recover from panic.
 	if fn := alloc.Parent(); fn.Recover != nil {
@@ -471,7 +467,7 @@ func liftAlloc(df domFrontier, alloc *Alloc, newPhis newPhiMap, fresh *int) bool
 				*fresh++
 
 				phi.pos = alloc.Pos()
-				phi.setType(deref(alloc.Type()))
+				phi.setType(typeparams.MustDeref(alloc.Type()))
 				phi.block = v
 				if debugLifting {
 					fmt.Fprintf(os.Stderr, "\tplace %s = %s at block %s\n", phi.Name(), phi, v)
@@ -491,7 +487,6 @@ func liftAlloc(df domFrontier, alloc *Alloc, newPhis newPhiMap, fresh *int) bool
 // replaceAll replaces all intraprocedural uses of x with y,
 // updating x.Referrers and y.Referrers.
 // Precondition: x.Referrers() != nil, i.e. x must be local to some function.
-//
 func replaceAll(x, y Value) {
 	var rands []*Value
 	pxrefs := x.Referrers()
@@ -514,11 +509,10 @@ func replaceAll(x, y Value) {
 
 // renamed returns the value to which alloc is being renamed,
 // constructing it lazily if it's the implicit zero initialization.
-//
 func renamed(renaming []Value, alloc *Alloc) Value {
 	v := renaming[alloc.index]
 	if v == nil {
-		v = zeroConst(deref(alloc.Type()))
+		v = zeroConst(typeparams.MustDeref(alloc.Type()))
 		renaming[alloc.index] = v
 	}
 	return v
@@ -533,7 +527,6 @@ func renamed(renaming []Value, alloc *Alloc) Value {
 // renaming is a map from *Alloc (keyed by index number) to its
 // dominating stored value; newPhis[x] is the set of new φ-nodes to be
 // prepended to block x.
-//
 func rename(u *BasicBlock, renaming []Value, newPhis newPhiMap) {
 	// Each φ-node becomes the new name for its associated Alloc.
 	for _, np := range newPhis[u] {

@@ -9,33 +9,22 @@ This module
 .. autofunction:: flake8.configure_logging
 
 """
+from __future__ import annotations
+
 import logging
 import sys
-
-if False:  # `typing.TYPE_CHECKING` was introduced in 3.5.2
-    from typing import Type  # `typing.Type` was introduced in 3.5.2
 
 LOG = logging.getLogger(__name__)
 LOG.addHandler(logging.NullHandler())
 
-__version__ = "3.9.2"
-__version_info__ = tuple(
-    int(i) for i in __version__.split(".") if i.isdigit()
-)
-
-
-# There is nothing lower than logging.DEBUG (10) in the logging library,
-# but we want an extra level to avoid being too verbose when using -vv.
-_EXTRA_VERBOSE = 5
-logging.addLevelName(_EXTRA_VERBOSE, "VERBOSE")
+__version__ = "6.1.0"
+__version_info__ = tuple(int(i) for i in __version__.split(".") if i.isdigit())
 
 _VERBOSITY_TO_LOG_LEVEL = {
     # output more than warnings but not debugging info
     1: logging.INFO,  # INFO is a numerical level of 20
     # output debugging information
     2: logging.DEBUG,  # DEBUG is a numerical level of 10
-    # output extra verbose debugging information
-    3: _EXTRA_VERBOSE,
 }
 
 LOG_FORMAT = (
@@ -44,12 +33,16 @@ LOG_FORMAT = (
 )
 
 
-def configure_logging(verbosity, filename=None, logformat=LOG_FORMAT):
+def configure_logging(
+    verbosity: int,
+    filename: str | None = None,
+    logformat: str = LOG_FORMAT,
+) -> None:
     """Configure logging for flake8.
 
-    :param int verbosity:
+    :param verbosity:
         How verbose to be in logging information.
-    :param str filename:
+    :param filename:
         Name of the file to append log information to.
         If ``None`` this will log to ``sys.stderr``.
         If the name is "stdout" or "stderr" this will log to the appropriate
@@ -57,14 +50,13 @@ def configure_logging(verbosity, filename=None, logformat=LOG_FORMAT):
     """
     if verbosity <= 0:
         return
-    if verbosity > 3:
-        verbosity = 3
 
+    verbosity = min(verbosity, max(_VERBOSITY_TO_LOG_LEVEL))
     log_level = _VERBOSITY_TO_LOG_LEVEL[verbosity]
 
     if not filename or filename in ("stderr", "stdout"):
         fileobj = getattr(sys, filename or "stderr")
-        handler_cls = logging.StreamHandler  # type: Type[logging.Handler]
+        handler_cls: type[logging.Handler] = logging.StreamHandler
     else:
         fileobj = filename
         handler_cls = logging.FileHandler
