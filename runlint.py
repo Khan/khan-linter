@@ -427,7 +427,7 @@ _EXTENSION_DICT = {'.py': 'python',
 
 def _lang(filename, lang_option):
     """Returns a string representing the language filename is written in."""
-    if lang_option:            # the user specified the langauge explicitly
+    if lang_option:            # the user specified the language explicitly
         return lang_option
     extension = os.path.splitext(filename)[1]
     return _EXTENSION_DICT.get(extension, 'unknown')
