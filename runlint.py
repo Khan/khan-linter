@@ -596,7 +596,7 @@ def _find_base_config(file_to_lint, config_filename):
 
     If the custom eslintrc depends on any extra node modules, for
     plugins or parsers, these node modules should be referenced as
-    relative to the eslintrc file, but without the preceeding "./" often
+    relative to the eslintrc file, but without the preceding "./" often
     used to denote relative paths. For example, if the parser module
     `babel-eslint` is in `repo/javascript/node_modules/babel-eslint` and
     the custom `.eslint` file is in `repo/.eslint`, then the path in the
