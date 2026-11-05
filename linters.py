@@ -131,7 +131,8 @@ class DelegatingLinter(Linter):
             self._argv + files,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=self._cwd)
+            cwd=self._cwd,
+            universal_newlines=True)
         stdout, stderr = pipe.communicate()
 
         if stderr:
@@ -145,7 +146,8 @@ class DelegatingLinter(Linter):
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                cwd=self._cwd)
+                cwd=self._cwd,
+                universal_newlines=True)
             autofix_stdout, autofix_stderr = autofix_pipe.communicate(
                 input=stdout)
             if autofix_stderr:
