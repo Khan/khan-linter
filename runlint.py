@@ -718,15 +718,38 @@ def _get_linters_for_file(file_to_lint, lang, propose_arc_fixes):
     # executables which allows runlint to run against subrepos with
     # different configurations.
     if file_lang == 'javascript':
-        # If eslint_config is None, linters.Eslint will default to the
-        # configuration in the khan-linter repo.
-        eslint_config = _find_base_config(file_to_lint, '.eslintrc')
+        # Repos that keep their JS project in a subdirectory (e.g. mobile,
+        # whose eslint and .eslintrc.js live in app/) won't have an eslint
+        # at the repo root.  So first look for the eslint executable
+        # closest to the file, and use the eslint config from that same
+        # directory.  (We don't just look for the closest .eslintrc:
+        # nested .eslintrc files are often partial overrides, not
+        # complete configs.)
+        eslint_config = None
+        exec_path = _resolve_ancestor(
+            '<ancestor_within_repo>/node_modules/.bin/eslint', file_to_lint)
+        if exec_path:
+            eslint_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(exec_path)))
+            for config_filename in ('.eslintrc', '.eslintrc.js'):
+                config_path = os.path.join(eslint_dir, config_filename)
+                if os.path.exists(config_path):
+                    eslint_config = config_path
+                    break
+
+        # Otherwise, look at the repo root.  If eslint_config is still
+        # None, linters.Eslint will default to the configuration in the
+        # khan-linter repo.
+        if eslint_config is None:
+            eslint_config = _find_base_config(file_to_lint, '.eslintrc')
 
         if eslint_config is None:
             eslint_config = _find_base_config(file_to_lint, '.eslintrc.js')
 
         # The same is true for the eslint executable.
-        exec_path = _find_base_config(file_to_lint, 'node_modules/.bin/eslint')
+        if exec_path is None:
+            exec_path = _find_base_config(file_to_lint,
+                                          'node_modules/.bin/eslint')
         if eslint_config or exec_path:
             cache_key = "js-%s-%s" % (eslint_config, exec_path)
             if cache_key not in _LINTERS_BY_LANG:
